@@ -204,7 +204,7 @@ def to_mosek(
         )
 
         for moment_matrix_id, moment_matrix in sdp.moment_matrices.items():
-            for monomial, (position_matrix, position_matrix_conj) in moment_matrix.as_row_col_data_format().items():
+            for monomial, (_position_matrix, position_matrix_conj) in moment_matrix.as_row_col_data_format().items():
                 new_variable = (
                     M.variable(str(monomial), Domain.unbounded())
                     if position_matrix_conj is None
@@ -217,49 +217,55 @@ def to_mosek(
                 mapped_variables[monomial] = new_variable
 
             mosek_moment_matrix = rust_moment_matrix_to_mosek(moment_matrix, mapped_variables, matrix_builder)
-            M.constraint(mosek_moment_matrix, Domain.inPSDCone(mosek_moment_matrix.getShape()[0]))
+            M.constraint(
+                f"MM-{moment_matrix_id}", mosek_moment_matrix, Domain.inPSDCone(mosek_moment_matrix.getShape()[0])
+            )
             logger.debug(f"Added moment matrix PSD constraint for moment matrix id {moment_matrix_id}.")
 
         for moment_matrix_id, equality_moment_matrices in sdp.localising_moment_matrices_equalities.items():
-            for equality_moment_matrix in equality_moment_matrices:
+            for index, equality_moment_matrix in enumerate(equality_moment_matrices):
                 mosek_new_localising_matrix = rust_moment_matrix_to_mosek(
                     equality_moment_matrix, mapped_variables, matrix_builder
                 )
-                M.constraint(mosek_new_localising_matrix, Domain.equalsTo(0))
+                M.constraint(f"LMME-{moment_matrix_id}-{index}", mosek_new_localising_matrix, Domain.equalsTo(0))
                 logger.debug(
                     f"Added constraint {mosek_new_localising_matrix} == 0 for moment matrix id {moment_matrix_id}."
                 )
 
         for moment_matrix_id, inequality_moment_matrices in sdp.localising_moment_matrices_inequalities.items():
-            for inequality_moment_matrix in inequality_moment_matrices:
+            for index, inequality_moment_matrix in enumerate(inequality_moment_matrices):
                 mosek_new_localising_matrix = rust_moment_matrix_to_mosek(
                     inequality_moment_matrix, mapped_variables, matrix_builder
                 )
-                M.constraint(mosek_new_localising_matrix, Domain.inPSDCone(mosek_new_localising_matrix.getShape()[0]))
+                M.constraint(
+                    f"LMMI-{moment_matrix_id}-{index}",
+                    mosek_new_localising_matrix,
+                    Domain.inPSDCone(mosek_new_localising_matrix.getShape()[0]),
+                )
                 logger.debug(
                     f"Added constraint {mosek_new_localising_matrix} ≽ 0 for moment matrix id {moment_matrix_id}."
                 )
 
-        for poly, value in sdp.moment_equalities:
+        for index, (poly, value) in enumerate(sdp.moment_equalities):
             changed = sdp.change_variables(poly, mapped_variables)
 
             if isinstance(changed, _ComplexExpr):
-                M.constraint(changed.real, Domain.equalsTo(value.real))
+                M.constraint(f"ME-{index}_re", changed.real, Domain.equalsTo(value.real))
                 logger.debug(f"Added constraint {changed.real} == {value.real}.")
-                M.constraint(changed.imag, Domain.equalsTo(value.imag))
+                M.constraint(f"ME-{index}_im", changed.imag, Domain.equalsTo(value.imag))
                 logger.debug(f"Added constraint {changed.imag} == {value.imag}.")
             else:
-                M.constraint(changed, Domain.equalsTo(value))
+                M.constraint(f"ME-{index}", changed, Domain.equalsTo(value))
                 logger.debug(f"Added constraint {changed} == {value}.")
 
-        for poly, value in sdp.moment_inequalities:
+        for index, (poly, value) in enumerate(sdp.moment_inequalities):
             changed = sdp.change_variables(poly, mapped_variables)
 
             if isinstance(changed, _ComplexExpr):
-                M.constraint(changed.real, Domain.equalsTo(value))
+                M.constraint(f"MI-{index}", changed.real, Domain.equalsTo(value))
                 logger.debug(f"Added constraint {changed.real} >= {value}.")
             else:
-                M.constraint(changed, Domain.greaterThan(value))
+                M.constraint(f"MI-{index}", changed, Domain.greaterThan(value))
                 logger.debug(f"Added constraint {changed} >= {value}.")
 
         objective = sdp.change_variables(sdp.objective, mapped_variables)
