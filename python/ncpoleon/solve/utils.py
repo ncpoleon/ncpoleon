@@ -1,5 +1,9 @@
-from importlib.util import find_spec
 import logging
+from importlib.util import find_spec
+from typing import cast, overload
+
+import numpy as np
+import numpy.typing as npt
 
 logger = logging.getLogger(__name__)
 
@@ -19,3 +23,19 @@ def automatic_solver_detection() -> str:
         raise ImportError("No solver has been found. Tried: mosek, picos.")
 
     return "picos"
+
+
+@overload
+def sqrtm_sdp_matrix(matrix: npt.NDArray[np.floating]) -> npt.NDArray[np.floating]: ...
+@overload
+def sqrtm_sdp_matrix(matrix: npt.NDArray[np.complexfloating]) -> npt.NDArray[np.complexfloating]: ...
+
+
+def sqrtm_sdp_matrix(
+    matrix: npt.NDArray[np.floating | np.complexfloating],
+) -> npt.NDArray[np.floating | np.complexfloating]:
+    eigvals, eigvecs = np.linalg.eigh(matrix)
+    eigvals = np.sqrt(np.clip(eigvals, 0, None))
+    result = (eigvecs * eigvals) @ eigvecs.conj().T
+
+    return cast(npt.NDArray[np.floating | np.complexfloating], result)

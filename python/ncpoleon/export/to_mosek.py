@@ -181,7 +181,10 @@ def to_mosek(
     :return: A :class:`mosek.Model` object corresponding to the problem the user has specified.
     """
     if not _mosek_available:
-        raise ImportError("mosek is required for to_mosek but is not installed. Install it with: pip install mosek")
+        raise ImportError(
+            "mosek is required for to_mosek but is not installed. Install it with: pip install mosek. Note that a MOSEK"
+            " license is required to use MOSEK."
+        )
     if objective_direction not in ["min", "max"]:
         raise ValueError(
             f"The only supported objective directions are min and max, but {objective_direction} was provided."
@@ -471,20 +474,20 @@ def to_mosek(
                     if is_problem_real_valued:
                         assert alpha_im is None
                     if objective_direction == "min":
-                        M.constraint(new_constraint, Domain.equalsTo(alpha_re))
+                        M.constraint(f"M-{monomial}", new_constraint, Domain.equalsTo(alpha_re))
                     else:
-                        M.constraint(new_constraint, Domain.equalsTo(-alpha_re))
+                        M.constraint(f"M-{monomial}", new_constraint, Domain.equalsTo(-alpha_re))
 
                     logger.debug(f"Added dual constraint for monomial {monomial}.")
                 else:
                     alpha_im = 0.0 if alpha_im is None else alpha_im
 
                     if objective_direction == "min":
-                        M.constraint(new_constraint_re, Domain.equalsTo(2 * alpha_re))
-                        M.constraint(new_constraint_im, Domain.equalsTo(2 * alpha_im))
+                        M.constraint(f"M-{monomial}-re", new_constraint_re, Domain.equalsTo(2 * alpha_re))
+                        M.constraint(f"M-{monomial}-im", new_constraint_im, Domain.equalsTo(2 * alpha_im))
                     else:
-                        M.constraint(new_constraint_re, Domain.equalsTo(-2 * alpha_re))
-                        M.constraint(new_constraint_im, Domain.equalsTo(-2 * alpha_im))
+                        M.constraint(f"M-{monomial}-re", new_constraint_re, Domain.equalsTo(-2 * alpha_re))
+                        M.constraint(f"M-{monomial}-im", new_constraint_im, Domain.equalsTo(-2 * alpha_im))
 
                     logger.debug(f"Added dual constraints for monomial {monomial}.")
 
