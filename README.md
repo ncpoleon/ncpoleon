@@ -1,10 +1,10 @@
 # Ncpoleon
 
-Ncpoleon solves polynomial optimization problems of (non)commutative variables through a SemiDefinite Programming (SDP) relaxation. It works similarly to [ncpol2sdpa](https://gitlab.com/peterwittek/ncpol2sdpa/) and is focused on performance. Example applications include:
- - Lasserre's hierarchy: if all polynomials involved in the optimization problem are made of commutative variables, then the generated hierarchy is [Lasserre's](https://epubs.siam.org/doi/10.1137/S1052623400366802). In this case, the functionality resembles the MATLAB toolbox [Globtipoly](https://homepages.laas.fr/henrion/software/gloptipoly/).
- - NPA hierarchy: if all polynomials involved in the optimization problem are made of noncommutative variables, then the generated hierarchy is [Miguel Navascués, Stefano Pironio and Antonio Acín's](https://iopscience.iop.org/article/10.1088/1367-2630/10/7/073013).
+Ncpoleon approximates polynomial optimization problems of (non)commutative variables through semidefinite programming (SDP) relaxations. It is intended as a followup to [ncpol2sdpa](https://gitlab.com/peterwittek/ncpol2sdpa/), focused improved performance, functionality and long-term improvements. Currently the package can relax polynomial optimization problems in both commutative and noncommutative variables, i.e., we implement
+ - Lasserre's hierarchy: if all polynomials involved in the optimization problem are made of commutative variables, then the generated hierarchy is [Lasserre's](https://epubs.siam.org/doi/10.1137/S1052623400366802).
+ - Noncommutative moment matrix hierarchy: if all polynomials involved in the optimization problem are made of noncommutative variables, then the generated hierarchy is [Pironio, Navascués and Acín's](https://arxiv.org/abs/0903.4368).
 
-Ncpoleon is able to handle operator constraints, moment constraints and substitutions rule to generate a relaxation that is as small as possible, as fast as possible.
+Ncpoleon is able to handle operator constraints, moment constraints and substitutions rules, following the design ideas of ncpol2sdpa.
 
 ## Installation
 Ncpoleon can be installed using `pip` via
@@ -21,7 +21,7 @@ pip install ncpoleon[picos,mosek]
 ```
 
 ## Example
-Let us consider the example stated by [Tavakoli, Pozas-Kerstjens, Brown and Araújo](https://journals.aps.org/rmp/abstract/10.1103/RevModPhys.96.045006). This optimization problem is stated as
+Let us consider the example from [Tavakoli, Pozas-Kerstjens, Brown and Araújo](https://journals.aps.org/rmp/abstract/10.1103/RevModPhys.96.045006). This optimization problem is stated as
 
 $$
     \begin{aligned}
