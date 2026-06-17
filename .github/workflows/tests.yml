@@ -27,4 +27,4 @@ jobs:
         run: |
           echo "$MSK_LICENSE" > "$HOME/mosek.lic"
           export MOSEKLM_LICENSE_FILE="$HOME/mosek.lic"
-          uv run pytest
+          uv run pytest -x
