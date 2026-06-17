@@ -2,23 +2,25 @@ from __future__ import annotations
 
 import warnings
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Generic, TypeVar
+from typing import TYPE_CHECKING, Generic
 
 import numpy as np
 import numpy.typing as npt
 
-from ncpoleon.polynomials.commutative_polynomials import CommutativePolynomialElement
-from ncpoleon.polynomials.noncommutative_polynomials import NonCommutativePolynomialElement
+from ncpoleon._typing import PolynomialElements, Scalar
 from ncpoleon.solve.utils import sos_vectors_of_hermitian_matrix
 
-from .sos_decomposition import PseudomomentMatrixDecomposition, SingleMomentDecomposition, SoSDecomposition
+from .sos_decomposition import (
+    LocalizingMomentMatrixEqualityDecomposition,
+    LocalizingMomentMatrixInequalityDecomposition,
+    MomentMatrixDecomposition,
+    SingleMomentDecomposition,
+    SoSDecomposition,
+)
 
 if TYPE_CHECKING:
     from ncpoleon.polynomials import Polynomial
     from ncpoleon.relaxations import BaseSdpRelaxation
-
-PolynomialElements = TypeVar("PolynomialElements", CommutativePolynomialElement, NonCommutativePolynomialElement)
-Scalar = TypeVar("Scalar", float, complex)
 
 
 class BaseSolution(ABC, Generic[PolynomialElements, Scalar]):
@@ -146,21 +148,23 @@ class BaseSolution(ABC, Generic[PolynomialElements, Scalar]):
     @abstractmethod
     def relaxation(self) -> BaseSdpRelaxation[PolynomialElements, Scalar]: ...
 
-    def get_sos_decomposition(self) -> SoSDecomposition[PolynomialElements, Scalar]:
-        sos_decompositions = self.get_sos_decomposition_by_mm_id()
+    def get_sos_decomposition(self, *, cutoff: float = 0.0) -> SoSDecomposition[PolynomialElements, Scalar]:
+        sos_decompositions = self.get_sos_decomposition_by_mm_id(cutoff=cutoff)
         if len(sos_decompositions) > 1:
             warnings.warn(
                 "The solution contains multiple moment matrices. The `get_sos_decomposition` "
                 "method will only return the SoS decomposition associated to the moment matrix of"
-                " index 0. Use `localizing_matrices_inequality_constraints_by_mm_id` to access all of them.",
+                " index 0. Use `get_sos_decomposition_by_mm_id` to access all of them.",
             )
         return sos_decompositions[0]
 
-    def get_sos_decomposition_by_mm_id(self) -> dict[int, SoSDecomposition[PolynomialElements, Scalar]]:
-        res = {}
+    def get_sos_decomposition_by_mm_id(
+        self, *, cutoff: float = 0.0
+    ) -> dict[int, SoSDecomposition[PolynomialElements, Scalar]]:
+        res: dict[int, SoSDecomposition[PolynomialElements, Scalar]] = {}
         moment_matrix_multipliers = self.moment_matrix_multiplier_by_mm_id
-        localizing_moment_matrices_multipliers_equality = self.localizing_matrices_equality_by_mm_id
-        localizing_moment_matrices_multipliers_inequality = self.localizing_matrices_inequality_by_mm_id
+        localizing_moment_matrices_multipliers_equality = self.localizing_matrices_equality_multipliers_by_mm_id
+        localizing_moment_matrices_multipliers_inequality = self.localizing_matrices_inequality_multipliers_by_mm_id
         moment_equality_multipliers = {}
 
         for polynomial, scalar in self.moment_equalities_multipliers:
@@ -180,47 +184,60 @@ class BaseSolution(ABC, Generic[PolynomialElements, Scalar]):
                     moment_inequality_multipliers[mm_id] = [(poly_id, scalar)]
 
         for mm_id in self.relaxation.moment_matrices:
-            pseudomoment_matrices = []
-
-            sos_vectors = sos_vectors_of_hermitian_matrix(moment_matrix_multipliers[mm_id])[0]
+            sos_vectors = sos_vectors_of_hermitian_matrix(moment_matrix_multipliers[mm_id], cutoff)[0]
             n_monomials = sos_vectors.shape[1]
-            decompositions = (sos_vectors @ self.relaxation.generating_sets[mm_id][:n_monomials]).reshape(-1).tolist()
-            pseudomoment_matrices.append(PseudomomentMatrixDecomposition(generator=1, decomposition=decompositions))
+            decomposition = (sos_vectors @ self.relaxation.generating_sets[mm_id][:n_monomials]).reshape(-1).tolist()
+            moment_matrix_term = MomentMatrixDecomposition(decomposition=decomposition)
 
-            for generator, multiplier in localizing_moment_matrices_multipliers_inequality.get(mm_id, []):
-                sos_vectors = sos_vectors_of_hermitian_matrix(multiplier)[0]
+            inequalities_terms = []
+
+            for generator, coefficient in localizing_moment_matrices_multipliers_inequality.get(mm_id, []):
+                sos_vectors = sos_vectors_of_hermitian_matrix(coefficient, cutoff)[0]
                 n_monomials = sos_vectors.shape[1]
                 decompositions = (
                     (sos_vectors @ self.relaxation.generating_sets[mm_id][:n_monomials]).reshape(-1).tolist()
                 )
-                pseudomoment_matrices.append(
-                    PseudomomentMatrixDecomposition(generator=generator, decomposition=decompositions)
+                inequalities_terms.append(
+                    LocalizingMomentMatrixInequalityDecomposition(generator=generator, decomposition=decompositions)
                 )
 
-            for generator, multiplier in localizing_moment_matrices_multipliers_equality.get(mm_id, []):
-                sos_vectors_pos, sos_vectors_neg = sos_vectors_of_hermitian_matrix(multiplier)
+            equalities_terms = []
+
+            for generator, coefficient in localizing_moment_matrices_multipliers_equality.get(mm_id, []):
+                sos_vectors_pos, sos_vectors_neg = sos_vectors_of_hermitian_matrix(coefficient, cutoff)
                 n_monomials = sos_vectors_pos.shape[1]
-                decompositions_pos = (
+                decomposition_positive = (
                     (sos_vectors_pos @ self.relaxation.generating_sets[mm_id][:n_monomials]).reshape(-1).tolist()
                 )
-                decompositions_neg = (
+                decomposition_negative = (
                     (sos_vectors_neg @ self.relaxation.generating_sets[mm_id][:n_monomials]).reshape(-1).tolist()
                 )
-                pseudomoment_matrices.append(
-                    PseudomomentMatrixDecomposition(generator=generator, decomposition=decompositions_pos)
+                equalities_terms.append(
+                    LocalizingMomentMatrixEqualityDecomposition(
+                        generator=generator,
+                        decomposition_positive=decomposition_positive,
+                        decomposition_negative=decomposition_negative,
+                    )
                 )
-                pseudomoment_matrices.append(
-                    PseudomomentMatrixDecomposition(generator=generator, decomposition=decompositions_neg, sign=-1)
+
+            moment_equalities_terms = []
+
+            for generator, coefficient in moment_equality_multipliers.get(mm_id, []):
+                moment_equalities_terms.append(SingleMomentDecomposition(generator=generator, coefficient=coefficient))
+
+            moment_inequalities_terms = []
+
+            for generator, coefficient in moment_inequality_multipliers.get(mm_id, []):
+                moment_inequalities_terms.append(
+                    SingleMomentDecomposition(generator=generator, coefficient=coefficient)
                 )
 
-            single_moments = []
-
-            for generator, multiplier in moment_equality_multipliers.get(mm_id, []):
-                single_moments.append(SingleMomentDecomposition(generator=generator, decomposition=multiplier))
-
-            for generator, multiplier in moment_inequality_multipliers.get(mm_id, []):
-                single_moments.append(SingleMomentDecomposition(generator=generator, decomposition=multiplier))
-
-            res[mm_id] = SoSDecomposition(pseudomoment_matrices=pseudomoment_matrices, single_moments=single_moments)
+            res[mm_id] = SoSDecomposition[PolynomialElements, Scalar](
+                moment_matrix_term=moment_matrix_term,
+                equalities_terms=equalities_terms,
+                inequalities_terms=inequalities_terms,
+                moment_equalities_terms=moment_equalities_terms,
+                moment_inequalities_terms=moment_inequalities_terms,
+            )
 
         return res

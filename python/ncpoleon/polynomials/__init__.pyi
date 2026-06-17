@@ -1,21 +1,18 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Generic, Protocol, Self, TypeVar, overload
+from typing import Generic, Protocol, Self, overload
 
+from ncpoleon._typing import PolynomialElements, Scalar
 from ncpoleon.relaxations import Constraint
 
-from .commutative_polynomials import CommutativePolynomialElement, generate_commutative_variables
-from .noncommutative_polynomials import NonCommutativePolynomialElement, generate_noncommutative_variables
+from .commutative_polynomials import generate_commutative_variables
+from .noncommutative_polynomials import generate_noncommutative_variables
 
 class RewritingStrategy(Enum):
     Greedy = 0
 
-PolynomialElements = TypeVar("PolynomialElements", CommutativePolynomialElement, NonCommutativePolynomialElement)
-Scalar = TypeVar("Scalar", float, complex)
-
 # Should be invariant by multiplying and adding within the same vector space
-# FIXME: Also used in the __init__.pyi of relaxations, so should maybe be defined elsewhere
 class VectorSpaceElement(Protocol[Scalar]):
     def __add__(self, other: VectorSpaceElement[Scalar]) -> VectorSpaceElement[Scalar]: ...
     def __radd__(self, other: VectorSpaceElement[Scalar]) -> VectorSpaceElement[Scalar]: ...

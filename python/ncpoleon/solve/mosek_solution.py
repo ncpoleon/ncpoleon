@@ -1,15 +1,11 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING
 
 import numpy as np
 
-from ncpoleon.polynomials.commutative_polynomials import CommutativePolynomialElement
-from ncpoleon.polynomials.noncommutative_polynomials import NonCommutativePolynomialElement
+from ncpoleon._typing import PolynomialElements, Scalar
 from ncpoleon.solve.solution import BaseSolution
-
-PolynomialElements = TypeVar("PolynomialElements", CommutativePolynomialElement, NonCommutativePolynomialElement)
-Scalar = TypeVar("Scalar", float, complex)
 
 if TYPE_CHECKING:
     from mosek.fusion import Model

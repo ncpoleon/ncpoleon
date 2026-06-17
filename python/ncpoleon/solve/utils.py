@@ -25,20 +25,28 @@ def automatic_solver_detection() -> str:
     return "picos"
 
 
+# FIXME: sue np.ndarray directly in the type hints, so tht we can specify the shape
 @overload
 def sos_vectors_of_hermitian_matrix(
-    matrix: npt.NDArray[np.float64],
+    matrix: npt.NDArray[np.float64], cutoff: float
 ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]: ...
 @overload
 def sos_vectors_of_hermitian_matrix(
-    matrix: npt.NDArray[np.complex128],
+    matrix: npt.NDArray[np.complex128], cutoff: float
 ) -> tuple[npt.NDArray[np.complex128], npt.NDArray[np.complex128]]: ...
 
 
 def sos_vectors_of_hermitian_matrix(
-    matrix: npt.NDArray[np.float64 | np.complex128],
+    matrix: npt.NDArray[np.float64 | np.complex128], cutoff: float
 ) -> tuple[npt.NDArray[np.float64 | np.complex128], npt.NDArray[np.float64 | np.complex128]]:
     eigvals, eigvecs = np.linalg.eigh(matrix)
+
+    # Remove small eigvals
+    cutoff_mask = np.abs(eigvals) >= cutoff
+    eigvecs = eigvecs[:, cutoff_mask]
+    eigvals = eigvals[cutoff_mask]
+
+    # Split positive and negative eigvals
     mask = eigvals >= 0
     positive_eigvecs = eigvecs[:, mask]
     positive_eigvals = np.sqrt(eigvals[mask])

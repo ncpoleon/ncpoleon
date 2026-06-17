@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any
 
 try:
     # The following import allows to use dunder methods on MOSEK expressions
@@ -16,11 +16,9 @@ except ImportError:
     if TYPE_CHECKING:
         from mosek.fusion import Expr, ExprMulScalarConst, Matrix, Model, PSDVariable, SparseMatrix
 
-from ncpoleon.polynomials.commutative_polynomials import CommutativePolynomialElement
-from ncpoleon.polynomials.noncommutative_polynomials import NonCommutativePolynomialElement
+        from ncpoleon.relaxations import MomentMatrix
 
-PolynomialElements = TypeVar("PolynomialElements", CommutativePolynomialElement, NonCommutativePolynomialElement)
-Scalar = TypeVar("Scalar", float, complex)
+from ncpoleon._typing import PolynomialElements, Scalar
 
 if TYPE_CHECKING:
     from ncpoleon.relaxations import BaseSdpRelaxation
@@ -87,8 +85,8 @@ def convert_row_col_data_to_mosek_hermitian_matrix(
 
 
 def rust_moment_matrix_to_mosek(
-    moment_matrix: MomentMatrix[CommutativeMonomial | NonCommutativeMonomial, float | complex],
-    mapped_variables: dict[CommutativeMonomial | NonCommutativeMonomial, Expr | _ComplexExpr],
+    moment_matrix: MomentMatrix[PolynomialElements, Scalar],
+    mapped_variables: dict[PolynomialElements, Expr | _ComplexExpr],
     matrix_builder: Callable[[tuple[list[int], list[int], list[complex]] | None, int], Matrix | None],
 ) -> Matrix:
     mosek_moment_matrix_re = 0

@@ -1,5 +1,6 @@
-from typing import Generic, Literal, TypeAlias, TypeVar, overload
+from typing import Generic, Literal, TypeAlias, overload
 
+from ncpoleon._typing import PolynomialElements, Scalar
 from ncpoleon.polynomials import Polynomial, RewritingStrategy, VectorSpaceElement
 from ncpoleon.polynomials.commutative_polynomials import (
     CommutativeOperator,
@@ -13,9 +14,6 @@ from ncpoleon.polynomials.noncommutative_polynomials import (
     NonCommutativePolynomialElement,
     RealCoefficientsNonCommutativePolynomial,
 )
-
-PolynomialElements = TypeVar("PolynomialElements", CommutativePolynomialElement, NonCommutativePolynomialElement)
-Scalar = TypeVar("Scalar", float, complex)
 
 class Constraint(Generic[PolynomialElements, Scalar]):
     @property

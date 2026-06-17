@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, TypeVar, overload
+from typing import TYPE_CHECKING, Any, overload
 
 import numpy as np
 from scipy.sparse import coo_matrix
@@ -15,11 +15,7 @@ except ImportError:
     if TYPE_CHECKING:
         import picos as pc
 
-from ncpoleon.polynomials.commutative_polynomials import CommutativePolynomialElement
-from ncpoleon.polynomials.noncommutative_polynomials import NonCommutativePolynomialElement
-
-PolynomialElements = TypeVar("PolynomialElements", CommutativePolynomialElement, NonCommutativePolynomialElement)
-Scalar = TypeVar("Scalar", float, complex)
+from ncpoleon._typing import PolynomialElements, Scalar
 
 if TYPE_CHECKING:
     from ncpoleon.relaxations import BaseSdpRelaxation
