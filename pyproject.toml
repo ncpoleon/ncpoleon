@@ -34,22 +34,24 @@ classifiers = [
 ]
 requires-python = ">=3.11"
 dynamic = ["version"]
-dependencies = []
+dependencies = ["numpy>=2.3.0"]
 [project.optional-dependencies]
+mosek = ["mosek>=11.2.0"]
+picos = ["picos>=2.6.2", "scipy>=1.17.1"]
+
+[dependency-groups]
 dev = [
-    "pytest",
-    "pytest-codspeed",
-    "numpy",
-    "scipy",
-    "scipy-stubs",
-    "picos",
-    "mypy",
-    "mosek",
-    "mkdocs-material",
-    "mkdocstrings[python]",
+    "mkdocs-material>=9.7.6",
+    "mkdocstrings[python]>=1.0.4",
+    "mosek>=11.2.0",
+    "picos>=2.6.2",
+    "pytest>=9.0.3",
+    "pytest-codspeed>=5.0.3",
+    "scipy>=1.17.1",
+    "scipy-stubs>=1.17.1.5",
+    "ty>=0.0.40",
 ]
-picos = ["picos", "scipy", "numpy"]
-mosek = ["mosek"]
+
 [tool.maturin]
 python-source = "python"
 features = ["pyo3/extension-module"]
@@ -65,7 +67,6 @@ exclude = [
     ".git-rewrite",
     ".hg",
     ".ipynb_checkpoints",
-    ".mypy_cache",
     ".nox",
     ".pants.d",
     ".pyenv",
@@ -137,14 +138,13 @@ docstring-code-format = true
 # enabled.
 docstring-code-line-length = "dynamic"
 
-[tool.mypy]
-python_version = "3.11"
-strict = true
-warn_return_any = true
-warn_unused_configs = true
-files = "python/"
-exclude = "python/tests"
-mypy_path = "stubs"
+[tool.ty.environment]
+python-version = "3.11"
+extra-paths = ["stubs"]
+
+[tool.ty.src]
+include = ["python"]
+exclude = ["python/tests"]
 
 [tool.pytest]
 console_output_style = "progress"
@@ -152,3 +152,13 @@ strict_config = true
 strict_markers = true
 strict_parametrization_ids = true
 testpaths = ["python/tests"]
+
+[tool.uv]
+# Rebuild package when any rust files change
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "rust/Cargo.toml" },
+    { file = "**/*.rs" },
+]
+# Uncomment to build rust code in development mode
+config-settings = { build-args = '--profile=dev' }

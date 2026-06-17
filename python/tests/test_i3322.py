@@ -22,8 +22,8 @@ def generate_i3322_parameters():
                 if use_primal:
                     marks.append(
                         pytest.mark.xfail(
-                            reason="Solving the primal using the MOSEK Python Fusion API may result in a Recursion Error "
-                            "because the involved LMI is too large.",
+                            reason="Solving the primal using the MOSEK Python Fusion API may result in a Recursion "
+                            "Error because the involved LMI is too large.",
                             raises=RecursionError,
                         )
                     )

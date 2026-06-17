@@ -202,11 +202,7 @@ macro_rules! impl_moment_matrix_pymethods {
             fn get_canonical(&self, monomial: &$py_monomial) -> PyResult<($py_monomial, bool, bool)> {
                 let (rust_monomial, is_adjoint, is_real_valued) = self
                     .0
-                    .get_canonical(
-                        &monomial.0,
-                        RewritingStrategy::None,
-                        &BTreeMap::new()
-                    )
+                    .get_canonical(&monomial.0, RewritingStrategy::None, &BTreeMap::new())
                     .map_err(PyValueError::new_err)?;
                 Ok(($py_monomial(rust_monomial), is_adjoint, is_real_valued))
             }

@@ -17,10 +17,8 @@ pub fn polynomials(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Inserting to sys.modules allows importing submodules nicely from Python
     let sys = PyModule::import(m.py(), "sys")?;
     let sys_modules: Bound<'_, PyDict> = sys.getattr("modules")?.cast_into()?;
-    sys_modules.set_item(
-        "ncpoleon._accelerate.polynomials.commutative_polynomials",
-        m.getattr("commutative_polynomials")?,
-    )?;
+    sys_modules
+        .set_item("ncpoleon._accelerate.polynomials.commutative_polynomials", m.getattr("commutative_polynomials")?)?;
 
     m.add_wrapped(wrap_pymodule!(noncommutative_polynomials::noncommutative_polynomials))?;
 
