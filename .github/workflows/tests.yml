@@ -14,8 +14,6 @@ permissions:
 jobs:
   pytest:
     runs-on: ubuntu-latest
-    env:
-      MOSEKLM_LICENSE_FILE: ${{ secrets.MSK_LICENSE }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
@@ -23,5 +21,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
       - uses: astral-sh/setup-uv@v8.2.0
-      - name: uv run pytest
-        run: uv run pytest
+      - name: pytest
+        env:
+          MSK_LICENSE: ${{ secrets.MSK_LICENSE }}
+        run: |
+          echo "$MSK_LICENSE" > "$HOME/mosek.lic"
+          export MOSEKLM_LICENSE_FILE="$HOME/mosek.lic"
+          uv run pytest
