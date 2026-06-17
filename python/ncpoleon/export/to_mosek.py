@@ -367,9 +367,10 @@ def to_mosek(
                     new_constraint = Expr.mul(Expr.dot(Y, Matrix.diag([F, F])), 1 / 2)
                 else:  # position matrix only contains the position of the canonical monomial
                     F_re, F_im = convert_row_col_data_to_mosek_hermitian_matrix(pos_matrix, moment_matrix.size)
-                    # Even though the trace of the representation is twice the trace of the original matrix, since we need to consider F + F^dagger
-                    # in the trace and since the hermitianize function actually returns the representation of (F + F^dagger) / 2, we can simply
-                    # consider .dot here without adding the 1/2 factor
+                    # Even though the trace of the representation is twice the trace of the original matrix, since we
+                    # need to consider F + F^dagger in the trace and since the hermitianize function actually returns
+                    # the representation of (F + F^dagger) / 2, we can simply consider .dot here without adding the 1/2
+                    # factor
                     new_constraint_re = Expr.dot(Y, mosek_hermitianize(F_re, F_im))
                     # The above comment also applies to antihermitianize
                     new_constraint_im = Expr.dot(Y, mosek_antihermitianize(F_re, F_im))
