@@ -25,7 +25,7 @@ jobs:
         env:
           MSK_LICENSE: ${{ secrets.MSK_LICENSE }}
         run: |
-          echo "$MSK_LICENSE" > "$HOME/mosek.lic"
+          echo -n "$MSK_LICENSE" > "$HOME/mosek.lic"
           export MOSEKLM_LICENSE_FILE="$HOME/mosek.lic"
           sha256sum "$MOSEKLM_LICENSE_FILE"
           uv run pytest -x
