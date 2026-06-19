@@ -23,7 +23,8 @@ jobs:
       - uses: astral-sh/setup-uv@v8.2.0
       - name: Python tests
         env:
-          MSK_LICENSE: ${{ secrets.MSK_LICENSE }}
+          MSK_LICENSE: |
+            ${{ secrets.MSK_LICENSE }}
         run: |
           echo -n "$MSK_LICENSE" > "$HOME/mosek.lic"
           export MOSEKLM_LICENSE_FILE="$HOME/mosek.lic"
