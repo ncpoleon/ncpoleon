@@ -25,10 +25,8 @@ jobs:
         env:
           MSK_LICENSE: ${{ secrets.MSK_LICENSE }}
         run: |
-          printf '%s' "$MSK_LICENSE" > "$HOME/mosek.lic"
+          echo "$MSK_LICENSE" > "$HOME/mosek.lic"
           export MOSEKLM_LICENSE_FILE="$HOME/mosek.lic"
-          sha256sum "$MOSEKLM_LICENSE_FILE"
-          head -n 1 "$MOSEKLM_LICENSE_FILE"
           uv run pytest -x
 
   cargo-test:
