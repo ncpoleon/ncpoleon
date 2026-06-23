@@ -5,7 +5,6 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Generic
 
 import numpy as np
-import numpy.typing as npt
 
 from ncpoleon._typing import PolynomialElements, Scalar
 from ncpoleon.solve.utils import sos_vectors_of_hermitian_matrix
@@ -26,13 +25,13 @@ if TYPE_CHECKING:
 class BaseSolution(ABC, Generic[PolynomialElements, Scalar]):
     @property
     @abstractmethod
-    def value(self) -> np.float64: ...
+    def value(self) -> float: ...
 
     @abstractmethod
-    def __getitem__(self, monomial: PolynomialElements) -> np.float64 | np.complex128: ...
+    def __getitem__(self, monomial: PolynomialElements) -> Scalar: ...
 
     @property
-    def moment_matrix(self) -> npt.NDArray[np.float64 | np.complex128]:
+    def moment_matrix(self) -> np.ndarray[tuple[int, int], np.dtype[np.float64] | np.dtype[np.complex128]]:
         moment_matrices = self.moment_matrix_by_mm_id
         if len(moment_matrices) > 1:
             warnings.warn(
@@ -43,10 +42,12 @@ class BaseSolution(ABC, Generic[PolynomialElements, Scalar]):
 
     @property
     @abstractmethod
-    def moment_matrix_by_mm_id(self) -> dict[int, npt.NDArray[np.float64 | np.complex128]]: ...
+    def moment_matrix_by_mm_id(
+        self,
+    ) -> dict[int, np.ndarray[tuple[int, int], np.dtype[np.float64] | np.dtype[np.complex128]]]: ...
 
     @property
-    def moment_matrix_multiplier(self) -> npt.NDArray[np.float64 | np.complex128]:
+    def moment_matrix_multiplier(self) -> np.ndarray[tuple[int, int], np.dtype[np.float64] | np.dtype[np.complex128]]:
         moment_matrix_multipliers = self.moment_matrix_multiplier_by_mm_id
         if len(moment_matrix_multipliers) > 1:
             warnings.warn(
@@ -57,12 +58,19 @@ class BaseSolution(ABC, Generic[PolynomialElements, Scalar]):
 
     @property
     @abstractmethod
-    def moment_matrix_multiplier_by_mm_id(self) -> dict[int, npt.NDArray[np.float64 | np.complex128]]: ...
+    def moment_matrix_multiplier_by_mm_id(
+        self,
+    ) -> dict[int, np.ndarray[tuple[int, int], np.dtype[np.float64] | np.dtype[np.complex128]]]: ...
 
     @property
     def localizing_matrices_equality_multipliers(
         self,
-    ) -> list[tuple[Polynomial[PolynomialElements, Scalar], npt.NDArray[np.float64 | np.complex128]]]:
+    ) -> list[
+        tuple[
+            Polynomial[PolynomialElements, Scalar],
+            np.ndarray[tuple[int, int], np.dtype[np.float64] | np.dtype[np.complex128]],
+        ]
+    ]:
         localizing_matrices_multipliers = self.localizing_matrices_equality_multipliers_by_mm_id
         if len(localizing_matrices_multipliers) > 1:
             warnings.warn(
@@ -76,12 +84,25 @@ class BaseSolution(ABC, Generic[PolynomialElements, Scalar]):
     @abstractmethod
     def localizing_matrices_equality_multipliers_by_mm_id(
         self,
-    ) -> dict[int, list[tuple[Polynomial[PolynomialElements, Scalar], npt.NDArray[np.float64 | np.complex128]]]]: ...
+    ) -> dict[
+        int,
+        list[
+            tuple[
+                Polynomial[PolynomialElements, Scalar],
+                np.ndarray[tuple[int, int], np.dtype[np.float64] | np.dtype[np.complex128]],
+            ]
+        ],
+    ]: ...
 
     @property
     def localizing_matrices_inequality(
         self,
-    ) -> list[tuple[Polynomial[PolynomialElements, Scalar], npt.NDArray[np.float64 | np.complex128]]]:
+    ) -> list[
+        tuple[
+            Polynomial[PolynomialElements, Scalar],
+            np.ndarray[tuple[int, int], np.dtype[np.float64] | np.dtype[np.complex128]],
+        ]
+    ]:
         localizing_matrices = self.localizing_matrices_inequality_by_mm_id
         if len(localizing_matrices) > 1:
             warnings.warn(
@@ -95,10 +116,20 @@ class BaseSolution(ABC, Generic[PolynomialElements, Scalar]):
     @abstractmethod
     def localizing_matrices_inequality_by_mm_id(
         self,
-    ) -> dict[int, list[tuple[Polynomial[PolynomialElements, Scalar], npt.NDArray[np.float64 | np.complex128]]]]: ...
+    ) -> dict[
+        int,
+        list[
+            tuple[
+                Polynomial[PolynomialElements, Scalar],
+                np.ndarray[tuple[int, int], np.dtype[np.float64] | np.dtype[np.complex128]],
+            ]
+        ],
+    ]: ...
 
     @property
-    def localizing_matrices_inequality_multipliers(self) -> list[npt.NDArray[np.float64 | np.complex128]]:
+    def localizing_matrices_inequality_multipliers(
+        self,
+    ) -> list[np.ndarray[tuple[int, int], np.dtype[np.float64] | np.dtype[np.complex128]]]:
         localizing_matrices_multipliers = self.localizing_matrices_inequality_multipliers_by_mm_id
         if len(localizing_matrices_multipliers) > 1:
             warnings.warn(
@@ -113,17 +144,17 @@ class BaseSolution(ABC, Generic[PolynomialElements, Scalar]):
     @abstractmethod
     def localizing_matrices_inequality_multipliers_by_mm_id(
         self,
-    ) -> dict[int, list[npt.NDArray[np.float64 | np.complex128]]]: ...
+    ) -> dict[int, list[np.ndarray[tuple[int, int], np.dtype[np.float64] | np.dtype[np.complex128]]]]: ...
 
     @property
     @abstractmethod
     def moment_equalities_multipliers(
         self,
-    ) -> list[tuple[Polynomial[PolynomialElements, Scalar], np.float64 | np.complex128]]: ...
+    ) -> list[tuple[Polynomial[PolynomialElements, Scalar], float | complex]]: ...
 
     @property
     @abstractmethod
-    def moment_inequalities_multipliers(self) -> list[tuple[Polynomial[PolynomialElements, Scalar], np.float64]]: ...
+    def moment_inequalities_multipliers(self) -> list[tuple[Polynomial[PolynomialElements, Scalar], float]]: ...
 
     @property
     @abstractmethod
@@ -204,7 +235,31 @@ class BaseSolution(ABC, Generic[PolynomialElements, Scalar]):
             moment_equalities_terms = []
 
             for generator, coefficient in moment_equality_multipliers.get(mm_id, []):
-                moment_equalities_terms.append(SingleMomentDecomposition(generator=generator, coefficient=coefficient))
+                if isinstance(coefficient, float):
+                    moment_equalities_terms.append(
+                        SingleMomentDecomposition(
+                            generator=(self.relaxation.rewrite(generator + generator.adjoint()) / 2),
+                            coefficient=coefficient,
+                        )
+                    )
+                elif isinstance(coefficient, complex):
+                    moment_equalities_terms.append(
+                        SingleMomentDecomposition(
+                            generator=(self.relaxation.rewrite(generator + generator.adjoint()) / 2),
+                            coefficient=coefficient.real,
+                        )
+                    )
+                    moment_equalities_terms.append(
+                        SingleMomentDecomposition(
+                            generator=(self.relaxation.rewrite(generator.adjoint() - generator) / 2),
+                            coefficient=coefficient.imag * 1j,
+                        )
+                    )
+                else:
+                    raise ValueError(
+                        f"Lagrange multiplier for moment equality {generator} has type {type(coefficient)}, but only "
+                        "floats and complex are supported."
+                    )
 
             moment_inequalities_terms = []
 

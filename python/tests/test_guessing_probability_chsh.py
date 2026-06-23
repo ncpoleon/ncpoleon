@@ -1,15 +1,16 @@
 from math import sqrt
 
 import pytest
-from ncpoleon import generate_noncommutative_variables, get_relaxation
-from ncpoleon.export import to_mosek, to_picos
+from ncpoleon import generate_noncommutative_variables, get_relaxation, solve
 from ncpoleon.utils import is_mosek_available
+
+from .utils import reduce_sos_decomposition
 
 
 @pytest.mark.parametrize(
-    "export",
+    "solver",
     [
-        "picos",
+        "cvxopt",
         pytest.param(
             "mosek",
             marks=pytest.mark.skipif(
@@ -21,8 +22,7 @@ from ncpoleon.utils import is_mosek_available
 @pytest.mark.parametrize("use_primal", [False, True])
 @pytest.mark.parametrize("level", [1, 2])
 @pytest.mark.parametrize("w", [2.0, 2.25, 2.5])
-@pytest.mark.benchmark
-def test_guessing_probability_chsh(export, use_primal, level, w):
+def test_guessing_probability_chsh(benchmark, solver, use_primal, level, w):
     """
     NCPOP relaxation of the guessing probability problem for DI Cryptography
 
@@ -59,26 +59,19 @@ def test_guessing_probability_chsh(export, use_primal, level, w):
 
     obj = M0 * E + (1 - M0) * (1 - E)
 
-    sdp = get_relaxation(
-        [M0, M1, N0, N1, E], level, obj, substitutions=substitutions, moment_constraints=moment_constraints
+    sdp = benchmark(
+        get_relaxation,
+        [M0, M1, N0, N1, E],
+        level,
+        obj,
+        substitutions=substitutions,
+        moment_constraints=moment_constraints,
     )
+    sol = solve(sdp, "max", solver=solver, force_primal=use_primal)
 
-    if export == "picos":
-        problem = to_picos(sdp, "max", primal=use_primal)
-    elif export == "mosek":
-        problem = to_mosek(sdp, "max", primal=use_primal)
+    if level == 1:
+        assert sol.value == pytest.approx(1.0)
     else:
-        raise ValueError(f"Unknown export: {export}.")
+        assert sol.value == pytest.approx((1 + sqrt(2 - (w**2) / 4)) / 2)
 
-    problem.solve()
-
-    if export == "picos":
-        if level == 1:
-            assert problem.value == pytest.approx(1.0)
-        else:
-            assert problem.value == pytest.approx((1 + sqrt(2 - (w**2) / 4)) / 2)
-    elif export == "mosek":
-        if level == 1:
-            assert problem.primalObjValue() == pytest.approx(1.0)
-        else:
-            assert problem.primalObjValue() == pytest.approx((1 + sqrt(2 - (w**2) / 4)) / 2)
+    assert (sdp.rewrite(reduce_sos_decomposition(sol.get_sos_decomposition()) + obj)).is_zero(1e-7)

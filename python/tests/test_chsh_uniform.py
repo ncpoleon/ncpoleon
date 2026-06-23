@@ -1,15 +1,16 @@
 from math import sqrt
 
 import pytest
-from ncpoleon import generate_noncommutative_variables, get_relaxation
-from ncpoleon.export import to_mosek, to_picos
+from ncpoleon import generate_noncommutative_variables, get_relaxation, solve
 from ncpoleon.utils import is_mosek_available
+
+from .utils import reduce_sos_decomposition
 
 
 @pytest.mark.parametrize(
-    "export",
+    "solver",
     [
-        "picos",
+        "cvxopt",
         pytest.param(
             "mosek",
             marks=pytest.mark.skipif(
@@ -19,8 +20,8 @@ from ncpoleon.utils import is_mosek_available
     ],
 )
 @pytest.mark.parametrize("use_primal", [False, True])
-@pytest.mark.benchmark
-def test_chsh_uniform(export, use_primal):
+@pytest.mark.benchmark  # TODO: we should use the benchmark fixture along with a parameter indicating which part (relaxation/solving/sos) we're benchmarking
+def test_chsh_uniform(solver, use_primal):
     """
     What is the largest CHSH value possible if we know that the inputs (x,y) = (0,0)
     produce a uniform distribution?
@@ -45,17 +46,7 @@ def test_chsh_uniform(export, use_primal):
     moment_constraints = [A[0] * B[0] == 0, A[0] == 0, B[0] == 0]
 
     sdp = get_relaxation(A + B, level, obj, substitutions=substitutions, moment_constraints=moment_constraints)
+    sol = solve(sdp, "max", force_primal=use_primal, solver=solver)
 
-    if export == "picos":
-        problem = to_picos(sdp, "max", primal=use_primal)
-    elif export == "mosek":
-        problem = to_mosek(sdp, "max", primal=use_primal)
-    else:
-        raise ValueError(f"Unknown export: {export}.")
-
-    problem.solve()
-
-    if export == "picos":
-        assert problem.value == pytest.approx(3 * sqrt(3) / 2)
-    elif export == "mosek":
-        assert problem.primalObjValue() == pytest.approx(3 * sqrt(3) / 2)
+    assert sol.value == pytest.approx(3 * sqrt(3) / 2)
+    assert (sdp.rewrite(reduce_sos_decomposition(sol.get_sos_decomposition()) + obj)).is_zero(1e-7)

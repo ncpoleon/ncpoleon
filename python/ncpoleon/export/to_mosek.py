@@ -424,6 +424,7 @@ def to_mosek(
                             assert minus_beta_im is None
                             new_constraint = Expr.add(new_constraint, Expr.mul(lambda_m, beta_re))
                         else:
+                            assert minus_beta_im is not None
                             new_constraint_re = Expr.add(new_constraint_re, Expr.mul(Expr.mul(lambda_m, beta_re), 2.0))
                             new_constraint_im = Expr.add(
                                 new_constraint_im, Expr.mul(Expr.mul(lambda_m, minus_beta_im), 2.0)

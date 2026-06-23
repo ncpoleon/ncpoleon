@@ -296,6 +296,7 @@ macro_rules! impl_sdp_relaxation_pymethods {
                 if let Some(res) = res { res } else { Err(PyValueError::new_err("Can't replace the Zero polynomial.")) }
             }
 
+            // FIXME: This docstring is unclear and not helpful
             /// Splits a polynomial of moments into its real and imaginary parts.
             ///
             /// Given `P = Σ_m c_m [m]` where each `[m]` is a (possibly complex) moment, this
@@ -370,7 +371,7 @@ macro_rules! impl_sdp_relaxation_pymethods {
                     .collect();
                 let python_imag_part: BTreeMap<_, _> = imag_part
                     .into_iter()
-                    // We use unwrap here since we always insert the imaginarity part with Some, no None in unreachable
+                    // We use unwrap here since we always insert the imaginarity part with Some, no None is unreachable
                     .filter(|(_mon, (coeff_re, coeff_im))| *coeff_re != 0.0 || coeff_im.unwrap() != 0.0)
                     .map(|(rust_monomial, coeff)| ($py_monomial(rust_monomial), coeff))
                     .collect();
@@ -404,9 +405,9 @@ macro_rules! impl_sdp_relaxation_pymethods {
                     .collect()
             }
 
-            fn reduce_monomial<'py>(&self, monomial: &Bound<'py, PyAny>) -> PyResult<$py_monomial> {
-                let mon: $py_monomial = monomial.try_into()?;
-                Ok(
+            fn rewrite<'py>(&self, mon_or_poly: &Bound<'py, PyAny>) -> PyResult<Py<PyAny>> {
+                let py = mon_or_poly.py();
+                if let Ok(mon) = TryInto::<$py_monomial>::try_into(mon_or_poly) {
                     $py_monomial(
                         mon.0
                         .rewrite(
@@ -414,8 +415,18 @@ macro_rules! impl_sdp_relaxation_pymethods {
                             &self.0.substitutions
                         )
                         .map_err(PyValueError::new_err)?
-                    )
-                )
+                    ).into_py_any(py)
+                } else {
+                    let poly: $py_poly = mon_or_poly.try_into()?;
+                    $py_poly(
+                        poly.0
+                        .rewrite(
+                            self.0.substitution_strategy,
+                            &self.0.substitutions
+                        )
+                        .map_err(PyValueError::new_err)?
+                    ).into_py_any(py)
+                }
             }
 
             /// Dictionary of all generating sets

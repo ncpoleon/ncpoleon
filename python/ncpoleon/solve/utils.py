@@ -5,27 +5,22 @@ from typing import cast, overload
 import numpy as np
 import numpy.typing as npt
 
+from ncpoleon.utils import is_mosek_available
+
 logger = logging.getLogger(__name__)
 
 
 def automatic_solver_detection() -> str:
-    if find_spec("mosek") is not None:
-        try:
-            import mosek
-
-            with mosek.Env() as env:
-                env.checkoutlicense(mosek.feature.pts)
-            return "mosek"
-        except mosek.Error:
-            logging.warning("MOSEK is installed but no valid license has been found, skipping.")
+    if is_mosek_available():
+        return "mosek"
 
     if find_spec("picos") is None:
-        raise ImportError("No solver has been found. Tried: mosek, picos.")
+        raise ImportError("No solver has been found. Tried: mosek, cvxopt via Picos.")
 
-    return "picos"
+    return "cvxopt"
 
 
-# FIXME: sue np.ndarray directly in the type hints, so tht we can specify the shape
+# FIXME: change to np.ndarray directly in the type hints, so tht we can specify the shape
 @overload
 def sos_vectors_of_hermitian_matrix(
     matrix: npt.NDArray[np.float64], cutoff: float

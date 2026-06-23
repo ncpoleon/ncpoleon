@@ -39,8 +39,8 @@ class MosekSolution(BaseSolution[PolynomialElements, Scalar]):
     def relaxation(self) -> BaseSdpRelaxation[PolynomialElements, Scalar]:
         return self._relaxation
 
-    def __getitem__(self, monomial: PolynomialElements) -> np.float64 | np.complex128:
-        rewritten_monomial = self._relaxation.reduce_monomial(monomial)
+    def __getitem__(self, monomial: PolynomialElements) -> Scalar:
+        rewritten_monomial = self._relaxation.rewrite(monomial)
         canonical_monomial, is_adjoint, is_real_valued = self._relaxation.moment_matrices[
             rewritten_monomial.moment_matrix_id
         ].get_canonical(rewritten_monomial)
@@ -73,17 +73,19 @@ class MosekSolution(BaseSolution[PolynomialElements, Scalar]):
             ) * sign
 
     @property
-    def moment_matrix_by_mm_id(self) -> dict[int, np.ndarray]:
+    def moment_matrix_by_mm_id(
+        self,
+    ) -> dict[int, np.ndarray[tuple[int, int], np.dtype[np.float64] | np.dtype[np.complex128]]]:
         res = {}
 
         for id, moment_matrix in self._relaxation.moment_matrices.items():
             size = moment_matrix.size
 
             if self._primal:
-                moment_matrix_level = self._model.getConstraint("MM-0").level()
+                moment_matrix_level = self._model.getConstraint(f"MM-{id}").level()
             else:
                 sign = 1 if self._objective_sense == "max" else -1
-                moment_matrix_level = self._model.getVariable("Y_0").dual() * sign
+                moment_matrix_level = self._model.getVariable(f"Y_{id}").dual() * sign
 
             if self._relaxation.is_real:
                 res[id] = moment_matrix_level.reshape(size, size)
@@ -94,7 +96,9 @@ class MosekSolution(BaseSolution[PolynomialElements, Scalar]):
         return res
 
     @property
-    def moment_matrix_multiplier_by_mm_id(self) -> dict[int, np.ndarray]:
+    def moment_matrix_multiplier_by_mm_id(
+        self,
+    ) -> dict[int, np.ndarray[tuple[int, int], np.dtype[np.float64] | np.dtype[np.complex128]]]:
         res = {}
 
         for id, moment_matrix in self._relaxation.moment_matrices.items():
@@ -102,9 +106,9 @@ class MosekSolution(BaseSolution[PolynomialElements, Scalar]):
 
             if self._primal:
                 sign = 1 if self._objective_sense == "min" else -1
-                moment_matrix_dual = self._model.getConstraint("MM-0").dual() * sign
+                moment_matrix_dual = self._model.getConstraint(f"MM-{id}").dual() * sign
             else:
-                moment_matrix_dual = self._model.getVariable("Y_0").level()
+                moment_matrix_dual = self._model.getVariable(f"Y_{id}").level()
 
             if self._relaxation.is_real:
                 res[id] = moment_matrix_dual.reshape(size, size)
@@ -117,7 +121,15 @@ class MosekSolution(BaseSolution[PolynomialElements, Scalar]):
     @property
     def localizing_matrices_equality_multipliers_by_mm_id(
         self,
-    ) -> dict[int, list[tuple[Polynomial[PolynomialElements, Scalar], np.ndarray]]]:
+    ) -> dict[
+        int,
+        list[
+            tuple[
+                Polynomial[PolynomialElements, Scalar],
+                np.ndarray[tuple[int, int], np.dtype[np.float64] | np.dtype[np.complex128]],
+            ]
+        ],
+    ]:
         res = {}
 
         for (
@@ -176,7 +188,15 @@ class MosekSolution(BaseSolution[PolynomialElements, Scalar]):
     @property
     def localizing_matrices_inequality_by_mm_id(
         self,
-    ) -> dict[int, list[tuple[Polynomial[PolynomialElements, Scalar], np.ndarray]]]:
+    ) -> dict[
+        int,
+        list[
+            tuple[
+                Polynomial[PolynomialElements, Scalar],
+                np.ndarray[tuple[int, int], np.dtype[np.float64] | np.dtype[np.complex128]],
+            ]
+        ],
+    ]:
         res = {}
 
         for (
@@ -227,7 +247,15 @@ class MosekSolution(BaseSolution[PolynomialElements, Scalar]):
     @property
     def localizing_matrices_inequality_multipliers_by_mm_id(
         self,
-    ) -> dict[int, list[tuple[Polynomial[PolynomialElements, Scalar], np.ndarray]]]:
+    ) -> dict[
+        int,
+        list[
+            tuple[
+                Polynomial[PolynomialElements, Scalar],
+                np.ndarray[tuple[int, int], np.dtype[np.float64] | np.dtype[np.complex128]],
+            ]
+        ],
+    ]:
         res = {}
 
         for (

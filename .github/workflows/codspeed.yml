@@ -35,4 +35,4 @@ jobs:
                   MOSEKLM_LICENSE_FILE: ${{ github.workspace }}/mosek.lic
               with:
                   mode: simulation
-                  run: uv run --config-setting 'build-args=--profile=release' pytest -x
+                  run: uv run --config-setting 'build-args=--profile=release' pytest -x --codspeed

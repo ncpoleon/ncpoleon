@@ -1,13 +1,14 @@
 from math import log2, sqrt
 
 import pytest
-from ncpoleon import generate_noncommutative_variables, get_relaxation
-from ncpoleon.export import to_mosek, to_picos
+from ncpoleon import generate_noncommutative_variables, get_relaxation, solve
 from ncpoleon.utils import is_mosek_available
+
+from .utils import reduce_sos_decomposition
 
 
 def generate_multiple_moment_matrices_parameters():
-    for export in ["mosek", "picos"]:
+    for solver in ["mosek", "cvxopt"]:
         for use_primal in [True, False]:
             for level, w, expected in [
                 (1, 2.0, 0.0),
@@ -17,7 +18,7 @@ def generate_multiple_moment_matrices_parameters():
             ]:
                 marks = []
 
-                if export == "mosek":
+                if solver == "mosek":
                     marks.append(
                         pytest.mark.skipif(
                             not is_mosek_available(),
@@ -34,12 +35,12 @@ def generate_multiple_moment_matrices_parameters():
                             )
                         )
 
-                yield pytest.param(export, use_primal, level, w, expected, marks=marks)
+                yield pytest.param(solver, use_primal, level, w, expected, marks=marks)
 
 
-@pytest.mark.parametrize("export, use_primal, level, w, expected", generate_multiple_moment_matrices_parameters())
+@pytest.mark.parametrize("solver, use_primal, level, w, expected", generate_multiple_moment_matrices_parameters())
 @pytest.mark.benchmark
-def test_multiple_moment_matrices(export, use_primal, level, w, expected):
+def test_multiple_moment_matrices(solver, use_primal, level, w, expected):
     # TODO: write docstring about the problem and change the name, it's about CHSH
     F, I_0 = generate_noncommutative_variables("F", 4, projector=True, moment_matrix_id=0, return_identity=True)
     G = generate_noncommutative_variables("G", 4, projector=True, moment_matrix_id=0)
@@ -95,16 +96,6 @@ def test_multiple_moment_matrices(export, use_primal, level, w, expected):
         normalization_constraints=normalization_constraints,
     )
 
-    if export == "picos":
-        problem = to_picos(sdp, "max", primal=use_primal)
-    elif export == "mosek":
-        problem = to_mosek(sdp, "max", primal=use_primal)
-    else:
-        raise ValueError(f"Unknown export: {export}.")
-
-    problem.solve()
-
-    if export == "picos":
-        assert -log2(problem.value) == pytest.approx(expected, abs=1e-6)
-    elif export == "mosek":
-        assert -log2(problem.primalObjValue()) == pytest.approx(expected, abs=1e-6)
+    sol = solve(sdp, "max", force_primal=use_primal, solver=solver)
+    assert -log2(sol.value) == pytest.approx(expected, abs=1e-6)
+    assert (sdp.rewrite(reduce_sos_decomposition(sol.get_sos_decomposition()) + objective)).is_zero(1e-7)

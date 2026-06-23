@@ -4,163 +4,91 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from ncpoleon._typing import PolynomialElements, Scalar
 from ncpoleon.solve.solution import BaseSolution
 
 if TYPE_CHECKING:
     import picos as pc
 
-    from ncpoleon.relaxations import (
-        ComplexValuedCommutativeSdpRelaxation,
-        ComplexValuedNonCommutativeSdpRelaxation,
-        RealValuedCommutativeSdpRelaxation,
-        RealValuedNonCommutativeSdpRelaxation,
-    )
+    from ncpoleon.polynomials import Polynomial
+    from ncpoleon.relaxations import BaseSdpRelaxation
 
 
-class PicosSolution(BaseSolution):
+class PicosSolution(BaseSolution[PolynomialElements, Scalar]):
     def __init__(
         self,
-        relaxation: RealValuedCommutativeSdpRelaxation
-        | ComplexValuedCommutativeSdpRelaxation
-        | RealValuedNonCommutativeSdpRelaxation
-        | ComplexValuedNonCommutativeSdpRelaxation,
+        relaxation: BaseSdpRelaxation[PolynomialElements, Scalar],
         problem: pc.Problem,
+        constraints: dict[str, pc.Constraint],
         primal: bool,
     ):
         self._relaxation = relaxation
         self._problem = problem
         self._primal = primal
+        self._constraints = constraints
 
     @property
-    def value(self) -> np.float64 | np.complex128:
+    def value(self) -> float:
         return self._problem.value
 
-    def __getitem__(self, monomial) -> np.float64 | np.complex128:
-        rewritten_monomial = self._relaxation.reduce_monomial(monomial)
+    @property
+    def relaxation(self) -> BaseSdpRelaxation[PolynomialElements, Scalar]:
+        return self._relaxation
+
+    def __getitem__(self, monomial) -> Scalar:
+        rewritten_monomial = self._relaxation.rewrite(monomial)
         canonical_monomial, is_adjoint, is_real_valued = self._relaxation.moment_matrices[
             rewritten_monomial.moment_matrix_id
         ].get_canonical(rewritten_monomial)
 
         if self._primal:
+            if is_adjoint and not is_real_valued:
+                return self._problem.get_variable(str(canonical_monomial)).value.conjugate()
             if is_real_valued:
-                return self._model.getVariable(str(canonical_monomial)).level()[0]
-            if is_adjoint:
-                return (
-                    self._model.getVariable(f"{str(monomial)}_re").level()[0]
-                    - self._model.getVariable(f"{str(monomial)}_im").level()[0] * 1j
-                )
-            return (
-                self._model.getVariable(f"{str(monomial)}_re").level()[0]
-                + self._model.getVariable(f"{str(monomial)}_im").level()[0] * 1j
-            )
+                return self._problem.get_variable(str(canonical_monomial)).value
         else:
-            sign = 1 if self._model.getTask().getobjsense() == "maximize" else -1
-
-            if is_real_valued:
-                return self._model.getConstraint(f"M-{canonical_monomial}").dual()[0] * sign
-            if is_adjoint:
-                return (
-                    self._model.getConstraint(f"M-{monomial}-re").dual()[0]
-                    - self._model.getConstraint(f"M-{monomial}-im").dual()[0] * 1j
-                ) * sign
-            return (
-                self._model.getConstraint(f"M-{monomial}-re").dual()[0]
-                + self._model.getConstraint(f"M-{monomial}-im").dual()[0] * 1j
-            ) * sign
+            return -self._problem.get_constraint(self._constraints[f"M-{canonical_monomial}"]).dual
 
     @property
-    def moment_matrix(self) -> np.ndarray:
-        size = self._relaxation.moment_matrices[0].size
-
-        if self._primal:
-            moment_matrix_level = self._model.getConstraint("MM-0").level()
-        else:
-            moment_matrix_level = self._model.getVariable("Y_0").dual()
-
-        if self._relaxation.is_real:
-            return moment_matrix_level.reshape(size, size)
-
-        moment_matrix_level = moment_matrix_level.reshape(2 * size, 2 * size)
-
-        return moment_matrix_level[:size, :size] + 1j * moment_matrix_level[size:, :size]
-
-    @property
-    def moment_matrix_by_mm_id(self) -> dict[int, np.ndarray]:
+    def moment_matrix_by_mm_id(
+        self,
+    ) -> dict[int, np.ndarray[tuple[int, int], np.dtype[np.float64] | np.dtype[np.complex128]]]:
         res = {}
 
-        for id, moment_matrix in self._relaxation.moment_matrices.items():
-            size = moment_matrix.size
-
+        for id in self._relaxation.moment_matrices:
             if self._primal:
-                moment_matrix_level = self._model.getConstraint("MM-0").level()
+                res[id] = np.array(self._problem.get_constraint(self._constraints[f"MM-{id}"]).lhs.value)
             else:
-                moment_matrix_level = self._model.getVariable("Y_0").dual()
-
-            if self._relaxation.is_real:
-                res[id] = moment_matrix_level.reshape(size, size)
-
-            moment_matrix_level = moment_matrix_level.reshape(2 * size, 2 * size)
-            res[id] = moment_matrix_level[:size, :size] + 1j * moment_matrix_level[size:, :size]
+                res[id] = np.array(self._problem.get_constraint(self._constraints[f"Y_{id}"]).dual)
 
         return res
 
     @property
-    def localizing_matrices_equality_constraints(self) -> list[np.ndarray]:
-        res = []
+    def moment_matrix_multiplier_by_mm_id(
+        self,
+    ) -> dict[int, np.ndarray[tuple[int, int], np.dtype[np.float64] | np.dtype[np.complex128]]]:
+        res = {}
 
-        for index, localizing_moment_matrix in enumerate(self._relaxation.localising_moment_matrices_equalities[0]):
+        for id in self._relaxation.moment_matrices:
             if self._primal:
-                localizing_moment_matrix_level = self._model.getConstraint(f"LMME-0-{index}").level()
+                res[id] = np.array(self._problem.get_constraint(self._constraints[f"MM-{id}"]).dual)
             else:
-                localizing_moment_matrix_level = (
-                    self._model.getVariable(f"Q_(0, {index})^0").dual()
-                    - self._model.getVariable(f"Q_(0, {index})^1").dual()
-                )
-
-            if self._relaxation.is_real:
-                res.append(
-                    localizing_moment_matrix_level.reshape(localizing_moment_matrix.size, localizing_moment_matrix.size)
-                )
-            else:
-                localizing_moment_matrix_level = localizing_moment_matrix_level.reshape(
-                    2 * localizing_moment_matrix.size, 2 * localizing_moment_matrix.size
-                )
-                res.append(
-                    localizing_moment_matrix_level[: localizing_moment_matrix.size, : localizing_moment_matrix.size]
-                    + 1j
-                    * localizing_moment_matrix_level[localizing_moment_matrix.size :, : localizing_moment_matrix.size]
-                )
+                res[id] = np.array(self._problem.get_variable(f"Y_{id}").value)
 
         return res
 
     @property
-    def localizing_matrices_inequality_constraints(self) -> list[np.ndarray]:
-        res = []
-
-        for index, localizing_moment_matrix in enumerate(self._relaxation.localising_moment_matrices_inequalities[0]):
-            if self._primal:
-                localizing_moment_matrix_level = self._model.getConstraint(f"LMMI-0-{index}").level()
-            else:
-                localizing_moment_matrix_level = self._model.getVariable(f"P_(0, {index})").dual()
-
-            if self._relaxation.is_real:
-                res.append(
-                    localizing_moment_matrix_level.reshape(localizing_moment_matrix.size, localizing_moment_matrix.size)
-                )
-            else:
-                localizing_moment_matrix_level = localizing_moment_matrix_level.reshape(
-                    2 * localizing_moment_matrix.size, 2 * localizing_moment_matrix.size
-                )
-                res.append(
-                    localizing_moment_matrix_level[: localizing_moment_matrix.size, : localizing_moment_matrix.size]
-                    + 1j
-                    * localizing_moment_matrix_level[localizing_moment_matrix.size :, : localizing_moment_matrix.size]
-                )
-
-        return res
-
-    @property
-    def localizing_matrices_equality_constraints_by_mm_id(self) -> dict[int, list[np.ndarray]]:
+    def localizing_matrices_equality_multipliers_by_mm_id(
+        self,
+    ) -> dict[
+        int,
+        list[
+            tuple[
+                Polynomial[PolynomialElements, Scalar],
+                np.ndarray[tuple[int, int], np.dtype[np.float64] | np.dtype[np.complex128]],
+            ]
+        ],
+    ]:
         res = {}
 
         for (
@@ -169,39 +97,34 @@ class PicosSolution(BaseSolution):
         ) in self._relaxation.localising_moment_matrices_equalities.items():
             to_add = []
 
-            for index, localizing_moment_matrix in enumerate(localizing_moment_matrices_equalities_id):
+            for index, equality_constraint in enumerate(self._relaxation.equalities.get(id, [])):
                 if self._primal:
-                    localizing_moment_matrix_level = self._model.getConstraint(f"LMME-{id}-{index}").level()
-                else:
-                    localizing_moment_matrix_level = (
-                        self._model.getVariable(f"Q_({id}, {index})^0").dual()
-                        - self._model.getVariable(f"Q_({id}, {index})^1").dual()
-                    )
-
-                if self._relaxation.is_real:
-                    to_add.append(
-                        localizing_moment_matrix_level.reshape(
-                            localizing_moment_matrix.size, localizing_moment_matrix.size
-                        )
+                    # FIXME: this doesn't return a Hermitian matrix, we probably have to hermitianize it, to check that
+                    #  it does return the right SoS decomposition. We probably have to write down how to compute the SoS
+                    #  for localizing matrices to check i.e. what does the resulting PSD variable represent
+                    # to_add.append(np.array(self._problem.get_constraint(self._constraints[f"LMME-{id}-{index}"]).dual))
+                    raise NotImplementedError(
+                        "Getting the multiplier of a localizing matrix equality using the primal isn't supported yet."
                     )
                 else:
-                    localizing_moment_matrix_level = localizing_moment_matrix_level.reshape(
-                        2 * localizing_moment_matrix.size, 2 * localizing_moment_matrix.size
-                    )
-                    to_add.append(
-                        localizing_moment_matrix_level[: localizing_moment_matrix.size, : localizing_moment_matrix.size]
-                        + 1j
-                        * localizing_moment_matrix_level[
-                            localizing_moment_matrix.size :, : localizing_moment_matrix.size
-                        ]
-                    )
+                    to_add.append((equality_constraint, np.array(self._problem.get_variable(f"Q_{(id, index)}").value)))
 
             res[id] = to_add
 
         return res
 
     @property
-    def localizing_matrices_inequality_constraints_by_mm_id(self) -> dict[int, list[np.ndarray]]:
+    def localizing_matrices_inequality_by_mm_id(
+        self,
+    ) -> dict[
+        int,
+        list[
+            tuple[
+                Polynomial[PolynomialElements, Scalar],
+                np.ndarray[tuple[int, int], np.dtype[np.float64] | np.dtype[np.complex128]],
+            ]
+        ],
+    ]:
         res = {}
 
         for (
@@ -210,30 +133,87 @@ class PicosSolution(BaseSolution):
         ) in self._relaxation.localising_moment_matrices_inequalities.items():
             to_add = []
 
-            for index, localizing_moment_matrix in enumerate(localizing_moment_matrices_inequalities_id):
+            for index, inequality_constraint in enumerate(self._relaxation.inequalities.get(id, [])):
                 if self._primal:
-                    localizing_moment_matrix_level = self._model.getConstraint(f"LMMI-{id}-{index}").level()
-                else:
-                    localizing_moment_matrix_level = self._model.getVariable(f"P_({id}, {index})").dual()
-
-                if self._relaxation.is_real:
                     to_add.append(
-                        localizing_moment_matrix_level.reshape(
-                            localizing_moment_matrix.size, localizing_moment_matrix.size
+                        (
+                            inequality_constraint,
+                            np.array(
+                                self._problem.get_constraint(self._constraints[f"LMMI-{id}-{index}"]).lhs.value,
+                            ),
                         )
                     )
                 else:
-                    localizing_moment_matrix_level = localizing_moment_matrix_level.reshape(
-                        2 * localizing_moment_matrix.size, 2 * localizing_moment_matrix.size
-                    )
                     to_add.append(
-                        localizing_moment_matrix_level[: localizing_moment_matrix.size, : localizing_moment_matrix.size]
-                        + 1j
-                        * localizing_moment_matrix_level[
-                            localizing_moment_matrix.size :, : localizing_moment_matrix.size
-                        ]
+                        (
+                            inequality_constraint,
+                            np.array(self._problem.get_constraint(self._constraints[f"P_({id}, {index})"]).dual),
+                        )
                     )
 
             res[id] = to_add
+
+        return res
+
+    @property
+    def localizing_matrices_inequality_multipliers_by_mm_id(
+        self,
+    ) -> dict[
+        int,
+        list[
+            tuple[
+                Polynomial[PolynomialElements, Scalar],
+                np.ndarray[tuple[int, int], np.dtype[np.float64] | np.dtype[np.complex128]],
+            ]
+        ],
+    ]:
+        res = {}
+
+        for (
+            id,
+            localizing_moment_matrices_inequalities_id,
+        ) in self._relaxation.localising_moment_matrices_inequalities.items():
+            to_add = []
+
+            for index, inequality_constraint in enumerate(self._relaxation.inequalities.get(id, [])):
+                if self._primal:
+                    to_add.append(
+                        (
+                            inequality_constraint,
+                            np.array(self._problem.get_constraint(self._constraints[f"LMMI-{id}-{index}"]).dual),
+                        )
+                    )
+                else:
+                    to_add.append(
+                        (inequality_constraint, np.array(self._problem.get_variable(f"P_({id}, {index})").value))
+                    )
+
+            res[id] = to_add
+
+        return res
+
+    @property
+    def moment_equalities_multipliers(
+        self,
+    ) -> list[tuple[Polynomial[PolynomialElements, Scalar], np.float64 | np.complex128]]:
+        res = []
+
+        for index, (polynomial_constraint, _scalar) in enumerate(self._relaxation.moment_equalities):
+            if self._primal:
+                res.append((polynomial_constraint, self._problem.get_constraint(self._constraints[f"ME-{index}"]).dual))
+            else:
+                res.append((polynomial_constraint, self._problem.get_variable(f"nu_{index}").value))
+
+        return res
+
+    @property
+    def moment_inequalities_multipliers(self) -> list[tuple[Polynomial[PolynomialElements, Scalar], np.float64]]:
+        res = []
+
+        for index, (polynomial_constraint, _scalar) in enumerate(self._relaxation.moment_inequalities):
+            if self._primal:
+                res.append((polynomial_constraint, self._problem.get_constraint(self._constraints[f"MI-{index}"]).dual))
+            else:
+                res.append((polynomial_constraint, self._problem.get_variable(f"lambda_{index}").value))
 
         return res
