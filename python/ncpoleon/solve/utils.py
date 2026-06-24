@@ -15,9 +15,9 @@ def automatic_solver_detection() -> str:
         return "mosek"
 
     if find_spec("picos") is None:
-        raise ImportError("No solver has been found. Tried: mosek, cvxopt via Picos.")
+        raise ImportError("No solver has been found. Tried: mosek, picos.")
 
-    return "cvxopt"
+    return "picos"
 
 
 # FIXME: change to np.ndarray directly in the type hints, so tht we can specify the shape

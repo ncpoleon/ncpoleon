@@ -10,7 +10,7 @@ from .utils import reduce_sos_decomposition
 @pytest.mark.parametrize(
     "solver",
     [
-        "cvxopt",
+        "picos-cvxopt",
         pytest.param(
             "mosek",
             marks=pytest.mark.skipif(
@@ -20,7 +20,9 @@ from .utils import reduce_sos_decomposition
     ],
 )
 @pytest.mark.parametrize("use_primal", [False, True])
-@pytest.mark.benchmark  # TODO: we should use the benchmark fixture along with a parameter indicating which part (relaxation/solving/sos) we're benchmarking
+# TODO: we should use the benchmark fixture along with a parameter indicating which part (relaxation/solving/sos) we're
+#  benchmarking
+@pytest.mark.benchmark
 def test_chsh_uniform(solver, use_primal):
     """
     What is the largest CHSH value possible if we know that the inputs (x,y) = (0,0)

@@ -8,7 +8,7 @@ from .utils import reduce_sos_decomposition
 
 
 def generate_multiple_moment_matrices_parameters():
-    for solver in ["mosek", "cvxopt"]:
+    for solver in ["mosek", "picos-cvxopt"]:
         for use_primal in [True, False]:
             for level, w, expected in [
                 (1, 2.0, 0.0),

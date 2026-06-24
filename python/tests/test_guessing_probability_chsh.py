@@ -10,7 +10,7 @@ from .utils import reduce_sos_decomposition
 @pytest.mark.parametrize(
     "solver",
     [
-        "cvxopt",
+        "picos-cvxopt",
         pytest.param(
             "mosek",
             marks=pytest.mark.skipif(

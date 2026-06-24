@@ -9,7 +9,7 @@ from .utils import reduce_sos_decomposition
 
 
 def generate_simple_noncommutative_parameters():
-    for solver in ["cvxopt", "mosek"]:
+    for solver in ["picos-cvxopt", "mosek"]:
         for level, expected in [(1, 1 / 8), (2, 1 / 8)]:
             if solver == "mosek":
                 yield pytest.param(
@@ -24,12 +24,12 @@ def generate_simple_noncommutative_parameters():
                     ],
                 )
 
-            elif solver == "cvxopt":
+            elif solver == "picos-cvxopt":
                 yield pytest.param(solver, level, expected)
 
 
 def generate_simple_noncommutative_with_equality_constraints_parameters():
-    for solver in ["cvxopt", "mosek"]:
+    for solver in ["picos-cvxopt", "mosek"]:
         for level, expected in [(1, 1 / 8), (2, 1 / 8)]:
             for force_primal in [True, False]:
                 if solver == "mosek":
@@ -45,7 +45,7 @@ def generate_simple_noncommutative_with_equality_constraints_parameters():
                             )
                         ],
                     )
-                elif solver == "cvxopt":
+                elif solver == "picos-cvxopt":
                     if level == 2 and force_primal:
                         yield pytest.param(
                             solver,
@@ -64,7 +64,7 @@ def generate_simple_noncommutative_with_equality_constraints_parameters():
 
 
 def generate_simple_noncommutative_with_substitution_parameters():
-    for solver in ["cvxopt", "mosek"]:
+    for solver in ["picos-cvxopt", "mosek"]:
         for level, expected in [(1, 1 / 8), (2, 2.15e-05)]:
             if solver == "mosek":
                 yield pytest.param(
@@ -78,7 +78,7 @@ def generate_simple_noncommutative_with_substitution_parameters():
                         )
                     ],
                 )
-            elif solver == "cvxopt":
+            elif solver == "picos-cvxopt":
                 yield pytest.param(solver, level, expected)
 
 
@@ -106,7 +106,8 @@ def test_simple_real_noncommutative_problem_with_equality_constraints(
     obj = x2**2 - x1 * x2 / 2 - x2 * x1 / 2 - x2
     # FIXME: So, for SOME REASON, CVXOPT fails to solve the problem if we input the constraints in this order. That is,
     #  if we swap these two constraints, the code works. Maybe we'll have to investigate this at some point, but since
-    #  it only happens on the primal, it's not *too* bad
+    #  it only happens on the primal, it's not *too* bad. It might reveal a bug on Picos' side though, so it might be
+    #  worth invectigating
     operator_constraints = [x2 - x2**2 == 0, x1 - x1**2 == 0]
 
     sdp = get_relaxation([x1, x2], level, obj, operator_constraints=operator_constraints)

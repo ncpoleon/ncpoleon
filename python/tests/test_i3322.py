@@ -9,7 +9,7 @@ from .utils import reduce_sos_decomposition
 
 
 def generate_i3322_parameters():
-    for solver in ["mosek", "cvxopt"]:
+    for solver in ["mosek", "picos-cvxopt"]:
         for use_primal in [True, False]:
             marks = []
 
@@ -50,7 +50,11 @@ def test_i3322(solver, use_primal: bool):
     obj = -m0 * n0 - m1 * n1 - m0 * n1 - m1 * n0 - m0 * n2 - m2 * n0 + m1 * n2 + m2 * n1 + m0 + n0
 
     sdp = get_relaxation([m0, m1, m2, n0, n1, n2], 3, obj, substitutions=substitutions)
-    sol = solve(sdp, "max", force_primal=use_primal, solver=solver)
+
+    if solver != "picos-cvxopt" or use_primal:
+        sol = solve(sdp, "max", force_primal=use_primal, solver=solver)
+    else:  # Change the KKT Solver in this case since the default one can't manage to solve the problem
+        sol = solve(sdp, "max", force_primal=use_primal, solver=solver, cvxopt_kktsolver="qr")
 
     assert sol.value == pytest.approx(1.2508756)
     assert (sdp.rewrite(reduce_sos_decomposition(sol.get_sos_decomposition()) + obj)).is_zero(1e-7)

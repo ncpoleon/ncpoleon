@@ -25,12 +25,19 @@ def solve(
         model.solve()
 
         return MosekSolution(relaxation, model, primal=force_primal, objective_sense=objective_direction)
-    elif solver == "cvxopt":
+    elif solver == "picos":
         problem, constraints = to_picos(
-            relaxation, objective_direction, primal=force_primal, solver="cvxopt", **solver_parameters
+            relaxation, objective_direction, primal=force_primal, **solver_parameters
+        )
+        problem.solve()
+
+        return PicosSolution(relaxation, problem, constraints, primal=force_primal)
+    elif solver.startswith("picos-"):  # TODO: to put in the docstring of this function
+        problem, constraints = to_picos(
+            relaxation, objective_direction, primal=force_primal, solver=solver[6:], **solver_parameters
         )
         problem.solve()
 
         return PicosSolution(relaxation, problem, constraints, primal=force_primal)
     else:
-        raise ValueError(f"{solver} isn't a valid solver. Possible solvers are mosek and cvxopt.")
+        raise ValueError(f"{solver} isn't a valid solver. Possible solvers are mosek, picos and picos-{{solver}}.")

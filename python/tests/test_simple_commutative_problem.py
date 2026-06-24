@@ -11,7 +11,7 @@ from .utils import reduce_sos_decomposition
 
 
 def generate_simple_commutative_parameters():
-    for solver in ["cvxopt", "mosek"]:
+    for solver in ["picos-cvxopt", "mosek"]:
         for level, expected in [(1, -0.5), (2, 1 - sqrt(2))]:
             if solver == "mosek":
                 yield pytest.param(
@@ -26,7 +26,7 @@ def generate_simple_commutative_parameters():
                     ],
                 )
 
-            elif solver == "cvxopt":
+            elif solver == "picos-cvxopt":
                 yield pytest.param(solver, level, expected)
 
 

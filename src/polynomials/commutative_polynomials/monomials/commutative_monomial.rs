@@ -250,7 +250,7 @@ impl PythonCommutativeMonomial {
     }
 
     /// Return the complex conjugate of this monomial.
-    fn conjugate(&self) -> PythonCommutativeMonomial {
+    fn adjoint(&self) -> PythonCommutativeMonomial {
         Self(self.0.adjoint())
     }
 }

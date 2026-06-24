@@ -238,7 +238,7 @@ impl PythonCommutativeOperator {
     }
 
     /// Return the complex conjugate of this operator.
-    pub(crate) fn conjugate(&self) -> PythonCommutativeOperator {
+    pub(crate) fn adjoint(&self) -> PythonCommutativeOperator {
         Self(self.0.adjoint())
     }
 }
