@@ -2,27 +2,36 @@ from math import sqrt
 
 import pytest
 from ncpoleon import generate_noncommutative_variables, get_relaxation, solve
-from ncpoleon.utils import is_mosek_available
 
-from .utils import reduce_sos_decomposition
+from .utils import SOLVERS, reduce_sos_decomposition
 
 
-@pytest.mark.parametrize(
-    "solver",
-    [
-        "picos-cvxopt",
-        pytest.param(
-            "mosek",
-            marks=pytest.mark.skipif(
-                not is_mosek_available(), reason="Mosek is not installed or a Mosek license is not available."
-            ),
-        ),
-    ],
-)
-@pytest.mark.parametrize("use_primal", [False, True])
+def _guessing_probability_chsh_params(w):
+    [M0, M1] = generate_noncommutative_variables("M", 2, projector=True)
+    [N0, N1] = generate_noncommutative_variables("N", 2, projector=True)
+    [E] = generate_noncommutative_variables("E", 1, projector=True)
+
+    substitutions = {}
+    for op1 in [M0, M1]:
+        for op2 in [N0, N1]:
+            substitutions[op2 * op1] = op1 * op2
+        substitutions[E * op1] = op1 * E
+    for op2 in [N0, N1]:
+        substitutions[E * op2] = op2 * E
+
+    A0 = 2 * M0 - 1
+    A1 = 2 * M1 - 1
+    B0 = 2 * N0 - 1
+    B1 = 2 * N1 - 1
+    moment_constraints = [A0 * (B0 + B1) + A1 * (B0 - B1) == w]
+    obj = M0 * E + (1 - M0) * (1 - E)
+
+    return [M0, M1, N0, N1, E], obj, substitutions, moment_constraints
+
+
 @pytest.mark.parametrize("level", [1, 2])
 @pytest.mark.parametrize("w", [2.0, 2.25, 2.5])
-def test_guessing_probability_chsh(benchmark, solver, use_primal, level, w):
+def test_guessing_probability_chsh_relaxation(benchmark, level, w):
     """
     NCPOP relaxation of the guessing probability problem for DI Cryptography
 
@@ -33,41 +42,20 @@ def test_guessing_probability_chsh(benchmark, solver, use_primal, level, w):
     max Tr[rho (A_{0|0} otimes E)]/2 + Tr[(A_{1|0} otimes (id - E))]
     s.t. CHSH = w
 
-
     Level 1 should give trivial value of 1 and level 2 should give the optimal value of (1 + sqrt(2 - (w**2)/4))/2
     """
-    [M0, M1] = generate_noncommutative_variables("M", 2, projector=True)
-    [N0, N1] = generate_noncommutative_variables("N", 2, projector=True)
-    [E] = generate_noncommutative_variables("E", 1, projector=True)
+    variables, obj, substitutions, moment_constraints = _guessing_probability_chsh_params(w)
+    benchmark(get_relaxation, variables, level, obj, substitutions=substitutions, moment_constraints=moment_constraints)
 
-    substitutions = {}
 
-    for op1 in [M0, M1]:
-        for op2 in [N0, N1]:
-            substitutions[op2 * op1] = op1 * op2
-
-        substitutions[E * op1] = op1 * E
-
-    for op2 in [N0, N1]:
-        substitutions[E * op2] = op2 * E
-
-    A0 = 2 * M0 - 1
-    A1 = 2 * M1 - 1
-    B0 = 2 * N0 - 1
-    B1 = 2 * N1 - 1
-    moment_constraints = [A0 * (B0 + B1) + A1 * (B0 - B1) == w]
-
-    obj = M0 * E + (1 - M0) * (1 - E)
-
-    sdp = benchmark(
-        get_relaxation,
-        [M0, M1, N0, N1, E],
-        level,
-        obj,
-        substitutions=substitutions,
-        moment_constraints=moment_constraints,
-    )
-    sol = solve(sdp, "max", solver=solver, force_primal=use_primal)
+@pytest.mark.parametrize("solver", SOLVERS)
+@pytest.mark.parametrize("use_primal", [False, True])
+@pytest.mark.parametrize("level", [1, 2])
+@pytest.mark.parametrize("w", [2.0, 2.25, 2.5])
+def test_guessing_probability_chsh_solve(benchmark, solver, use_primal, level, w):
+    variables, obj, substitutions, moment_constraints = _guessing_probability_chsh_params(w)
+    sdp = get_relaxation(variables, level, obj, substitutions=substitutions, moment_constraints=moment_constraints)
+    sol = benchmark(solve, sdp, "max", solver=solver, force_primal=use_primal)
 
     if level == 1:
         assert sol.value == pytest.approx(1.0)

@@ -38,21 +38,16 @@ def generate_multiple_moment_matrices_parameters():
                 yield pytest.param(solver, use_primal, level, w, expected, marks=marks)
 
 
-@pytest.mark.parametrize("solver, use_primal, level, w, expected", generate_multiple_moment_matrices_parameters())
-@pytest.mark.benchmark
-def test_multiple_moment_matrices(solver, use_primal, level, w, expected):
-    # TODO: write docstring about the problem and change the name, it's about CHSH
+def _multiple_moment_matrices_params(w):
     F, I_0 = generate_noncommutative_variables("F", 4, projector=True, moment_matrix_id=0, return_identity=True)
     G = generate_noncommutative_variables("G", 4, projector=True, moment_matrix_id=0)
     M, I_1 = generate_noncommutative_variables("M", 4, projector=True, moment_matrix_id=1, return_identity=True)
     N = generate_noncommutative_variables("N", 4, projector=True, moment_matrix_id=1)
 
     substitutions = {}
-
     for g in G:
         for f in F:
             substitutions[g * f] = f * g
-
     for n in N:
         for m in M:
             substitutions[n * m] = m * n
@@ -81,13 +76,22 @@ def test_multiple_moment_matrices(solver, use_primal, level, w, expected):
     K_2 = M_0 * (N_0 + N_1) + M_1 * (N_0 - N_1)
 
     moment_constraints = [K_1 + K_2 == w]
-
     normalization_constraints = [I_0 + I_1 == 1]
-
     objective = F[0] + M[2]
 
-    sdp = get_relaxation(
-        F + G + M + N,
+    return F + G + M + N, objective, substitutions, operator_constraints, moment_constraints, normalization_constraints
+
+
+@pytest.mark.parametrize("level", [1, 2])
+@pytest.mark.parametrize("w", [2.0, 2.2])
+def test_multiple_moment_matrices_relaxation(benchmark, level, w):
+    # TODO: write docstring about the problem and change the name, it's about CHSH
+    variables, objective, substitutions, operator_constraints, moment_constraints, normalization_constraints = (
+        _multiple_moment_matrices_params(w)
+    )
+    benchmark(
+        get_relaxation,
+        variables,
         level,
         objective,
         substitutions=substitutions,
@@ -96,7 +100,23 @@ def test_multiple_moment_matrices(solver, use_primal, level, w, expected):
         normalization_constraints=normalization_constraints,
     )
 
-    sol = solve(sdp, "max", force_primal=use_primal, solver=solver)
+
+@pytest.mark.parametrize("solver, use_primal, level, w, expected", generate_multiple_moment_matrices_parameters())
+def test_multiple_moment_matrices(benchmark, solver, use_primal, level, w, expected):
+    # TODO: write docstring about the problem and change the name, it's about CHSH
+    variables, objective, substitutions, operator_constraints, moment_constraints, normalization_constraints = (
+        _multiple_moment_matrices_params(w)
+    )
+    sdp = get_relaxation(
+        variables,
+        level,
+        objective,
+        substitutions=substitutions,
+        operator_constraints=operator_constraints,
+        moment_constraints=moment_constraints,
+        normalization_constraints=normalization_constraints,
+    )
+    sol = benchmark(solve, sdp, "max", force_primal=use_primal, solver=solver)
     assert -log2(sol.value) == pytest.approx(expected, abs=1e-6)
     sos_decompositions = sol.get_sos_decomposition_by_mm_id()
     reduced_0 = sdp.rewrite(reduce_sos_decomposition(sos_decompositions[0]))

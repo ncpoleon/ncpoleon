@@ -32,8 +32,7 @@ def generate_i3322_parameters():
             yield pytest.param(solver, use_primal, marks=marks)
 
 
-@pytest.mark.parametrize("solver, use_primal", generate_i3322_parameters())
-def test_i3322(solver, use_primal: bool):
+def _i3322_params():
     """
     Maximize the Bell-inequality I3322.
 
@@ -45,16 +44,21 @@ def test_i3322(solver, use_primal: bool):
     """
     m0, m1, m2 = generate_noncommutative_variables("M", 3, projector=True)
     n0, n1, n2 = generate_noncommutative_variables("N", 3, projector=True)
-
     substitutions = {op1 * op2: op2 * op1 for op1 in [m0, m1, m2] for op2 in [n0, n1, n2]}
     obj = -m0 * n0 - m1 * n1 - m0 * n1 - m1 * n0 - m0 * n2 - m2 * n0 + m1 * n2 + m2 * n1 + m0 + n0
+    return [m0, m1, m2, n0, n1, n2], obj, substitutions
 
-    sdp = get_relaxation([m0, m1, m2, n0, n1, n2], 3, obj, substitutions=substitutions)
 
-    if solver != "picos-cvxopt" or use_primal:
-        sol = solve(sdp, "max", force_primal=use_primal, solver=solver)
-    else:  # Change the KKT Solver in this case since the default one can't manage to solve the problem
-        sol = solve(sdp, "max", force_primal=use_primal, solver=solver, cvxopt_kktsolver="qr")
+def test_i3322_relaxation(benchmark):
+    variables, obj, substitutions = _i3322_params()
+    benchmark(get_relaxation, variables, 3, obj, substitutions=substitutions)
 
+
+@pytest.mark.parametrize("solver, use_primal", generate_i3322_parameters())
+def test_i3322(benchmark, solver, use_primal: bool):
+    variables, obj, substitutions = _i3322_params()
+    sdp = get_relaxation(variables, 3, obj, substitutions=substitutions)
+    kwargs = {} if solver != "picos-cvxopt" or use_primal else {"cvxopt_kktsolver": "qr"}
+    sol = benchmark(solve, sdp, "max", force_primal=use_primal, solver=solver, **kwargs)
     assert sol.value == pytest.approx(1.2508756)
     assert (sdp.rewrite(reduce_sos_decomposition(sol.get_sos_decomposition()) + obj)).is_zero(1e-7)

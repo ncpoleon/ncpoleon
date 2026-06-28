@@ -2,11 +2,23 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import pytest
 from ncpoleon._typing import PolynomialElements, Scalar
 from ncpoleon.solve.sos_decomposition import SoSDecomposition
+from ncpoleon.utils import is_mosek_available
 
 if TYPE_CHECKING:
     from ncpoleon.polynomials import Polynomial
+
+SOLVERS = [
+    "picos-cvxopt",
+    pytest.param(
+        "mosek",
+        marks=pytest.mark.skipif(
+            not is_mosek_available(), reason="Mosek is not installed or a Mosek license is not available."
+        ),
+    ),
+]
 
 
 def reduce_sos_decomposition(
@@ -29,3 +41,5 @@ def reduce_sos_decomposition(
         res += moment_decomposition.coefficient * moment_decomposition.generator
 
     return res
+
+
