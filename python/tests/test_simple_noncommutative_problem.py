@@ -136,7 +136,9 @@ def test_simple_real_noncommutative_problem_with_commutative_substitution_relaxa
     x1, x2, obj = _simple_noncommutative_vars()
     operator_constraints = [x1 - x1**2 >= 0, x2 - x2**2 >= 0]
     substitutions = {x2 * x1: x1 * x2}
-    benchmark(get_relaxation, [x1, x2], level, obj, operator_constraints=operator_constraints, substitutions=substitutions)
+    benchmark(
+        get_relaxation, [x1, x2], level, obj, operator_constraints=operator_constraints, substitutions=substitutions
+    )
 
 
 @pytest.mark.parametrize("solver, level, expected", generate_simple_noncommutative_with_substitution_parameters())

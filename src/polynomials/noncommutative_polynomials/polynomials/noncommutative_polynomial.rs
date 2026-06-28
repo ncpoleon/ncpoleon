@@ -523,11 +523,7 @@ impl PythonRealCoefficientsNonCommutativePolynomial {
     /// the delta parameter is specified
     #[pyo3(signature=(delta=None))]
     fn is_zero(&self, delta: Option<f64>) -> bool {
-        if let Some(delta) = delta {
-            self.0.chop(delta).data.is_empty()
-        } else {
-            self.0.data.is_empty()
-        }
+        if let Some(delta) = delta { self.0.chop(delta).data.is_empty() } else { self.0.data.is_empty() }
     }
 
     /// Return a polynomial identical to the one this method has been called with, at the exception
@@ -755,11 +751,7 @@ impl PythonComplexCoefficientsNonCommutativePolynomial {
     /// the delta parameter is specified
     #[pyo3(signature=(delta=None))]
     fn is_zero(&self, delta: Option<f64>) -> bool {
-        if let Some(delta) = delta {
-            self.0.chop(delta).data.is_empty()
-        } else {
-            self.0.data.is_empty()
-        }
+        if let Some(delta) = delta { self.0.chop(delta).data.is_empty() } else { self.0.data.is_empty() }
     }
 
     fn __eq__<'py>(&self, other: &Bound<'py, PyAny>) -> PyResult<Py<PyAny>> {
