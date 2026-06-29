@@ -16,12 +16,10 @@ except ImportError:
     if TYPE_CHECKING:
         from mosek.fusion import Expr, ExprMulScalarConst, Matrix, Model, PSDVariable, SparseMatrix
 
-        from ncpoleon.relaxations import MomentMatrix
-
 from ncpoleon._typing import PolynomialElements, Scalar
 
 if TYPE_CHECKING:
-    from ncpoleon.relaxations import BaseSdpRelaxation
+    from ncpoleon.relaxations import BaseSdpRelaxation, MomentMatrix
 
 
 logger = logging.getLogger(__name__)
@@ -258,7 +256,7 @@ def to_mosek(
             changed = sdp.change_variables(poly, mapped_variables)
 
             if isinstance(changed, _ComplexExpr):
-                M.constraint(f"MI-{index}", changed.real, Domain.equalsTo(value))
+                M.constraint(f"MI-{index}", changed.real, Domain.greaterThan(value))
                 logger.debug(f"Added constraint {changed.real} >= {value}.")
             else:
                 M.constraint(f"MI-{index}", changed, Domain.greaterThan(value))

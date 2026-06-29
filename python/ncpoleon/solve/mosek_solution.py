@@ -50,12 +50,12 @@ class MosekSolution(BaseSolution[PolynomialElements, Scalar]):
                 return self._model.getVariable(str(canonical_monomial)).level()[0]
             if is_adjoint:
                 return (
-                    self._model.getVariable(f"{str(monomial)}_re").level()[0]
-                    - self._model.getVariable(f"{str(monomial)}_im").level()[0] * 1j
+                    self._model.getVariable(f"{str(canonical_monomial)}_re").level()[0]
+                    - self._model.getVariable(f"{str(canonical_monomial)}_im").level()[0] * 1j
                 )
             return (
-                self._model.getVariable(f"{str(monomial)}_re").level()[0]
-                + self._model.getVariable(f"{str(monomial)}_im").level()[0] * 1j
+                self._model.getVariable(f"{str(canonical_monomial)}_re").level()[0]
+                + self._model.getVariable(f"{str(canonical_monomial)}_im").level()[0] * 1j
             )
         else:
             sign = 1 if self._objective_sense == "min" else -1
@@ -64,12 +64,12 @@ class MosekSolution(BaseSolution[PolynomialElements, Scalar]):
                 return self._model.getConstraint(f"M-{canonical_monomial}").dual()[0] * sign
             if is_adjoint:
                 return (
-                    self._model.getConstraint(f"M-{monomial}-re").dual()[0]
-                    - self._model.getConstraint(f"M-{monomial}-im").dual()[0] * 1j
+                    self._model.getConstraint(f"M-{canonical_monomial}-re").dual()[0]
+                    - self._model.getConstraint(f"M-{canonical_monomial}-im").dual()[0] * 1j
                 ) * sign
             return (
-                self._model.getConstraint(f"M-{monomial}-re").dual()[0]
-                + self._model.getConstraint(f"M-{monomial}-im").dual()[0] * 1j
+                self._model.getConstraint(f"M-{canonical_monomial}-re").dual()[0]
+                + self._model.getConstraint(f"M-{canonical_monomial}-im").dual()[0] * 1j
             ) * sign
 
     @property

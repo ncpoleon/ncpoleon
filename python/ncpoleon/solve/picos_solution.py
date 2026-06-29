@@ -44,7 +44,7 @@ class PicosSolution(BaseSolution[PolynomialElements, Scalar]):
         if self._primal:
             if is_adjoint and not is_real_valued:
                 return self._problem.get_variable(str(canonical_monomial)).value.conjugate()
-            if is_real_valued:
+            else:
                 return self._problem.get_variable(str(canonical_monomial)).value
         else:
             return -self._problem.get_constraint(self._constraints[f"M-{canonical_monomial}"]).dual

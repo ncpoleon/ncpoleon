@@ -101,8 +101,9 @@ def test_multiple_moment_matrices_relaxation(benchmark, level, w):
     )
 
 
+# TODO: benchmark this once the Codspeed action is setup
 @pytest.mark.parametrize("solver, use_primal, level, w, expected", generate_multiple_moment_matrices_parameters())
-def test_multiple_moment_matrices(benchmark, solver, use_primal, level, w, expected):
+def test_multiple_moment_matrices(solver, use_primal, level, w, expected):
     # TODO: write docstring about the problem and change the name, it's about CHSH
     variables, objective, substitutions, operator_constraints, moment_constraints, normalization_constraints = (
         _multiple_moment_matrices_params(w)
@@ -116,9 +117,9 @@ def test_multiple_moment_matrices(benchmark, solver, use_primal, level, w, expec
         moment_constraints=moment_constraints,
         normalization_constraints=normalization_constraints,
     )
-    sol = benchmark(solve, sdp, "max", force_primal=use_primal, solver=solver)
+    sol = solve(sdp, "max", force_primal=use_primal, solver=solver)
     assert -log2(sol.value) == pytest.approx(expected, abs=1e-6)
     sos_decompositions = sol.get_sos_decomposition_by_mm_id()
-    reduced_0 = sdp.rewrite(reduce_sos_decomposition(sos_decompositions[0]))
-    reduced_1 = sdp.rewrite(reduce_sos_decomposition(sos_decompositions[1]))
-    assert (reduced_0 + reduced_1 + objective).is_zero(1e-7)
+    reduced_0 = reduce_sos_decomposition(sos_decompositions[0])
+    reduced_1 = reduce_sos_decomposition(sos_decompositions[1])
+    assert sdp.rewrite(reduced_0 + reduced_1 + objective).is_zero(1e-7)

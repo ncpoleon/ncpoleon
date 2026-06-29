@@ -21,7 +21,7 @@ class MomentMatrixDecomposition(Generic[PolynomialElements, Scalar]):
 
 @dataclass(eq=False, order=False, kw_only=True)
 class LocalizingMomentMatrixInequalityDecomposition(Generic[PolynomialElements, Scalar]):
-    """A single localizing moment matrix equality contribution to a SoS decomposition.
+    """A single localizing moment matrix inequality contribution to a SoS decomposition.
 
     Docs TODO
     """
@@ -32,7 +32,7 @@ class LocalizingMomentMatrixInequalityDecomposition(Generic[PolynomialElements, 
 
 @dataclass(eq=False, order=False, kw_only=True)
 class LocalizingMomentMatrixEqualityDecomposition(Generic[PolynomialElements, Scalar]):
-    """A single localizing moment matrix inequality contribution to a SoS decomposition.
+    """A single localizing moment matrix equality contribution to a SoS decomposition.
 
     Docs TODO
     """
@@ -43,7 +43,17 @@ class LocalizingMomentMatrixEqualityDecomposition(Generic[PolynomialElements, Sc
 
 
 @dataclass(eq=False, order=False, kw_only=True)
-class SingleMomentDecomposition(Generic[PolynomialElements, Scalar]):
+class SingleMomentEqualityDecomposition(Generic[PolynomialElements, Scalar]):
+    """A single scalar moment contribution to a SoS decomposition.
+
+    Docs TODO
+    """
+
+    generator: Polynomial[PolynomialElements, Scalar]
+    coefficient: Scalar
+
+@dataclass(eq=False, order=False, kw_only=True)
+class SingleMomentInequalityDecomposition(Generic[PolynomialElements, Scalar]):
     """A single scalar moment contribution to a SoS decomposition.
 
     Docs TODO
@@ -58,5 +68,5 @@ class SoSDecomposition(Generic[PolynomialElements, Scalar]):
     moment_matrix_term: MomentMatrixDecomposition[PolynomialElements, Scalar]
     equalities_terms: list[LocalizingMomentMatrixEqualityDecomposition[PolynomialElements, Scalar]]
     inequalities_terms: list[LocalizingMomentMatrixInequalityDecomposition[PolynomialElements, Scalar]]
-    moment_equalities_terms: list[SingleMomentDecomposition[PolynomialElements, Scalar]]
-    moment_inequalities_terms: list[SingleMomentDecomposition[PolynomialElements, Scalar]]
+    moment_equalities_terms: list[SingleMomentEqualityDecomposition[PolynomialElements, Scalar]]
+    moment_inequalities_terms: list[SingleMomentInequalityDecomposition[PolynomialElements, float]]

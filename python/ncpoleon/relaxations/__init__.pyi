@@ -1,5 +1,7 @@
 from typing import Generic, Literal, TypeAlias, overload
 
+__all__ = ["get_relaxation"]
+
 from ncpoleon._typing import PolynomialElements, Scalar
 from ncpoleon.polynomials import Polynomial, RewritingStrategy, VectorSpaceElement
 from ncpoleon.polynomials.commutative_polynomials import (
