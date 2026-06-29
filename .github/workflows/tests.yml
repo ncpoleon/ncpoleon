@@ -28,6 +28,8 @@ jobs:
           uv run --config-setting 'build-args=--profile=dev' pytest -x
           if [ -n "$MSK_LICENSE" ]; then
             echo "$MSK_LICENSE" > "$HOME/mosek.lic"
+            MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run python -c \
+              "from ncpoleon.utils import is_mosek_available; assert is_mosek_available(), 'MSK_LICENSE is set but MOSEK license checkout failed'"
             MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run --config-setting 'build-args=--profile=dev' pytest -x
           fi
 
