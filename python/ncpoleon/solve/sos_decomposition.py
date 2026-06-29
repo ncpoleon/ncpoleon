@@ -69,4 +69,4 @@ class SoSDecomposition(Generic[PolynomialElements, Scalar]):
     equalities_terms: list[LocalizingMomentMatrixEqualityDecomposition[PolynomialElements, Scalar]]
     inequalities_terms: list[LocalizingMomentMatrixInequalityDecomposition[PolynomialElements, Scalar]]
     moment_equalities_terms: list[SingleMomentEqualityDecomposition[PolynomialElements, Scalar]]
-    moment_inequalities_terms: list[SingleMomentInequalityDecomposition[PolynomialElements, float]]
+    moment_inequalities_terms: list[SingleMomentInequalityDecomposition[PolynomialElements, Scalar]]
