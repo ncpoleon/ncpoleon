@@ -130,7 +130,12 @@ class BaseSolution(ABC, Generic[PolynomialElements, Scalar]):
     @property
     def localizing_matrices_inequality_multipliers(
         self,
-    ) -> list[np.ndarray[tuple[int, int], np.dtype[np.float64] | np.dtype[np.complex128]]]:
+    ) -> list[
+        tuple[
+            Polynomial[PolynomialElements, Scalar],
+            np.ndarray[tuple[int, int], np.dtype[np.float64] | np.dtype[np.complex128]],
+        ]
+    ]:
         localizing_matrices_multipliers = self.localizing_matrices_inequality_multipliers_by_mm_id
         if len(localizing_matrices_multipliers) > 1:
             warnings.warn(
@@ -145,7 +150,15 @@ class BaseSolution(ABC, Generic[PolynomialElements, Scalar]):
     @abstractmethod
     def localizing_matrices_inequality_multipliers_by_mm_id(
         self,
-    ) -> dict[int, list[np.ndarray[tuple[int, int], np.dtype[np.float64] | np.dtype[np.complex128]]]]: ...
+    ) -> dict[
+        int,
+        list[
+            tuple[
+                Polynomial[PolynomialElements, Scalar],
+                np.ndarray[tuple[int, int], np.dtype[np.float64] | np.dtype[np.complex128]],
+            ]
+        ],
+    ]: ...
 
     @property
     @abstractmethod

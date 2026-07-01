@@ -1,5 +1,31 @@
-from ncpoleon._accelerate.relaxations import get_relaxation
+from ncpoleon._accelerate.relaxations import (
+    ComplexCoefficientsCommutativeConstraint,
+    ComplexCoefficientsNonCommutativeConstraint,
+    ComplexValuedCommutativeMomentMatrix,
+    ComplexValuedCommutativeSdpRelaxation,
+    ComplexValuedNonCommutativeMomentMatrix,
+    ComplexValuedNonCommutativeSdpRelaxation,
+    RealCoefficientsCommutativeConstraint,
+    RealCoefficientsNonCommutativeConstraint,
+    RealValuedCommutativeMomentMatrix,
+    RealValuedCommutativeSdpRelaxation,
+    RealValuedNonCommutativeMomentMatrix,
+    RealValuedNonCommutativeSdpRelaxation,
+    get_relaxation,
+)
 
 __all__ = [
     "get_relaxation",
+    "RealCoefficientsCommutativeConstraint",
+    "ComplexCoefficientsCommutativeConstraint",
+    "RealCoefficientsNonCommutativeConstraint",
+    "ComplexCoefficientsNonCommutativeConstraint",
+    "RealValuedCommutativeMomentMatrix",
+    "ComplexValuedCommutativeMomentMatrix",
+    "RealValuedNonCommutativeMomentMatrix",
+    "ComplexValuedNonCommutativeMomentMatrix",
+    "RealValuedCommutativeSdpRelaxation",
+    "ComplexValuedCommutativeSdpRelaxation",
+    "RealValuedNonCommutativeSdpRelaxation",
+    "ComplexValuedNonCommutativeSdpRelaxation",
 ]
