@@ -2,17 +2,14 @@ from typing import Generic, Literal, TypeAlias, overload
 
 __all__ = [
     "get_relaxation",
-    "Constraint",
     "RealCoefficientsCommutativeConstraint",
     "ComplexCoefficientsCommutativeConstraint",
     "RealCoefficientsNonCommutativeConstraint",
     "ComplexCoefficientsNonCommutativeConstraint",
-    "MomentMatrix",
     "RealValuedCommutativeMomentMatrix",
     "ComplexValuedCommutativeMomentMatrix",
     "RealValuedNonCommutativeMomentMatrix",
     "ComplexValuedNonCommutativeMomentMatrix",
-    "BaseSdpRelaxation",
     "RealValuedCommutativeSdpRelaxation",
     "ComplexValuedCommutativeSdpRelaxation",
     "RealValuedNonCommutativeSdpRelaxation",
