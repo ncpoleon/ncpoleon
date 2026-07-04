@@ -33,4 +33,29 @@ jobs:
                   MOSEKLM_LICENSE_FILE: ${{ github.workspace }}/mosek.lic
               with:
                   mode: simulation
-                  run: uv run --config-setting 'build-args=--profile=release' pytest -x --codspeed
+                  run: uv run --config-setting 'build-args=--profile=release' pytest -x --codspeed -m "not walltime"
+    
+    benchmarks-walltime:
+        name: Run benchmarks with walltime
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+            - name: Set up Python
+              uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+              with:
+                  python-version-file: pyproject.toml
+            - name: Install uv
+              uses: astral-sh/setup-uv@v8.2.0
+            - name: Install dependencies
+              run: uv sync --all-extras --dev
+            - name: Write MOSEK license
+              env:
+                  MSK_LICENSE: ${{ secrets.MSK_LICENSE }}
+              run: echo "$MSK_LICENSE" > "${{ github.workspace }}/mosek.lic"
+            - name: Run the walltime benchmarks
+              uses: CodSpeedHQ/action@c145068895e045cc725ee76fcd2307624b65c3af
+              env:
+                  MOSEKLM_LICENSE_FILE: ${{ github.workspace }}/mosek.lic
+              with:
+                  mode: walltime
+                  run: uv run --config-setting 'build-args=--profile=release' pytest -x --codspeed -m walltime
