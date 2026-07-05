@@ -49,7 +49,6 @@ def _i3322_params():
     return [m0, m1, m2, n0, n1, n2], obj, substitutions
 
 
-@pytest.mark.walltime
 def test_i3322_relaxation(benchmark):
     variables, obj, substitutions = _i3322_params()
     benchmark(get_relaxation, variables, 3, obj, substitutions=substitutions)
