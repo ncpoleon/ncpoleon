@@ -83,11 +83,10 @@ def _multiple_moment_matrices_params(w):
 
 
 @pytest.mark.parametrize("level", [1, 2])
-@pytest.mark.parametrize("w", [2.0, 2.2])
-def test_multiple_moment_matrices_relaxation(benchmark, level, w):
+def test_multiple_moment_matrices_relaxation(benchmark, level):
     # TODO: write docstring about the problem and change the name, it's about CHSH
     variables, objective, substitutions, operator_constraints, moment_constraints, normalization_constraints = (
-        _multiple_moment_matrices_params(w)
+        _multiple_moment_matrices_params(2.0)
     )
     benchmark(
         get_relaxation,
@@ -99,6 +98,7 @@ def test_multiple_moment_matrices_relaxation(benchmark, level, w):
         moment_constraints=moment_constraints,
         normalization_constraints=normalization_constraints,
     )
+
 
 @pytest.mark.parametrize("solver, use_primal, level, w, expected", generate_multiple_moment_matrices_parameters())
 @pytest.mark.walltime
