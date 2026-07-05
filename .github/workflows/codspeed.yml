@@ -29,7 +29,7 @@ jobs:
           MSK_LICENSE: ${{ secrets.MSK_LICENSE }}
         run: echo "$MSK_LICENSE" > "${{ github.workspace }}/mosek.lic"
       - name: Run the benchmarks
-        uses: CodSpeedHQ/action@c145068895e045cc725ee76fcd2307624b65c3af
+        uses: CodSpeedHQ/action@a4a36bb07c0638b0b4ca52bf1f3dad1b4289e52f
         env:
           MOSEKLM_LICENSE_FILE: ${{ github.workspace }}/mosek.lic
         with:
@@ -57,7 +57,7 @@ jobs:
           MSK_LICENSE: ${{ secrets.MSK_LICENSE }}
         run: echo "$MSK_LICENSE" > "${{ github.workspace }}/mosek.lic"
       - name: Run the walltime benchmarks
-        uses: CodSpeedHQ/action@c145068895e045cc725ee76fcd2307624b65c3af
+        uses: CodSpeedHQ/action@a4a36bb07c0638b0b4ca52bf1f3dad1b4289e52f
         env:
           MOSEKLM_LICENSE_FILE: ${{ github.workspace }}/mosek.lic
         with:
