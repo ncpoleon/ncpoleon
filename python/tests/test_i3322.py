@@ -49,12 +49,17 @@ def _i3322_params():
     return [m0, m1, m2, n0, n1, n2], obj, substitutions
 
 
-# TODO: Benchmark this once the Codspeed action is setup
+def test_i3322_relaxation(benchmark):
+    variables, obj, substitutions = _i3322_params()
+    benchmark(get_relaxation, variables, 3, obj, substitutions=substitutions)
+
+
 @pytest.mark.parametrize("solver, use_primal", generate_i3322_parameters())
-def test_i3322(solver, use_primal: bool):
+@pytest.mark.walltime
+def test_i3322(benchmark, solver, use_primal: bool):
     variables, obj, substitutions = _i3322_params()
     sdp = get_relaxation(variables, 3, obj, substitutions=substitutions)
     kwargs = {} if solver != "picos-cvxopt" or use_primal else {"cvxopt_kktsolver": "qr"}
-    sol = solve(sdp, "max", force_primal=use_primal, solver=solver, **kwargs)
+    sol = benchmark(solve, sdp, "max", force_primal=use_primal, solver=solver, **kwargs)
     assert sol.value == pytest.approx(1.2508756)
     assert (sdp.rewrite(reduce_sos_decomposition(sol.get_sos_decomposition()) + obj)).is_zero(1e-7)

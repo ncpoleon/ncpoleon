@@ -152,6 +152,9 @@ strict_config = true
 strict_markers = true
 strict_parametrization_ids = true
 testpaths = ["python/tests"]
+markers = [
+    "walltime: marks tests as benchmarkable using walltime mode (deselect with '-m \"not walltime\"')",
+]
 
 [tool.uv]
 # Rebuild package when any rust files change

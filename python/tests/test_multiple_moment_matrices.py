@@ -83,11 +83,10 @@ def _multiple_moment_matrices_params(w):
 
 
 @pytest.mark.parametrize("level", [1, 2])
-@pytest.mark.parametrize("w", [2.0, 2.2])
-def test_multiple_moment_matrices_relaxation(benchmark, level, w):
+def test_multiple_moment_matrices_relaxation(benchmark, level):
     # TODO: write docstring about the problem and change the name, it's about CHSH
     variables, objective, substitutions, operator_constraints, moment_constraints, normalization_constraints = (
-        _multiple_moment_matrices_params(w)
+        _multiple_moment_matrices_params(2.0)
     )
     benchmark(
         get_relaxation,
@@ -101,9 +100,9 @@ def test_multiple_moment_matrices_relaxation(benchmark, level, w):
     )
 
 
-# TODO: benchmark this once the Codspeed action is setup
 @pytest.mark.parametrize("solver, use_primal, level, w, expected", generate_multiple_moment_matrices_parameters())
-def test_multiple_moment_matrices(solver, use_primal, level, w, expected):
+@pytest.mark.walltime
+def test_multiple_moment_matrices_solve(benchmark, solver, use_primal, level, w, expected):
     # TODO: write docstring about the problem and change the name, it's about CHSH
     variables, objective, substitutions, operator_constraints, moment_constraints, normalization_constraints = (
         _multiple_moment_matrices_params(w)
@@ -117,7 +116,7 @@ def test_multiple_moment_matrices(solver, use_primal, level, w, expected):
         moment_constraints=moment_constraints,
         normalization_constraints=normalization_constraints,
     )
-    sol = solve(sdp, "max", force_primal=use_primal, solver=solver)
+    sol = benchmark(solve, sdp, "max", force_primal=use_primal, solver=solver)
     assert -log2(sol.value) == pytest.approx(expected, abs=1e-6)
     sos_decompositions = sol.get_sos_decomposition_by_mm_id()
     reduced_0 = reduce_sos_decomposition(sos_decompositions[0])
