@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - master
   pull_request:
   workflow_dispatch:
 
@@ -25,12 +24,12 @@ jobs:
         env:
           MSK_LICENSE: ${{ secrets.MSK_LICENSE }}
         run: |
-          uv run --config-setting 'build-args=--profile=dev' pytest -x
+          uv run --all-extras --dev --config-setting 'build-args=--profile=dev' pytest -x
           if [ -n "$MSK_LICENSE" ]; then
             echo "$MSK_LICENSE" > "$HOME/mosek.lic"
             MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run python -c \
               "from ncpoleon.utils import is_mosek_available; assert is_mosek_available(), 'MSK_LICENSE is set but MOSEK license checkout failed'"
-            MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run --config-setting 'build-args=--profile=dev' pytest -x
+            MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run --all-extras --dev --config-setting 'build-args=--profile=dev' pytest -x
           fi
 
   cargo-test:
