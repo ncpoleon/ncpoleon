@@ -1,7 +1,8 @@
 import logging
 from typing import Literal
 
-from ncpoleon._accelerate import reset_handler as _reset_handler
+from ncpoleon._accelerate.logging import reset_handler as _reset_handler
+from ncpoleon._accelerate.logging import set_notebook as set_notebook
 
 FORMAT = "%(levelname)s %(name)s %(asctime)-15s %(filename)s:%(lineno)d %(message)s"
 logging.basicConfig(format=FORMAT)
@@ -28,5 +29,6 @@ def set_verbosity_level(verbosity: Literal[0] | Literal[1] | Literal[2] | Litera
 
 __all__ = [
     "set_logging_format",
+    "set_notebook",
     "set_verbosity_level",
 ]

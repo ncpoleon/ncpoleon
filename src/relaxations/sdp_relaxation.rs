@@ -1062,7 +1062,9 @@ where
             for (index_row, monomial_row) in monomials_sets_iterator_rows {
                 let monomials_sets_iterator_cols = if verbosity > 0 {
                     itertools::Either::Left(tqdm!(
-                        // FIXME: using skip makes it run in n^2 instead of n*(n+1)/2
+                        // FIXME: using skip makes it run in n^2 instead of n*(n+1)/2. We can probably fix it
+                        // by computing how many elements (i.e. lengths) should we skip, and then skip the first
+                        // remaining elements of the first length that we consider. Maybe write this as a function
                         monomials_sets.iter().flatten().enumerate().skip(index_row),
                         desc = "Filling columns of this row",
                         position = if top_bar { 2 } else { 1 },
@@ -1070,7 +1072,7 @@ where
                         leave = false
                     ))
                 } else {
-                    itertools::Either::Right(monomials_sets.iter().flatten().enumerate())
+                    itertools::Either::Right(monomials_sets.iter().flatten().enumerate().skip(index_row))
                 };
 
                 for (index_column, monomial_column) in monomials_sets_iterator_cols {
