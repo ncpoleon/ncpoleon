@@ -148,6 +148,7 @@ def get_relaxation(  # type: ignore[overload-overlap]
     normalization_constraints: list[RealCoefficientsCommutativeConstraint] | None = None,
     substitution_strategy: RewritingStrategy = RewritingStrategy.Greedy,
     assume_real: bool = False,
+    verbosity: Literal[0] | Literal[1] | Literal[2] | Literal[3] = 0,
 ) -> RealValuedCommutativeSdpRelaxation: ...
 @overload
 def get_relaxation(
@@ -164,6 +165,7 @@ def get_relaxation(
     | None = None,
     substitution_strategy: RewritingStrategy = RewritingStrategy.Greedy,
     assume_real: bool = False,
+    verbosity: Literal[0] | Literal[1] | Literal[2] | Literal[3] = 0,
 ) -> ComplexValuedCommutativeSdpRelaxation: ...
 @overload
 def get_relaxation(  # type: ignore[overload-overlap]
@@ -177,6 +179,7 @@ def get_relaxation(  # type: ignore[overload-overlap]
     normalization_constraints: list[RealCoefficientsNonCommutativeConstraint] | None = None,
     substitution_strategy: RewritingStrategy = RewritingStrategy.Greedy,
     assume_real: bool = False,
+    verbosity: Literal[0] | Literal[1] | Literal[2] | Literal[3] = 0,
 ) -> RealValuedNonCommutativeSdpRelaxation: ...
 @overload
 def get_relaxation(
@@ -195,4 +198,5 @@ def get_relaxation(
     | None = None,
     substitution_strategy: RewritingStrategy = RewritingStrategy.Greedy,
     assume_real: bool = False,
+    verbosity: Literal[0] | Literal[1] | Literal[2] | Literal[3] = 0,
 ) -> ComplexValuedNonCommutativeSdpRelaxation: ...

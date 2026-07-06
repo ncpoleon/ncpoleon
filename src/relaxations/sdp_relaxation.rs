@@ -5,7 +5,8 @@ use std::iter::repeat_n;
 use std::ops::Mul;
 
 use itertools::Itertools;
-use log::{debug, info, trace};
+use kdam::tqdm;
+use log::{debug, info, trace, warn};
 use num_complex::Complex;
 use num_traits::Zero;
 use pyo3::IntoPyObjectExt;
@@ -48,7 +49,7 @@ macro_rules! build_relaxation_inner {
         $py:expr, $level:expr, $objective:expr,
         $operator_constraints_some:expr, $moment_constraints_some:expr, $normalization_constraints_some:expr,
         $variables:expr, $substitutions:expr, $strategy:expr,
-        $py_poly:ident, $py_relaxation:ident, $py_constraint:ident $(,)?
+        $py_poly:ident, $py_relaxation:ident, $py_constraint:ident, $verbosity:expr $(,)?
     ) => {{
         let rust_objective = match $py_poly::try_from($objective) {
             Ok(polynomial) => polynomial.0,
@@ -165,6 +166,7 @@ macro_rules! build_relaxation_inner {
             rust_moment_inequalities,
             rust_normalization_equalities,
             rust_normalization_inequalities,
+            $verbosity
         )?;
         $py_relaxation(relaxation).into_py_any($py)
     }};
@@ -181,7 +183,7 @@ macro_rules! build_relaxation_arm {
         variables: $variables:expr,
         real_poly_and_relaxation: $real_py_poly:ident & $real_py_relaxation:ident & $real_py_constraint:ident,
         complex_poly_and_relaxation: $complex_py_poly:ident & $complex_py_relaxation:ident & $complex_py_constraint:ident,
-        is_real: $is_real:expr $(,)?
+        is_real: $is_real:expr, verbosity: $verbosity:expr $(,)?
     ) => {{
         let mut rust_substitutions: BTreeMap<$rust_monomial, $rust_monomial> = BTreeMap::new();
 
@@ -196,7 +198,7 @@ macro_rules! build_relaxation_arm {
                     // case the conversion couldn't know the moment_matrix index. We set it to the
                     // same one as the monomial to replace
                     if value.0.is_one() {
-                        debug!("Set the moment matrix index of the identity operator to the same one as {} in a substitution constraint.", key.0);
+                        warn!("Set the moment matrix index of the identity operator to the same one as {} in a substitution constraint.", key.0);
                         value.0.data.moment_matrix_id = key.0.data.moment_matrix_id;
                     }
                     trace!("Adding substitution at index {} to the substitutions ({} -> {}).", index, key.0, value.0);
@@ -212,7 +214,6 @@ macro_rules! build_relaxation_arm {
         }
 
         if $is_real {
-            debug!("Setting real-valued relaxation.");
             build_relaxation_inner!(
                 $py,
                 $level,
@@ -225,10 +226,10 @@ macro_rules! build_relaxation_arm {
                 $substitution_strategy,
                 $real_py_poly,
                 $real_py_relaxation,
-                $real_py_constraint
+                $real_py_constraint,
+                $verbosity
             )
         } else {
-            debug!("Setting complex-valued relaxation.");
             build_relaxation_inner!(
                 $py,
                 $level,
@@ -241,7 +242,8 @@ macro_rules! build_relaxation_arm {
                 $substitution_strategy,
                 $complex_py_poly,
                 $complex_py_relaxation,
-                $complex_py_constraint
+                $complex_py_constraint,
+                $verbosity
             )
         }
     }};
@@ -581,6 +583,7 @@ pub(crate) fn is_constraint_real_valued<'py>(bound: &Bound<'py, PyAny>, name: &s
         normalization_constraints=None,
         substitution_strategy=RewritingStrategy::Greedy,
         assume_real=false,
+        verbosity=0
     )
 )]
 #[allow(clippy::too_many_arguments)]
@@ -594,6 +597,7 @@ pub(crate) fn get_relaxation<'py>(
     normalization_constraints: Option<&Bound<'py, PyList>>,
     substitution_strategy: RewritingStrategy,
     assume_real: bool,
+    verbosity: u8,
 ) -> PyResult<Py<PyAny>> {
     let py = objective.py();
     let default_dict = PyDict::new(py);
@@ -625,6 +629,10 @@ pub(crate) fn get_relaxation<'py>(
                     format!("the constraint at index {} of the {} constraints", index, label).as_str(),
                 )?;
             }
+        }
+
+        if is_problem_real_valued {
+            info!("The problem has been found to be real-valued.");
         }
     }
 
@@ -663,7 +671,7 @@ pub(crate) fn get_relaxation<'py>(
                 complex_poly_and_relaxation: PythonComplexCoefficientsNonCommutativePolynomial &
                     PythonComplexValuedNonCommutativeSdpRelaxation &
                     PythonComplexCoefficientsNonCommutativeConstraint,
-                is_real: is_problem_real_valued,
+                is_real: is_problem_real_valued, verbosity: verbosity
             )
         }
         // Commutative problem
@@ -680,7 +688,7 @@ pub(crate) fn get_relaxation<'py>(
                 complex_poly_and_relaxation: PythonComplexCoefficientsCommutativePolynomial &
                     PythonComplexValuedCommutativeSdpRelaxation &
                     PythonComplexCoefficientsCommutativeConstraint,
-                is_real: is_problem_real_valued,
+                is_real: is_problem_real_valued, verbosity: verbosity
             )
         }
         (false, false) => Err(PyNotImplementedError::new_err(
@@ -816,6 +824,7 @@ where
         moment_inequalities: Vec<(Polynomial<Monomial<Data>, Scalar>, f64)>,
         normalization_equalities: Vec<(Polynomial<Monomial<Data>, Scalar>, Scalar)>,
         normalization_inequalities: Vec<(Polynomial<Monomial<Data>, Scalar>, f64)>,
+        verbosity: u8,
     ) -> PyResult<()>
     where
         Monomial<Data>: From<OperatorType> + RewritingTrait<Monomial<Data>> + Display,
@@ -953,7 +962,20 @@ where
             )));
         }
 
-        for (moment_matrix_id, variables_set) in variables_with_adjoint.into_iter() {
+        let top_bar = (verbosity > 0) & (verbosity < 3) & (variables_with_adjoint.len() > 1);
+
+        let mm_iterator = if top_bar {
+            itertools::Either::Left(tqdm!(
+                variables_with_adjoint.into_iter(),
+                desc = "Moment matrix index",
+                position = 0,
+                ncols = 0
+            ))
+        } else {
+            itertools::Either::Right(variables_with_adjoint.into_iter())
+        };
+
+        for (moment_matrix_id, variables_set) in mm_iterator {
             // The i-th element of monomials_sets contains the set of monomials of length i + 1
             // This allows us to access the monomials for lower k_i when dealing with
             // localizing moment matrices
@@ -966,12 +988,36 @@ where
             // order to do so, we could add a is_commutative method to PolynomialTrait, just like we did
             // with is_real. This however wouldn't work to generate Hybrid monomials, we may want to have
             // two different sets of variables, one commutative and one non commutative
-            debug!("Generating indexing set for moment matrix identifier {}.", moment_matrix_id);
-            for monomial_length in 1..=level {
-                debug!("Generating monomials of length {}.", monomial_length);
+
+            let monomial_length_iterator = if verbosity > 0 {
+                itertools::Either::Left(tqdm!(
+                    1..=level,
+                    desc = "Generating monomials with length",
+                    position = if top_bar { 1 } else { 0 },
+                    ncols = 0
+                ))
+            } else {
+                itertools::Either::Right(1..=level)
+            };
+
+            for monomial_length in monomial_length_iterator {
                 let mut level_set = BTreeSet::new();
-                repeat_n(variables_set.iter().cloned(), monomial_length as usize)
-                    .multi_cartesian_product()
+
+                let mut multi_cartesian_product_iterator = if (verbosity > 0) & (verbosity < 3) {
+                    itertools::Either::Left(tqdm!(
+                        repeat_n(variables_set.iter().cloned(), monomial_length as usize).multi_cartesian_product(),
+                        desc = "Monomial combinations",
+                        position = if top_bar { 2 } else { 1 },
+                        total = variables_set.len().pow(monomial_length as u32),
+                        leave = false
+                    ))
+                } else {
+                    itertools::Either::Right(
+                        repeat_n(variables_set.iter().cloned(), monomial_length as usize).multi_cartesian_product(),
+                    )
+                };
+
+                multi_cartesian_product_iterator
                     .try_for_each(|operators| -> Result<(), String> {
                         let mut iter = operators.into_iter().map(Monomial::from);
                         let first = iter.next().unwrap();
@@ -1001,9 +1047,33 @@ where
 
             // Determine the constraints on the moment matrix. This is where we build the map between
             // reduced monomials and indices within the moment matrix
-            for (index_row, monomial_row) in monomials_sets.iter().flatten().enumerate() {
-                // FIXME: using skip probably makes it run in n^2 instead of n*(n+1)/2
-                for (index_column, monomial_column) in monomials_sets.iter().flatten().enumerate().skip(index_row) {
+
+            let monomials_sets_iterator_rows = if verbosity > 0 {
+                itertools::Either::Left(tqdm!(
+                    monomials_sets.iter().flatten().enumerate(),
+                    desc = "Filling moment matrix rows",
+                    position = if top_bar { 1 } else { 0 },
+                    total = monomials_sets.iter().map(|set| set.len()).sum::<usize>()
+                ))
+            } else {
+                itertools::Either::Right(monomials_sets.iter().flatten().enumerate())
+            };
+
+            for (index_row, monomial_row) in monomials_sets_iterator_rows {
+                let monomials_sets_iterator_cols = if verbosity > 0 {
+                    itertools::Either::Left(tqdm!(
+                        // FIXME: using skip makes it run in n^2 instead of n*(n+1)/2
+                        monomials_sets.iter().flatten().enumerate().skip(index_row),
+                        desc = "Filling columns of this row",
+                        position = if top_bar { 2 } else { 1 },
+                        total = monomials_sets.iter().map(|set| set.len()).sum::<usize>() - index_row,
+                        leave = false
+                    ))
+                } else {
+                    itertools::Either::Right(monomials_sets.iter().flatten().enumerate())
+                };
+
+                for (index_column, monomial_column) in monomials_sets_iterator_cols {
                     let new_monomial = if index_row == 0 {
                         monomial_column.clone()
                     } else {
@@ -1054,36 +1124,39 @@ where
                 }
             }
 
-            debug!("Computing localizing matrices for equality constraints.");
-            // TODO: write a macro/function for equalities and inequalities
-            let mut new_localising_moment_matrices_equalities = Vec::with_capacity(self.equalities.len());
-            if let Some(equalities) = self.equalities.get(&moment_matrix_id) {
-                for equality in equalities.iter() {
-                    new_localising_moment_matrices_equalities.push(self.get_localising_moment_matrix(
-                        equality,
-                        (2 * level - equality.degree()) / 2,
-                        &monomials_sets,
-                        &new_moment_matrix,
-                    )?);
-                }
-            }
-            self.localising_moment_matrices_equalities
-                .insert(moment_matrix_id, new_localising_moment_matrices_equalities);
+            macro_rules! build_localising_moment_matrices {
+                ($constraints_field:ident, $matrices_field:ident) => {{
+                    let mut new_localising_moment_matrices = Vec::with_capacity(self.$constraints_field.len());
+                    if let Some(constraints) = self.$constraints_field.get(&moment_matrix_id) {
+                        let constraints_iterator = if verbosity > 0 {
+                            itertools::Either::Left(tqdm!(
+                                constraints.iter(),
+                                desc =
+                                    format!("Building localising moment matrices ({})", stringify!($constraints_field)),
+                                position = if top_bar { 1 } else { 0 },
+                                ncols = 0
+                            ))
+                        } else {
+                            itertools::Either::Right(constraints.iter())
+                        };
 
-            debug!("Computing localizing matrices for inequality constraints.");
-            let mut new_localising_moment_matrices_inequalities = Vec::with_capacity(self.inequalities.len());
-            if let Some(inequalities) = self.inequalities.get(&moment_matrix_id) {
-                for inequality in inequalities.iter() {
-                    new_localising_moment_matrices_inequalities.push(self.get_localising_moment_matrix(
-                        inequality,
-                        (2 * level - inequality.degree()) / 2,
-                        &monomials_sets,
-                        &new_moment_matrix,
-                    )?);
-                }
+                        for constraint in constraints_iterator {
+                            new_localising_moment_matrices.push(self.get_localising_moment_matrix(
+                                constraint,
+                                (2 * level - constraint.degree()) / 2,
+                                &monomials_sets,
+                                &new_moment_matrix,
+                                verbosity,
+                                top_bar,
+                            )?);
+                        }
+                    }
+                    self.$matrices_field.insert(moment_matrix_id, new_localising_moment_matrices);
+                }};
             }
-            self.localising_moment_matrices_inequalities
-                .insert(moment_matrix_id, new_localising_moment_matrices_inequalities);
+
+            build_localising_moment_matrices!(equalities, localising_moment_matrices_equalities);
+            build_localising_moment_matrices!(inequalities, localising_moment_matrices_inequalities);
 
             self.moment_matrices.insert(moment_matrix_id, new_moment_matrix);
             self.generating_sets.insert(moment_matrix_id, monomials_sets.iter().flatten().cloned().collect());
@@ -1100,6 +1173,8 @@ where
         level: u8,
         monomials_sets: &[BTreeSet<Monomial<Data>>],
         moment_matrix: &RustMomentMatrix<Scalar, Monomial<Data>>,
+        verbosity: u8,
+        top_bar: bool,
     ) -> PyResult<RustMomentMatrix<Scalar, Monomial<Data>>>
     where
         Monomial<Data>: Display + RewritingTrait<Monomial<Data>>,
@@ -1110,11 +1185,35 @@ where
             size: monomials_sets.iter().take((level + 1).into()).map(|set| set.len()).sum(),
         };
 
-        for (index_row, operator_row) in monomials_sets.iter().take((level + 1).into()).flatten().enumerate() {
+        let operators_iterator_rows = if verbosity > 0 {
+            itertools::Either::Left(tqdm!(
+                monomials_sets.iter().take((level + 1).into()).flatten().enumerate(),
+                desc = "Filling localising matrix rows",
+                position = if top_bar { 2 } else { 1 },
+                ncols = 0,
+                leave = false
+            ))
+        } else {
+            itertools::Either::Right(monomials_sets.iter().take((level + 1).into()).flatten().enumerate())
+        };
+
+        for (index_row, operator_row) in operators_iterator_rows {
             // FIXME: using skip is suboptimal, since it still traverses the iterator
-            for (index_col, operator_col) in
-                monomials_sets.iter().take((level + 1).into()).flatten().enumerate().skip(index_row)
-            {
+            let operators_iterator_cols = if verbosity > 0 {
+                itertools::Either::Left(tqdm!(
+                    monomials_sets.iter().take((level + 1).into()).flatten().enumerate().skip(index_row),
+                    desc = "Filling localising matrix columns of this row",
+                    position = if top_bar { 3 } else { 2 },
+                    ncols = 0,
+                    leave = false
+                ))
+            } else {
+                itertools::Either::Right(
+                    monomials_sets.iter().take((level + 1).into()).flatten().enumerate().skip(index_row),
+                )
+            };
+
+            for (index_col, operator_col) in operators_iterator_cols {
                 // FIXME: performance: no need to recompute the adjoint each time
                 let operator_row_adjoint = operator_row.adjoint();
                 trace!(
