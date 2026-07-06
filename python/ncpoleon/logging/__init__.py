@@ -28,7 +28,7 @@ def set_verbosity_level(verbosity: Literal[0] | Literal[1] | Literal[2] | Litera
     elif verbosity == 2:
         _logger.setLevel(logging.DEBUG)
     elif verbosity >= 3:
-        _logger.setLevel(logging.NOTSET)
+        _logger.setLevel(5)
 
     _reset_handler()
 
