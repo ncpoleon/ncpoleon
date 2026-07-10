@@ -1,6 +1,6 @@
 use std::sync::OnceLock;
 
-use log::{debug, LevelFilter};
+use log::{LevelFilter, debug};
 use pyo3::prelude::*;
 use pyo3_log::ResetHandle;
 
