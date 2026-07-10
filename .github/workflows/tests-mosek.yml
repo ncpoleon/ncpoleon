@@ -29,7 +29,7 @@ jobs:
         run: |
           echo "$MSK_LICENSE" > "$HOME/mosek.lic"
           MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run python -c \
-            "from ncpoleon.utils import is_mosek_available; assert is_mosek_available(), 'MSK_LICENSE is set but MOSEK license checkout failed'"
+            "from ncpoleon.utils import is_mosek_available; assert is_mosek_available(), 'MOSEK license checkout failed'"
           MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run --all-extras --dev --config-setting 'build-args=--profile=dev' pytest -x
   
   approve:
@@ -61,43 +61,75 @@ jobs:
         run: |
           echo "$MSK_LICENSE" > "$HOME/mosek.lic"
           MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run python -c \
-            "from ncpoleon.utils import is_mosek_available; assert is_mosek_available(), 'MSK_LICENSE is set but MOSEK license checkout failed'"
+            "from ncpoleon.utils import is_mosek_available; assert is_mosek_available(), 'MOSEK license checkout failed'"
           MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run --all-extras --dev --config-setting 'build-args=--profile=dev' pytest -x
 
   # push to main / manual dispatch. workflow_dispatch also lets CodSpeed
   # itself trigger backtest performance analysis to generate baseline data.
   codspeed-trusted:
     if: github.event_name != 'pull_request_target'
+    name: Run benchmarks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           persist-credentials: false
-      - name: Install uv
-        uses: astral-sh/setup-uv@v8.2.0
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version-file: pyproject.toml
-      - name: Install dependencies
-        run: uv sync --all-extras --dev
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.2.0
+      - name: Run the benchmarks
+        uses: CodSpeedHQ/action@a4a36bb07c0638b0b4ca52bf1f3dad1b4289e52f
+        env:
+          MSK_LICENSE: ${{ secrets.MSK_LICENSE }}
+        with:
+          mode: simulation
+          run: |
+            echo "$MSK_LICENSE" > "$HOME/mosek.lic"
+            MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run python -c \
+              "from ncpoleon.utils import is_mosek_available; assert is_mosek_available(), 'MOSEK license checkout failed'"
+            MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run --all-extras --dev --config-setting 'build-args=--profile=release' pytest -x --codspeed -m "not walltime"
+            
+  
+  codspeed-trusted-walltime:
+    if: github.event_name != 'pull_request_target'
+    name: Run benchmarks with walltime
+    runs-on: codspeed-macro
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version-file: pyproject.toml
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.2.0
       - name: Write MOSEK license
         env:
           MSK_LICENSE: ${{ secrets.MSK_LICENSE }}
         run: echo "$MSK_LICENSE" > "${{ github.workspace }}/mosek.lic"
-      - name: Run the benchmarks
-        uses: CodSpeedHQ/action@c145068895e045cc725ee76fcd2307624b65c3af
+      - name: Run the walltime benchmarks
+        uses: CodSpeedHQ/action@a4a36bb07c0638b0b4ca52bf1f3dad1b4289e52f
         env:
-          MOSEKLM_LICENSE_FILE: ${{ github.workspace }}/mosek.lic
+          MSK_LICENSE: ${{ secrets.MSK_LICENSE }}
         with:
-          mode: simulation
-          run: uv run --config-setting 'build-args=--profile=release' pytest -x --codspeed
+          mode: walltime
+          run: |
+            echo "$MSK_LICENSE" > "$HOME/mosek.lic"
+            MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run python -c \
+              "from ncpoleon.utils import is_mosek_available; assert is_mosek_available(), 'MOSEK license checkout failed'"
+            MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run --all-extras --dev --config-setting 'build-args=--profile=release' pytest -x --codspeed -m walltime
 
-  # pull requests: same review gate as mosek-pr — this also checks out
-  # PR-controlled code and hands it the MOSEK secret, so it needs the
-  # same human approval before it's allowed to run.
   codspeed-pr:
     if: github.event_name == 'pull_request_target'
+    name: Run benchmarks
     runs-on: ubuntu-latest
     needs: [approve]
     environment:
@@ -105,24 +137,51 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
-      - name: Install uv
-        uses: astral-sh/setup-uv@v8.2.0
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version-file: pyproject.toml
-      - name: Install dependencies
-        run: uv sync --all-extras --dev
-      - name: Write MOSEK license
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.2.0
+      - name: Run the benchmarks
+        uses: CodSpeedHQ/action@a4a36bb07c0638b0b4ca52bf1f3dad1b4289e52f
         env:
           MSK_LICENSE: ${{ secrets.MSK_LICENSE }}
-        run: echo "$MSK_LICENSE" > "${{ github.workspace }}/mosek.lic"
-      - name: Run the benchmarks
-        uses: CodSpeedHQ/action@c145068895e045cc725ee76fcd2307624b65c3af
-        env:
-          MOSEKLM_LICENSE_FILE: ${{ github.workspace }}/mosek.lic
         with:
           mode: simulation
-          run: uv run --config-setting 'build-args=--profile=release' pytest -x --codspeed
+          run: |
+            echo "$MSK_LICENSE" > "$HOME/mosek.lic"
+            MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run python -c \
+              "from ncpoleon.utils import is_mosek_available; assert is_mosek_available(), 'MOSEK license checkout failed'"
+            MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run --all-extras --dev --config-setting 'build-args=--profile=release' pytest -x --codspeed -m "not walltime"
+  
+  codspeed-pr-walltime:
+    if: github.event_name != 'pull_request_target'
+    name: Run benchmarks with walltime
+    runs-on: codspeed-macro
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version-file: pyproject.toml
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.2.0
+      - name: Run the walltime benchmarks
+        uses: CodSpeedHQ/action@a4a36bb07c0638b0b4ca52bf1f3dad1b4289e52f
+        env:
+          MSK_LICENSE: ${{ secrets.MSK_LICENSE }}
+        with:
+          mode: walltime
+          run: |
+            echo "$MSK_LICENSE" > "$HOME/mosek.lic"
+            MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run python -c \
+              "from ncpoleon.utils import is_mosek_available; assert is_mosek_available(), 'MOSEK license checkout failed'"
+            MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run --all-extras --dev --config-setting 'build-args=--profile=release' pytest -x --codspeed -m walltime
