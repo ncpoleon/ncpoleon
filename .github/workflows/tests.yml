@@ -1,4 +1,4 @@
-name: Tests
+name: Tests without a MOSEK license
 
 on:
   push:
@@ -21,16 +21,7 @@ jobs:
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
       - uses: astral-sh/setup-uv@v8.2.0
       - name: Python tests
-        env:
-          MSK_LICENSE: ${{ secrets.MSK_LICENSE }}
-        run: |
-          uv run --all-extras --dev --config-setting 'build-args=--profile=dev' pytest -x
-          if [ -n "$MSK_LICENSE" ]; then
-            echo "$MSK_LICENSE" > "$HOME/mosek.lic"
-            MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run python -c \
-              "from ncpoleon.utils import is_mosek_available; assert is_mosek_available(), 'MSK_LICENSE is set but MOSEK license checkout failed'"
-            MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run --all-extras --dev --config-setting 'build-args=--profile=dev' pytest -x
-          fi
+        run: uv run --all-extras --dev --config-setting 'build-args=--profile=dev' pytest -x
 
   cargo-test:
     runs-on: ubuntu-latest
