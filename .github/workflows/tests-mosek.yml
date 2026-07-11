@@ -4,7 +4,14 @@ on:
   push:
     branches:
       - buffer
+      - main
   pull_request_target:
+    branches:
+      - buffer
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
 
 permissions:
   contents: read
