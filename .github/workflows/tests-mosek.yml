@@ -51,6 +51,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
+          allow-unsafe-pr-checkout: true
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
       - uses: astral-sh/setup-uv@v8.2.0
@@ -133,6 +134,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
+          allow-unsafe-pr-checkout: true
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
@@ -146,6 +148,7 @@ jobs:
         uses: CodSpeedHQ/action@a4a36bb07c0638b0b4ca52bf1f3dad1b4289e52f
         env:
           MSK_LICENSE: ${{ secrets.MSK_LICENSE }}
+          GITHUB_EVENT_NAME: pull_request # Hack since Codspeed doesn't support pull_request_target yet
         with:
           mode: simulation
           run: |
@@ -164,6 +167,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
+          allow-unsafe-pr-checkout: true
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
@@ -177,6 +181,7 @@ jobs:
         uses: CodSpeedHQ/action@a4a36bb07c0638b0b4ca52bf1f3dad1b4289e52f
         env:
           MSK_LICENSE: ${{ secrets.MSK_LICENSE }}
+          GITHUB_EVENT_NAME: pull_request # Hack since Codspeed doesn't support pull_request_target yet
         with:
           mode: walltime
           run: |
