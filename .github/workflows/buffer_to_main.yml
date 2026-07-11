@@ -1,0 +1,38 @@
+name: Open buffer -> main PR
+
+on:
+  push:
+    branches:
+      - buffer
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  open-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open PR if none exists
+        env:
+          GH_TOKEN: ${{ secrets.BUFFER_TO_MAIN }}
+        run: |
+          existing_pr=$(gh pr list \
+            --repo "$GITHUB_REPOSITORY" \
+            --base main \
+            --head buffer \
+            --state open \
+            --json number \
+            --jq '.[0].number // empty')
+
+          if [ -n "$existing_pr" ]; then
+            echo "PR #$existing_pr from buffer to main is already open, nothing to do."
+            exit 0
+          fi
+
+          gh pr create \
+            --repo "$GITHUB_REPOSITORY" \
+            --base main \
+            --head buffer \
+            --title "Integrate buffer into main" \
+            --body "Opened automatically after a reviewed external contribution landed on \`buffer\`. This re-runs the full CI suite, including MOSEK-backed tests and CodSpeed benchmarks, as an ordinary same-repo pull request."
