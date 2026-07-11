@@ -30,6 +30,16 @@ jobs:
             exit 0
           fi
 
+          # buffer and main may already agree (e.g. right after the
+          # "Sync buffer with main" workflow resets buffer to main's tip).
+          # There's nothing to open a PR about in that case.
+          ahead_by=$(gh api "repos/$GITHUB_REPOSITORY/compare/main...buffer" --jq '.ahead_by')
+
+          if [ "${ahead_by:-0}" -eq 0 ]; then
+            echo "buffer has no commits main doesn't already have, nothing to open a PR for."
+            exit 0
+          fi
+
           # Find the original PR that just landed on buffer (the PR containing the
           # pushed commit whose base branch was buffer).
           orig_json=$(gh api \
