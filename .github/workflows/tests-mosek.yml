@@ -31,22 +31,21 @@ jobs:
           MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run python -c \
             "from ncpoleon.utils import is_mosek_available; assert is_mosek_available(), 'MOSEK license checkout failed'"
           MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run --all-extras --dev --config-setting 'build-args=--profile=dev' pytest -x
-  
+
   approve:
+    if: github.event_name == 'pull_request_target'
+    environment:
+      name: Integrate Pull Request
     runs-on: ubuntu-latest
 
     steps:
-    - name: Approve
-      run: echo For security reasons, all workflows requiring a MOSEK license need to be approved first before running.
+      - name: Approve
+        run: echo For security reasons, all workflows requiring a MOSEK license need to be approved first before running.
 
-  # pull requests: paused until a maintainer reviews the diff and approves
-  # the "Integrate Pull Request" environment.
   mosek-pr:
     if: github.event_name == 'pull_request_target'
     runs-on: ubuntu-latest
     needs: [approve]
-    environment:
-      name: Integrate Pull Request
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
@@ -94,8 +93,7 @@ jobs:
             MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run python -c \
               "from ncpoleon.utils import is_mosek_available; assert is_mosek_available(), 'MOSEK license checkout failed'"
             MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run --all-extras --dev --config-setting 'build-args=--profile=release' pytest -x --codspeed -m "not walltime"
-            
-  
+
   codspeed-trusted-walltime:
     if: github.event_name != 'pull_request_target'
     name: Run benchmarks with walltime
@@ -130,8 +128,6 @@ jobs:
     name: Run benchmarks
     runs-on: ubuntu-latest
     needs: [approve]
-    environment:
-      name: Integrate Pull Request
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
@@ -157,14 +153,12 @@ jobs:
             MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run python -c \
               "from ncpoleon.utils import is_mosek_available; assert is_mosek_available(), 'MOSEK license checkout failed'"
             MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run --all-extras --dev --config-setting 'build-args=--profile=release' pytest -x --codspeed -m "not walltime"
-  
+
   codspeed-pr-walltime:
     if: github.event_name == 'pull_request_target'
     name: Run benchmarks with walltime
     runs-on: codspeed-macro
     needs: [approve]
-    environment:
-      name: Integrate Pull Request
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
