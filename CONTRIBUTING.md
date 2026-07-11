@@ -76,6 +76,10 @@ All incoming pull requests should be made against the `buffer` branch. Here's wh
    check that can block the merge if it detects a regression. This is the
    real final gate before your change reaches `main`; a maintainer will
    merge it once everything is green.
+4. On every push on `main`, including the merging of the PR originating 
+   from `buffer`, `buffer` is force-pushed into the state of `main`. This
+   ensures that both branches stay in sync. For this reason, you should
+   **never** fork the `buffer` branch, always fork the `main` one.
 
 We've adopted this framework because the CodSpeed action, which we use to test for performance regression, doesn't support the `pull_request_target` event yet. As a result, merging your code onto `buffer` means that your code should pass all the checks required to be merged on `main`. The second PR then checks that no performance regression happens when using a valid MOSEK license, in which case it is then merged onto `main`.
 
