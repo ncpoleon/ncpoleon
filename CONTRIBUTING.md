@@ -4,7 +4,13 @@ If you want to contribute to `ncpoleon`, first of all, thanks for considering it
 
 ## Setup
 
-In order to build the library, you will have to have [Rust](https://rust-lang.org/tools/install/) and [`uv`](https://docs.astral.sh/uv/getting-started/installation/) installed on your system. Once that's done, you can run
+In order to build the library, you will have to have [Rust](https://rust-lang.org/tools/install/) and [`uv`](https://docs.astral.sh/uv/getting-started/installation/) installed on your system. You will also need the nightly toolchain, along with its `rustfmt` component, since formatting checks run under nightly. You can install both by running
+
+```shell
+rustup toolchain install nightly --component rustfmt
+```
+
+Once that's done, you can run
 
 ```shell
 uv sync --dev --all-extras --config-setting 'build-args=--profile=dev'
