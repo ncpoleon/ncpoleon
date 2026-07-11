@@ -3,7 +3,6 @@ name: Tests with a MOSEK license
 on:
   push:
     branches:
-      - buffer
       - main
   pull_request_target:
     branches:
