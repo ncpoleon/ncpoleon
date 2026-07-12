@@ -1,70 +1,80 @@
 name: CodSpeed Benchmarks
 
 on:
-    push:
-        branches:
-            - "main"
-    pull_request: # required to have reports on PRs
-    # `workflow_dispatch` allows CodSpeed to trigger backtest
-    # performance analysis in order to generate initial data.
-    workflow_dispatch:
+  push:
+    branches:
+      - "main"
+  pull_request: # required to have reports on PRs
+  # `workflow_dispatch` allows CodSpeed to trigger backtest
+  # performance analysis in order to generate initial data.
+  workflow_dispatch:
 
 permissions:
-    contents: read
+  contents: read
 
 jobs:
-    benchmarks:
-        name: Run benchmarks
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
-              with:
-                  persist-credentials: false
-            - name: Set up Python
-              uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
-              with:
-                  python-version-file: pyproject.toml
-            - name: Set up Rust toolchain
-              uses: dtolnay/rust-toolchain@stable
-            - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
-            - name: Install uv
-              uses: astral-sh/setup-uv@v8.2.0
-            - name: Run the benchmarks
-              uses: CodSpeedHQ/action@a4a36bb07c0638b0b4ca52bf1f3dad1b4289e52f
-              env:
-                  MSK_LICENSE: ${{ secrets.MSK_LICENSE }}
-              with:
-                  mode: simulation
-                  run: |
-                      echo "$MSK_LICENSE" > "$HOME/mosek.lic"
-                      MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run python -c \
-                        "from ncpoleon.utils import is_mosek_available; assert is_mosek_available(), 'MOSEK license checkout failed'"
-                      MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run --all-extras --dev --config-setting 'build-args=--profile=release' pytest -x --codspeed -m "not walltime"
+  approve-benchmarks:
+    environment:
+      name: Run walltime benchmarks
+    runs-on: ubuntu-latest
 
-    benchmarks-walltime:
-        name: Run benchmarks with walltime
-        runs-on: codspeed-macro
-        steps:
-            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
-              with:
-                  persist-credentials: false
-            - name: Set up Python
-              uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
-              with:
-                  python-version-file: pyproject.toml
-            - name: Set up Rust toolchain
-              uses: dtolnay/rust-toolchain@stable
-            - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
-            - name: Install uv
-              uses: astral-sh/setup-uv@v8.2.0
-            - name: Run the walltime benchmarks
-              uses: CodSpeedHQ/action@a4a36bb07c0638b0b4ca52bf1f3dad1b4289e52f
-              env:
-                  MSK_LICENSE: ${{ secrets.MSK_LICENSE }}
-              with:
-                  mode: walltime
-                  run: |
-                      echo "$MSK_LICENSE" > "$HOME/mosek.lic"
-                      MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run python -c \
-                        "from ncpoleon.utils import is_mosek_available; assert is_mosek_available(), 'MOSEK license checkout failed'"
-                      MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run --all-extras --dev --config-setting 'build-args=--profile=release' pytest -x --codspeed -m walltime
+    steps:
+      - name: Approve walltime benchmarks
+        run: echo Only run walltime benchmarks if required.
+
+  benchmarks:
+    name: Run benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version-file: pyproject.toml
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.2.0
+      - name: Run the benchmarks
+        uses: CodSpeedHQ/action@a4a36bb07c0638b0b4ca52bf1f3dad1b4289e52f
+        env:
+          MSK_LICENSE: ${{ secrets.MSK_LICENSE }}
+        with:
+          mode: simulation
+          run: |
+            echo "$MSK_LICENSE" > "$HOME/mosek.lic"
+            MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run python -c \
+              "from ncpoleon.utils import is_mosek_available; assert is_mosek_available(), 'MOSEK license checkout failed'"
+            MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run --all-extras --dev --config-setting 'build-args=--profile=release' pytest -x --codspeed -m "not walltime"
+
+  benchmarks-walltime:
+    name: Run benchmarks with walltime
+    runs-on: codspeed-macro
+    needs: [approve-benchmarks]
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version-file: pyproject.toml
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.2.0
+      - name: Run the walltime benchmarks
+        uses: CodSpeedHQ/action@a4a36bb07c0638b0b4ca52bf1f3dad1b4289e52f
+        env:
+          MSK_LICENSE: ${{ secrets.MSK_LICENSE }}
+        with:
+          mode: walltime
+          run: |
+            echo "$MSK_LICENSE" > "$HOME/mosek.lic"
+            MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run python -c \
+              "from ncpoleon.utils import is_mosek_available; assert is_mosek_available(), 'MOSEK license checkout failed'"
+            MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run --all-extras --dev --config-setting 'build-args=--profile=release' pytest -x --codspeed -m walltime
