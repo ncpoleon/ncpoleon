@@ -4,9 +4,10 @@ build-backend = "maturin"
 
 [project]
 name = "ncpoleon"
-description = "An efficient Python library for (non)commutative polynomial optimization via semidefinite programming relaxations."
+description = "A performance-focused Python library for solving polynomial optimization problems over (non)commutative variables through SDP relaxations."
 license = "GPL-3.0"
 license-files = ["LICENSE"]
+readme = "README.md"
 authors = [
     { name = "Peter Brown", email = "peter.brown@telecom-paris.fr" },
     { name = "Tristan Nemoz", email = "tristan.nemoz@gmail.com" },
@@ -35,6 +36,16 @@ classifiers = [
 requires-python = ">=3.11"
 dynamic = ["version"]
 dependencies = ["numpy>=2.3.0"]
+
+[project.urls]
+Homepage = "https://github.com/ncpoleon/ncpoleon/"
+
+[[tool.uv.index]]
+name = "testpypi"
+url = "https://test.pypi.org/simple/"
+publish-url = "https://test.pypi.org/legacy/"
+explicit = true
+
 [project.optional-dependencies]
 mosek = ["mosek>=11.2.0"]
 picos = ["picos>=2.6.2", "scipy>=1.17.1"]
