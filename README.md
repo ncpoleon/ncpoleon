@@ -11,7 +11,7 @@ Ncpoleon can be installed using `pip` via
 ```bash
 pip install ncpoleon
 ```
-Ncpoleon depends solely on numpy to compute the square root of SDP matrices, in order to extract the SOS decomposition, no matter which solver is used. It includes optional dependencies to solve the generated SDP problem, namely:
+Ncpoleon includes optional dependencies to solve the generated SDP problem, namely:
  - `picos`, to export the generated SDP to a [Picos](https://gitlab.com/picos-api/picos) problem, or to solve the generated problem using Picos and its default solver CVXOPT.
  - `mosek`, to export the generated SDP to a MOSEK Python Fusion problem, or to solve the generated problem using the MOSEK Python Fusion API. Note that this requires a MOSEK license.
 

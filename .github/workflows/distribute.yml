@@ -3,7 +3,7 @@
 #
 #    maturin generate-ci github -v -o .github/workflows/distribute.yml
 #
-name: CI
+name: Publish on PyPi
 
 on:
   release:
