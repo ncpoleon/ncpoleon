@@ -27,7 +27,7 @@ jobs:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
-      - uses: astral-sh/setup-uv@v8.2.0
+      - uses: astral-sh/setup-uv@v8.3.2
       - name: MOSEK-backed Python tests
         env:
           MSK_LICENSE: ${{ secrets.MSK_LICENSE }}
@@ -59,7 +59,7 @@ jobs:
           allow-unsafe-pr-checkout: true
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
-      - uses: astral-sh/setup-uv@v8.2.0
+      - uses: astral-sh/setup-uv@v8.3.2
       - name: MOSEK-backed Python tests
         env:
           MSK_LICENSE: ${{ secrets.MSK_LICENSE }}
