@@ -24,7 +24,7 @@ jobs:
 
             - name: Reset buffer to main's tip
               env:
-                  GH_TOKEN: ${{ secrets.BUFFER_TO_MAIN }}
+                  GH_TOKEN: ${{ secrets.MAIN_TO_BUFFER }}
               run: |
                   git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
                   git fetch origin buffer
