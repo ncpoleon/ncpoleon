@@ -15,7 +15,7 @@ permissions:
 jobs:
   approve-benchmarks:
     environment:
-      name: Integrate Pull Request
+      name: Run walltime benchmarks
     runs-on: ubuntu-latest
 
     steps:
