@@ -1,26 +1,27 @@
 use log::LevelFilter;
-use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use pyo3::wrap_pymodule;
+use pyo3::{exceptions::PyRuntimeError, prelude::*};
 use pyo3_log::{Caching, Logger};
 
 mod logging;
 mod polynomials;
+mod progress;
 mod relaxations;
 
 /// A Python module implemented in Rust.
 #[pymodule]
 fn _accelerate(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    // pyo3_log::init();
-    // TODO: check how to reset the logger so that the verbosity argument can change the logging level
-    logging::LOGGER
-        .set(
-            Logger::new(m.py(), Caching::LoggersAndLevels)?
-                .filter(LevelFilter::Trace)
-                .install()
-                .expect("Failed to instantiate logger."),
-        )
-        .expect("Failed to instantiate logger handle.");
+    if logging::LOGGER.get().is_none() {
+        logging::LOGGER
+            .set(
+                Logger::new(m.py(), Caching::LoggersAndLevels)?
+                    .filter(LevelFilter::Trace)
+                    .install()
+                    .map_err(|_| PyRuntimeError::new_err("Failed to install logger."))?,
+            )
+            .map_err(|_| PyRuntimeError::new_err("Failed to set logger."))?;
+    }
 
     // Inserting to sys.modules allows importing submodules nicely from Python
     let sys = PyModule::import(m.py(), "sys")?;

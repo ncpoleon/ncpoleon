@@ -22,13 +22,16 @@ def set_logging_format(format: str):
 
 
 def set_verbosity_level(verbosity: Literal[0] | Literal[1] | Literal[2] | Literal[3]):
+    if not 0 <= verbosity <= 3:
+        raise ValueError(f"verbosity must be between 0 and 3, got {verbosity}")
+
     if verbosity == 0:
         _logger.setLevel(logging.WARNING)
     elif verbosity == 1:
         _logger.setLevel(logging.INFO)
     elif verbosity == 2:
         _logger.setLevel(logging.DEBUG)
-    elif verbosity >= 3:
+    elif verbosity == 3:
         _logger.setLevel(5)
 
     # Lower the `log` crate's global max-level gate so hot-loop `trace!`/`debug!` short-circuit

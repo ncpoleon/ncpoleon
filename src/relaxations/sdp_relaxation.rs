@@ -32,6 +32,7 @@ use crate::polynomials::noncommutative_polynomials::polynomials::noncommutative_
     PythonComplexCoefficientsNonCommutativePolynomial, PythonRealCoefficientsNonCommutativePolynomial,
 };
 use crate::polynomials::polynomial::{Polynomial, PolynomialDtype, PolynomialTrait, TryIntoReal};
+use crate::progress::{MININTERVAL, with_bar};
 use crate::relaxations::constraint::{
     ConstraintKind, PythonComplexCoefficientsCommutativeConstraint, PythonComplexCoefficientsNonCommutativeConstraint,
     PythonRealCoefficientsCommutativeConstraint, PythonRealCoefficientsNonCommutativeConstraint,
@@ -969,7 +970,8 @@ where
                 variables_with_adjoint.into_iter(),
                 desc = "Moment matrix index",
                 position = 0,
-                ncols = 0
+                ncols = 0,
+                mininterval = MININTERVAL
             ))
         } else {
             itertools::Either::Right(variables_with_adjoint.into_iter())
@@ -994,33 +996,34 @@ where
                     1..=level,
                     desc = "Generating monomials with length",
                     position = if top_bar { 1 } else { 0 },
-                    ncols = 0
+                    ncols = 0,
+                    mininterval = MININTERVAL
                 ))
             } else {
                 itertools::Either::Right(1..=level)
             };
 
             // FIXME: it could be interesting performance-wise to generate the monomials of length t+1 from the
-            // monomials of length t in a sense.  The reasoning is that is we can reduce X^daggerY to Z,
+            // monomials of length t in a sense. The reasoning is that is we can reduce X^daggerY to Z,
             // then X^daggerYW can directly be rewritten as ZW. This should be formalized, but could work.
             //  Or maybe we could store which monomials were rewritten in a HashMap and work from there. This would
-            // probably be much faster for high levels of relaxation.
+            // probably be much faster for high levels of relaxation, but would increase the memory usage.
             for monomial_length in monomial_length_iterator {
                 let mut level_set = BTreeSet::new();
 
-                let mut multi_cartesian_product_iterator = if (verbosity > 0) & (verbosity < 3) {
-                    itertools::Either::Left(tqdm!(
-                        repeat_n(variables_set.iter().cloned(), monomial_length as usize).multi_cartesian_product(),
+                let monomial_combinations_bar = ((verbosity > 0) & (verbosity < 3)).then(|| {
+                    tqdm!(
                         desc = "Monomial combinations",
                         position = if top_bar { 2 } else { 1 },
                         total = variables_set.len().pow(monomial_length as u32),
-                        leave = false
-                    ))
-                } else {
-                    itertools::Either::Right(
-                        repeat_n(variables_set.iter().cloned(), monomial_length as usize).multi_cartesian_product(),
+                        leave = false,
+                        mininterval = MININTERVAL
                     )
-                };
+                });
+                let mut multi_cartesian_product_iterator = with_bar(
+                    repeat_n(variables_set.iter().cloned(), monomial_length as usize).multi_cartesian_product(),
+                    monomial_combinations_bar,
+                );
 
                 multi_cartesian_product_iterator
                     .try_for_each(|operators| -> Result<(), String> {
@@ -1058,27 +1061,18 @@ where
                     monomials_sets.iter().flatten().enumerate(),
                     desc = "Filling moment matrix rows",
                     position = if top_bar { 1 } else { 0 },
-                    total = monomials_sets.iter().map(|set| set.len()).sum::<usize>()
+                    total = monomials_sets.iter().map(|set| set.len()).sum::<usize>(),
+                    mininterval = MININTERVAL
                 ))
             } else {
                 itertools::Either::Right(monomials_sets.iter().flatten().enumerate())
             };
 
             for (index_row, monomial_row) in monomials_sets_iterator_rows {
-                let monomials_sets_iterator_cols = if verbosity > 0 {
-                    itertools::Either::Left(tqdm!(
-                        // FIXME: using skip makes it run in n^2 instead of n*(n+1)/2. We can probably fix it
-                        // by computing how many elements (i.e. lengths) should we skip, and then skip the first
-                        // remaining elements of the first length that we consider. Maybe write this as a function
-                        monomials_sets.iter().flatten().enumerate().skip(index_row),
-                        desc = "Filling columns of this row",
-                        position = if top_bar { 2 } else { 1 },
-                        total = monomials_sets.iter().map(|set| set.len()).sum::<usize>() - index_row,
-                        leave = false
-                    ))
-                } else {
-                    itertools::Either::Right(monomials_sets.iter().flatten().enumerate().skip(index_row))
-                };
+                // FIXME: using skip makes it run in n^2 instead of n*(n+1)/2. We can probably fix it
+                // by computing how many elements (i.e. lengths) should we skip, and then skip the first
+                // remaining elements of the first length that we consider. Maybe write this as a function
+                let monomials_sets_iterator_cols = monomials_sets.iter().flatten().enumerate().skip(index_row);
 
                 for (index_column, monomial_column) in monomials_sets_iterator_cols {
                     let new_monomial = if index_row == 0 {
@@ -1141,7 +1135,8 @@ where
                                 desc =
                                     format!("Building localising moment matrices ({})", stringify!($constraints_field)),
                                 position = if top_bar { 1 } else { 0 },
-                                ncols = 0
+                                ncols = 0,
+                                mininterval = MININTERVAL
                             ))
                         } else {
                             itertools::Either::Right(constraints.iter())
@@ -1187,18 +1182,17 @@ where
         Monomial<Data>: Display + RewritingTrait<Monomial<Data>>,
         Polynomial<Monomial<Data>, Scalar>: Display,
     {
-        let mut new_localising_moment_matrix = RustMomentMatrix {
-            data: BTreeMap::new(),
-            size: monomials_sets.iter().take((level + 1).into()).map(|set| set.len()).sum(),
-        };
+        let size = monomials_sets.iter().take((level + 1).into()).map(|set| set.len()).sum();
+        let mut new_localising_moment_matrix = RustMomentMatrix { data: BTreeMap::new(), size };
 
         let operators_iterator_rows = if verbosity > 0 {
             itertools::Either::Left(tqdm!(
                 monomials_sets.iter().take((level + 1).into()).flatten().enumerate(),
                 desc = "Filling localising matrix rows",
                 position = if top_bar { 2 } else { 1 },
-                ncols = 0,
-                leave = false
+                mininterval = MININTERVAL,
+                leave = false,
+                total = size
             ))
         } else {
             itertools::Either::Right(monomials_sets.iter().take((level + 1).into()).flatten().enumerate())
@@ -1206,19 +1200,8 @@ where
 
         for (index_row, operator_row) in operators_iterator_rows {
             // FIXME: using skip is suboptimal, since it still traverses the iterator
-            let operators_iterator_cols = if verbosity > 0 {
-                itertools::Either::Left(tqdm!(
-                    monomials_sets.iter().take((level + 1).into()).flatten().enumerate().skip(index_row),
-                    desc = "Filling localising matrix columns of this row",
-                    position = if top_bar { 3 } else { 2 },
-                    ncols = 0,
-                    leave = false
-                ))
-            } else {
-                itertools::Either::Right(
-                    monomials_sets.iter().take((level + 1).into()).flatten().enumerate().skip(index_row),
-                )
-            };
+            let operators_iterator_cols =
+                monomials_sets.iter().take((level + 1).into()).flatten().enumerate().skip(index_row);
 
             for (index_col, operator_col) in operators_iterator_cols {
                 // FIXME: performance: no need to recompute the adjoint each time
