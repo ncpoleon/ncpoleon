@@ -178,7 +178,7 @@ jobs:
     # Only a published GitHub release publishes to an index. A workflow_dispatch
     # run is a dry run: it exercises the whole build matrix and leaves the wheels
     # as downloadable artifacts, then stops before this job.
-    # if: ${{ github.event_name == 'release' }}
+    if: ${{ github.event_name == 'release' }}
     needs: [linux, musllinux, windows, macos, sdist]
     permissions:
       # Use to sign the release artifacts
@@ -188,7 +188,6 @@ jobs:
       # Used to generate artifact attestation
       attestations: write
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # TODO: to remove once we don't publish on the test typi
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
       - name: Generate artifact attestation
         uses: actions/attest@v4.1.1
@@ -205,7 +204,7 @@ jobs:
           uv venv --python 3.12 .venv-smoke
           uv pip install --python .venv-smoke "$wheel"
           .venv-smoke/bin/python -c "import ncpoleon; from ncpoleon import _accelerate; print('import OK:', _accelerate.__file__)"
-      - name: Publish to TestPyPI
-        run: uv publish 'wheels-*/*' --index testpypi
+      - name: Publish to PyPI
+        run: uv publish 'wheels-*/*'
         env:
-          UV_PUBLISH_TOKEN: ${{ secrets.TEST_PYPI_API_TOKEN }}
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
