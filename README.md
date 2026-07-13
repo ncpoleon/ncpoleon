@@ -66,6 +66,6 @@ print(solution.value)
 # Sponsors
 
 ## CodSpeed
-<a href= "https://codspeed.io/?utm_source=ncpoleon&utm_medium=readme"><img class="sponsor-logo" src="https://mintcdn.com/codspeed/GDLcp8Ny8u4pFbNX/assets/logo/dark.svg?fit=max&auto=format&n=GDLcp8Ny8u4pFbNX&q=85&s=23dfd47abfa1a88171517e4455c37899" alt="CodSpeed" style="background-color:rgb(9, 9, 11);"></a>
+<a href= "https://codspeed.io/?utm_source=ncpoleon&utm_medium=readme"><img class="sponsor-logo" src="https://mintcdn.com/codspeed/GDLcp8Ny8u4pFbNX/assets/logo/dark.svg?fit=max&auto=format&n=GDLcp8Ny8u4pFbNX&q=85&s=23dfd47abfa1a88171517e4455c37899" alt="CodSpeed" style="background-color:rgb(9, 9, 11);max-width: 50%;"></a>
 
 CodSpeed supports Ncpoleon through their open source program by providing us with monthly macro runner credits for our continuous benchmarking. You can find more about CodSpeed [here](https://codspeed.io/?utm_source=ncpoleon&utm_medium=readme).
