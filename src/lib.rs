@@ -1,7 +1,8 @@
 use log::LevelFilter;
+use pyo3::exceptions::PyRuntimeError;
+use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use pyo3::wrap_pymodule;
-use pyo3::{exceptions::PyRuntimeError, prelude::*};
 use pyo3_log::{Caching, Logger};
 
 mod logging;

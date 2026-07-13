@@ -11,7 +11,8 @@ const STRIDE: usize = 1024;
 
 /// Seconds between two renders of a progress bar.
 ///
-/// Every render is a `write` (plus a `term::width` ioctl) on stderr. Might be slow on some terminals, so keep reasonable
+/// Every render is a `write` (plus a `term::width` ioctl) on stderr. Might be slow on some terminals, so keep
+/// reasonable
 pub(crate) const MININTERVAL: f32 = 0.5;
 
 /// Iterator adapter that advances `bar` once every [`STRIDE`] elements instead of once per element.
