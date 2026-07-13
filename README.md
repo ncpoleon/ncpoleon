@@ -1,3 +1,5 @@
+[![CodSpeed Badge](https://img.shields.io/endpoint?url=https://app.codspeed.io//badge.json)](https://app.codspeed.io//ncpoleon/ncpoleon?utm_source=badge)
+
 # Ncpoleon
 
 Ncpoleon approximates polynomial optimization problems of (non)commutative variables through semidefinite programming (SDP) relaxations. It is intended as a followup to [ncpol2sdpa](https://gitlab.com/peterwittek/ncpol2sdpa/), focused on improved performance, functionality and long-term improvements. Currently the package can relax polynomial optimization problems in both commutative and noncommutative variables, i.e., we implement
@@ -60,3 +62,10 @@ solution = solve(sdp, "max")
 # Print the solution
 print(solution.value)
 ```
+
+# Sponsors
+
+## CodSpeed
+<a href= "https://codspeed.io/?utm_source=ncpoleon&utm_medium=readme"><img class="sponsor-logo" src="https://mintcdn.com/codspeed/GDLcp8Ny8u4pFbNX/assets/logo/dark.svg?fit=max&auto=format&n=GDLcp8Ny8u4pFbNX&q=85&s=23dfd47abfa1a88171517e4455c37899" alt="CodSpeed" width="50%"></a>
+
+CodSpeed supports Ncpoleon through their open source program by providing us with monthly macro runner credits for our continuous benchmarking. You can find more about CodSpeed [here](https://codspeed.io/?utm_source=ncpoleon&utm_medium=readme).
