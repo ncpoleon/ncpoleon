@@ -1000,6 +1000,9 @@ where
                 itertools::Either::Right(1..=level)
             };
 
+            // FIXME: it could be inerewting performance-wise to generate the monomials of length t+1 from the monomials of length t in a sense.
+            //  The reasoning is that is we can reduce X^daggerY to Z, then X^daggerYW can directly be rewritten as ZW. This should be formalized, but could work.
+            //  Or maybe we could store which monomials were rewritten in a HashMap and work from there. This would probably be much faster for high levels of relaxation.
             for monomial_length in monomial_length_iterator {
                 let mut level_set = BTreeSet::new();
 
