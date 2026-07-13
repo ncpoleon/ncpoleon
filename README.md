@@ -1,3 +1,5 @@
+[![codecov](https://codecov.io/gh/ncpoleon/ncpoleon/graph/badge.svg?token=D5QGB5Z41U)](https://codecov.io/gh/ncpoleon/ncpoleon)
+
 # Ncpoleon
 
 Ncpoleon approximates polynomial optimization problems of (non)commutative variables through semidefinite programming (SDP) relaxations. It is intended as a followup to [ncpol2sdpa](https://gitlab.com/peterwittek/ncpol2sdpa/), focused on improved performance, functionality and long-term improvements. Currently the package can relax polynomial optimization problems in both commutative and noncommutative variables, i.e., we implement
