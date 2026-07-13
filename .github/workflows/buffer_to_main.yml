@@ -1,0 +1,67 @@
+name: Open buffer -> main PR
+
+on:
+  push:
+    branches:
+      - buffer
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  open-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open PR if none exists
+        env:
+          GH_TOKEN: ${{ secrets.BUFFER_TO_MAIN }}
+        run: |
+          existing_pr=$(gh pr list \
+            --repo "$GITHUB_REPOSITORY" \
+            --base main \
+            --head buffer \
+            --state open \
+            --json number \
+            --jq '.[0].number // empty')
+
+          if [ -n "$existing_pr" ]; then
+            echo "PR #$existing_pr from buffer to main is already open, nothing to do."
+            exit 0
+          fi
+
+          # buffer and main may already agree (e.g. right after the
+          # "Sync buffer with main" workflow resets buffer to main's tip).
+          # There's nothing to open a PR about in that case.
+          ahead_by=$(gh api "repos/$GITHUB_REPOSITORY/compare/main...buffer" --jq '.ahead_by')
+
+          if [ "${ahead_by:-0}" -eq 0 ]; then
+            echo "buffer has no commits main doesn't already have, nothing to open a PR for."
+            exit 0
+          fi
+
+          # Find the original PR that just landed on buffer (the PR containing the
+          # pushed commit whose base branch was buffer).
+          orig_json=$(gh api \
+            "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" \
+            --jq '[.[] | select(.base.ref == "buffer")][0] // empty')
+
+          intro="Opened automatically after a reviewed external contribution landed on \`buffer\`. This re-runs the full CI suite, including MOSEK-backed tests and CodSpeed benchmarks, as an ordinary same-repo pull request."
+
+          if [ -n "$orig_json" ]; then
+            orig_title=$(echo "$orig_json" | jq -r '.title')
+            orig_body=$(echo "$orig_json" | jq -r '.body // ""')
+            title="$orig_title (integration to main)"
+            body="$intro"$'\n\n---\n\n'"$orig_body"
+          else
+            echo "Could not resolve the original PR; falling back to a generic title/body."
+            title="Integrate buffer into main"
+            body="$intro"
+          fi
+
+          gh pr create \
+            --repo "$GITHUB_REPOSITORY" \
+            --base main \
+            --head buffer \
+            --title "$title" \
+            --body "$body"

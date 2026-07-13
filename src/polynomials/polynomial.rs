@@ -351,7 +351,7 @@ where
         if rhs.is_zero() {
             Polynomial::zero()
         } else {
-            for (_mon, coeff) in self.data.iter_mut() {
+            for coeff in self.data.values_mut() {
                 *coeff = *coeff * rhs;
             }
             self

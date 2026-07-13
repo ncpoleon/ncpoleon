@@ -4,7 +4,27 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    target-branch: "buffer"
+    groups:
+      cargo:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - "major"
+          - "minor"
+          - "patch"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    target-branch: "buffer"
+    groups:
+      github-actions:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - "major"
+          - "minor"
+          - "patch"

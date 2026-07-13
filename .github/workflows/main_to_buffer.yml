@@ -1,0 +1,31 @@
+name: Sync buffer with main
+
+on:
+    push:
+        branches:
+            - main
+
+permissions:
+    contents: read
+
+concurrency:
+    group: sync-buffer
+    cancel-in-progress: false
+
+jobs:
+    sync:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+              with:
+                  ref: main
+                  fetch-depth: 0
+                  persist-credentials: false
+
+            - name: Reset buffer to main's tip
+              env:
+                  GH_TOKEN: ${{ secrets.MAIN_TO_BUFFER }}
+              run: |
+                  git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+                  git fetch origin buffer
+                  git push origin HEAD:buffer --force-with-lease

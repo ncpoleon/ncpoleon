@@ -1,0 +1,70 @@
+name: Tests with a MOSEK license
+
+on:
+  push:
+    branches:
+      - main
+  pull_request_target:
+    branches:
+      - buffer
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # push to main / manual dispatch: already requires write access to trigger,
+  # so these run immediately with no extra approval step.
+  mosek-trusted:
+    if: github.event_name != 'pull_request_target'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
+      - uses: astral-sh/setup-uv@v8.2.0
+      - name: MOSEK-backed Python tests
+        env:
+          MSK_LICENSE: ${{ secrets.MSK_LICENSE }}
+        run: |
+          echo "$MSK_LICENSE" > "$HOME/mosek.lic"
+          MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run python -c \
+            "from ncpoleon.utils import is_mosek_available; assert is_mosek_available(), 'MOSEK license checkout failed'"
+          MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run --all-extras --dev --config-setting 'build-args=--profile=dev' pytest -x
+
+  approve:
+    if: github.event_name == 'pull_request_target'
+    environment:
+      name: Integrate Pull Request
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Approve
+        run: echo For security reasons, all workflows requiring a MOSEK license need to be approved first before running.
+
+  mosek-pr:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    needs: [approve]
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+          allow-unsafe-pr-checkout: true
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
+      - uses: astral-sh/setup-uv@v8.2.0
+      - name: MOSEK-backed Python tests
+        env:
+          MSK_LICENSE: ${{ secrets.MSK_LICENSE }}
+        run: |
+          echo "$MSK_LICENSE" > "$HOME/mosek.lic"
+          MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run python -c \
+            "from ncpoleon.utils import is_mosek_available; assert is_mosek_available(), 'MOSEK license checkout failed'"
+          MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run --all-extras --dev --config-setting 'build-args=--profile=dev' pytest -x
