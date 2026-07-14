@@ -35,16 +35,10 @@ classifiers = [
 ]
 requires-python = ">=3.11"
 dynamic = ["version"]
-dependencies = ["numpy>=2.3.0"]
+dependencies = ["numpy>=2.3.0", "scipy>=1.17.1"]
 
 [project.urls]
 Homepage = "https://github.com/ncpoleon/ncpoleon/"
-
-[[tool.uv.index]]
-name = "testpypi"
-url = "https://test.pypi.org/simple/"
-publish-url = "https://test.pypi.org/legacy/"
-explicit = true
 
 [project.optional-dependencies]
 mosek = ["mosek>=11.2.0"]
@@ -58,7 +52,7 @@ dev = [
     "picos>=2.6.2",
     "pytest>=9.0.3",
     "pytest-codspeed>=5.0.3",
-    "scipy>=1.17.1",
+    "pytest-cov>=7.1.0",
     "scipy-stubs>=1.17.1.5",
     "ty>=0.0.40",
 ]
