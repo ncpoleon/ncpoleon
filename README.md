@@ -1,3 +1,4 @@
+[![codecov](https://codecov.io/gh/ncpoleon/ncpoleon/graph/badge.svg?token=D5QGB5Z41U)](https://codecov.io/gh/ncpoleon/ncpoleon)
 [![CodSpeed Badge](https://img.shields.io/endpoint?url=https://app.codspeed.io//badge.json)](https://app.codspeed.io//ncpoleon/ncpoleon?utm_source=badge)
 
 # Ncpoleon
