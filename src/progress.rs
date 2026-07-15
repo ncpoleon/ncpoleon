@@ -47,7 +47,7 @@ impl<I: Iterator> Iterator for ThrottledBarIter<I> {
     fn size_hint(&self) -> (usize, Option<usize>) {
         self.inner.size_hint()
     }
- }
+}
 
 impl<I: ExactSizeIterator> ExactSizeIterator for ThrottledBarIter<I> {
     fn len(&self) -> usize {
