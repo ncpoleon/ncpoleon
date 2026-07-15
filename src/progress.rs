@@ -43,6 +43,16 @@ impl<I: Iterator> Iterator for ThrottledBarIter<I> {
 
         item
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
+    }
+ }
+
+impl<I: ExactSizeIterator> ExactSizeIterator for ThrottledBarIter<I> {
+    fn len(&self) -> usize {
+        self.inner.len()
+    }
 }
 
 /// Attaches `bar` to `iter`, when there is one, without paying a per-element clock read.
