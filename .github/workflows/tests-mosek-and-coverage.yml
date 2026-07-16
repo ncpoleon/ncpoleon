@@ -38,7 +38,7 @@ jobs:
       - uses: taiki-e/install-action@v2.83.2
         with:
           tool: cargo-llvm-cov
-      - uses: astral-sh/setup-uv@v8.2.0
+      - uses: astral-sh/setup-uv@v8.3.2
       - name: Tests and coverage with MOSEK license
         env:
           MSK_LICENSE: ${{ secrets.MSK_LICENSE }}
@@ -95,7 +95,7 @@ jobs:
       - uses: taiki-e/install-action@v2.83.2
         with:
           tool: cargo-llvm-cov
-      - uses: astral-sh/setup-uv@v8.2.0
+      - uses: astral-sh/setup-uv@v8.3.2
       - name: Tests and coverage with MOSEK license
         env:
           MSK_LICENSE: ${{ secrets.MSK_LICENSE }}

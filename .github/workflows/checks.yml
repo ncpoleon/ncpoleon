@@ -45,7 +45,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Ruff
-        uses: astral-sh/ruff-action@v4.0.0
+        uses: astral-sh/ruff-action@v4.1.0
 
   # TODO: re-enable once ty passes
   # ty:
