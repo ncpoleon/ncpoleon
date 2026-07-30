@@ -1067,8 +1067,11 @@ where
             }
 
             let is_problem_real_valued = self.objective.is_real();
-            let mut new_moment_matrix =
-                RustMomentMatrix { data: BTreeMap::new(), size: monomials_sets.iter().map(|set| set.len()).sum() };
+            let mut new_moment_matrix = RustMomentMatrix {
+                data: BTreeMap::new(),
+                adjoint_index: BTreeMap::new(),
+                size: monomials_sets.iter().map(|set| set.len()).sum(),
+            };
 
             // Determine the constraints on the moment matrix. This is where we build the map between
             // reduced monomials and indices within the moment matrix
@@ -1085,6 +1088,8 @@ where
             };
 
             for (index_row, monomial_row) in monomials_sets_iterator_rows {
+                // Computed once per row instead of once per cell.
+                let monomial_row_adjoint = monomial_row.adjoint();
                 // FIXME: using skip makes it run in n^2 instead of n*(n+1)/2. We can probably fix it
                 // by computing how many elements (i.e. lengths) should we skip, and then skip the first
                 // remaining elements of the first length that we consider. Maybe write this as a function
@@ -1094,18 +1099,15 @@ where
                     let new_monomial = if index_row == 0 {
                         monomial_column.clone()
                     } else {
-                        // FIXME: performance: no need to recompute monomial_row_adjoint within the loop
-                        let monomial_row_adjoint = monomial_row.adjoint();
-                        (monomial_row_adjoint * monomial_column)
+                        (&monomial_row_adjoint * monomial_column)
                             .map_err(PyValueError::new_err)?
                             .rewrite(self.substitution_strategy, &self.substitutions)
                             .map_err(PyValueError::new_err)?
                     };
 
-                    if let Some((position_matrix, position_matrix_conj)) = new_moment_matrix
-                        .get_mut(&new_monomial, self.substitution_strategy, &self.substitutions)
-                        .map_err(PyValueError::new_err)?
-                    {
+                    // `get_mut` finds the entry (in either orientation) via the matrix's own
+                    // `adjoint_index`, so no per-cell `adjoint().rewrite()` is needed here.
+                    if let Some((position_matrix, position_matrix_conj)) = new_moment_matrix.get_mut(&new_monomial) {
                         position_matrix.insert((index_row, index_column), Scalar::one());
                         if let Some(position_matrix_conj) = position_matrix_conj {
                             position_matrix_conj.insert((index_column, index_row), Scalar::one());
@@ -1137,7 +1139,11 @@ where
                             Some(BTreeMap::from([((index_column, index_row), Scalar::one())])),
                         )
                     };
-                    new_moment_matrix.data.insert(new_monomial, new_entry);
+                    // `insert` records the entry and registers its adjoint's canonical form in
+                    // `adjoint_index` (the single adjoint rewrite per stored monomial).
+                    new_moment_matrix
+                        .insert(new_monomial, new_entry, self.substitution_strategy, &self.substitutions)
+                        .map_err(PyValueError::new_err)?;
                 }
             }
 
@@ -1198,7 +1204,8 @@ where
         Polynomial<Monomial<Data>, Scalar>: Display,
     {
         let size = monomials_sets.iter().take((level + 1).into()).map(|set| set.len()).sum();
-        let mut new_localising_moment_matrix = RustMomentMatrix { data: BTreeMap::new(), size };
+        let mut new_localising_moment_matrix =
+            RustMomentMatrix { data: BTreeMap::new(), adjoint_index: BTreeMap::new(), size };
 
         let operators_iterator_rows = if verbosity > 0 {
             itertools::Either::Left(tqdm!(
@@ -1232,9 +1239,8 @@ where
                 trace!("Adding the rewritten polynomial {} to the localizing matrix.", new_polynomial);
 
                 for (monomial, coefficient) in new_polynomial.data {
-                    if let Some((position_matrix, position_matrix_conj)) = new_localising_moment_matrix
-                        .get_mut(&monomial, self.substitution_strategy, &self.substitutions)
-                        .map_err(PyValueError::new_err)?
+                    if let Some((position_matrix, position_matrix_conj)) =
+                        new_localising_moment_matrix.get_mut(&monomial)
                     {
                         // Accumulate rather than insert: if `monomial` or its adjoint has already
                         // been processed for this same (row, col), we must add to the existing
@@ -1296,7 +1302,9 @@ where
                                 )));
                             }
                         };
-                        new_localising_moment_matrix.data.insert(key, new_entry);
+                        new_localising_moment_matrix
+                            .insert(key, new_entry, self.substitution_strategy, &self.substitutions)
+                            .map_err(PyValueError::new_err)?;
                     }
                 }
             }

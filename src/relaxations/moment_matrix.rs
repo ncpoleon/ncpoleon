@@ -48,6 +48,11 @@ fn position_matrix_to_row_col_data_format<Scalar: PolynomialDtype>(
 #[derive(Clone)]
 pub(super) struct RustMomentMatrix<Scalar: PolynomialDtype, MonomialType: AdjointTrait + Ord> {
     pub(super) data: BTreeMap<MonomialType, PositionMatrixPair<Scalar>>,
+    /// Maps the canonical form of each stored key's adjoint back to that key. Maintained by
+    /// [`RustMomentMatrix::insert`], it lets [`RustMomentMatrix::get_mut`] resolve a monomial stored
+    /// under the opposite (adjoint) orientation without recomputing `adjoint().rewrite()` on every
+    /// lookup
+    pub(super) adjoint_index: BTreeMap<MonomialType, MonomialType>,
     pub(super) size: usize,
 }
 
@@ -77,25 +82,40 @@ where
         Ok(None)
     }
 
-    pub(super) fn get_mut(
+    /// Insert a fresh entry for `monomial`, registering its adjoint's canonical form in
+    /// `adjoint_index` so that later [`get_mut`](Self::get_mut) lookups for the opposite orientation
+    /// resolve without recomputing `adjoint().rewrite()`. This is the only place the adjoint of a
+    /// stored key is rewritten
+    pub(super) fn insert(
         &mut self,
-        monomial: &MonomialType,
+        monomial: MonomialType,
+        entry: PositionMatrixPair<Scalar>,
         strategy: RewritingStrategy,
         substitutions: &BTreeMap<MonomialType, MonomialType>,
-    ) -> Result<Option<PositionMatrixMutPair<'_, Scalar>>, String> {
+    ) -> Result<(), String> {
+        let adjoint = monomial.adjoint().rewrite(strategy, substitutions)?;
+        if adjoint != monomial {
+            self.adjoint_index.insert(adjoint, monomial.clone());
+        }
+        self.data.insert(monomial, entry);
+        Ok(())
+    }
+
+    /// Look up the entry a monomial belongs to. A query resolves iff it is a stored key (direct
+    /// orientation) or the adjoint-canonical of a stored key (via `adjoint_index`); no rewriting is
+    /// performed here, so the query must already be in canonical form. Entries must be added through
+    /// [`insert`](Self::insert) for `adjoint_index` to stay consistent.
+    pub(super) fn get_mut(&mut self, monomial: &MonomialType) -> Option<PositionMatrixMutPair<'_, Scalar>> {
         if self.data.contains_key(monomial) {
             let (position_matrix, position_matrix_conj) = self.data.get_mut(monomial).unwrap();
-            return Ok(Some((position_matrix, position_matrix_conj.as_mut())));
+            return Some((position_matrix, position_matrix_conj.as_mut()));
         }
-        let adjoint = monomial.adjoint().rewrite(strategy, substitutions)?;
-        if self.data.contains_key(&adjoint) {
-            let (position_matrix_conj, position_matrix) = self.data.get_mut(&adjoint).unwrap();
-            return Ok(Some(match position_matrix {
-                Some(position_matrix) => (position_matrix, Some(position_matrix_conj)),
-                None => (position_matrix_conj, None),
-            }));
-        }
-        Ok(None)
+        let key = self.adjoint_index.get(monomial).cloned()?;
+        let (position_matrix_conj, position_matrix) = self.data.get_mut(&key).unwrap();
+        Some(match position_matrix {
+            Some(position_matrix) => (position_matrix, Some(position_matrix_conj)),
+            None => (position_matrix_conj, None),
+        })
     }
 
     /// get_canonical is used to verify that a monomial or its adjoint are stored. If neither are stored, it raises
