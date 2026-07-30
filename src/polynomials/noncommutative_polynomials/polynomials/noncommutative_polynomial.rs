@@ -8,7 +8,7 @@ use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyNone};
 
-use crate::polynomials::monomial::{AdjointTrait, OneWithMomentMatrixId, HasLength};
+use crate::polynomials::monomial::{AdjointTrait, HasLength, OneWithMomentMatrixId};
 use crate::polynomials::noncommutative_polynomials::monomials::noncommutative_monomial::{
     PythonNonCommutativeMonomial, RustNonCommutativeMonomial,
 };

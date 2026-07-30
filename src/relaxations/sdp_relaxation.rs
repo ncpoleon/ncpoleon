@@ -606,7 +606,7 @@ pub(crate) fn get_relaxation<'py>(
     substitution_strategy: RewritingStrategy,
     assume_real: bool,
     verbosity: u8,
-    check_uniqueness_with_length: bool
+    check_uniqueness_with_length: bool,
 ) -> PyResult<Py<PyAny>> {
     let py = objective.py();
     let default_dict = PyDict::new(py);
