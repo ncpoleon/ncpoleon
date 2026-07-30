@@ -14,7 +14,7 @@ use pyo3::types::PyNone;
 use rustc_hash::FxHasher;
 
 use crate::polynomials::monomial::{
-    AdjointTrait, HasAMomentMatrixId, Monomial, OneWithMomentMatrixId, RewritingStrategy, RewritingTrait,
+    AdjointTrait, HasAMomentMatrixId, HasLength, Monomial, OneWithMomentMatrixId, RewritingStrategy, RewritingTrait,
 };
 use crate::polynomials::noncommutative_polynomials::operators::noncommutative_operator::{
     PythonNonCommutativeOperator, RustNonCommutativeOperator,
@@ -265,10 +265,6 @@ impl RustNonCommutativeMonomial {
         Self { data: NonCommutativeMonomialDataWithMomentMatrixIndex { inner_data: data, moment_matrix_id } }
     }
 
-    pub fn len(&self) -> u8 {
-        self.data.inner_data.len() as u8
-    }
-
     pub(crate) fn __str__(&self) -> String {
         self.to_string()
     }
@@ -381,6 +377,12 @@ impl RewritingTrait<Self> for RustNonCommutativeMonomial {
                 Ok(current)
             }
         }
+    }
+}
+
+impl HasLength for RustNonCommutativeMonomial {
+    fn len(&self) -> u8 {
+        self.data.inner_data.len() as u8
     }
 }
 

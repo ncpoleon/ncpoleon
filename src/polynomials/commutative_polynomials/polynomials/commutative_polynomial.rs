@@ -12,7 +12,7 @@ use crate::polynomials::commutative_polynomials::monomials::commutative_monomial
     PythonCommutativeMonomial, RustCommutativeMonomial,
 };
 use crate::polynomials::commutative_polynomials::operators::commutative_operator::PythonCommutativeOperator;
-use crate::polynomials::monomial::{AdjointTrait, OneWithMomentMatrixId};
+use crate::polynomials::monomial::{AdjointTrait, OneWithMomentMatrixId, HasLength};
 use crate::polynomials::polynomial::{Polynomial, PolynomialTrait};
 use crate::relaxations::constraint::{ConstraintKind, make_commutative_constraint};
 
