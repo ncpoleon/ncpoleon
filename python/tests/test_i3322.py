@@ -50,8 +50,14 @@ def _i3322_params():
 
 
 def test_i3322_relaxation(benchmark):
+    """Measure the relaxation at level 4 rather than the level 3 solved below.
+
+    Level 3 builds in about 18ms, which is close enough to the measurement noise that it cannot
+    resolve a small change. Level 4 takes around 190ms for the same problem shape, and level 5
+    would cost roughly 2s for no better reproducibility.
+    """
     variables, obj, substitutions = _i3322_params()
-    benchmark(get_relaxation, variables, 3, obj, substitutions=substitutions)
+    benchmark(get_relaxation, variables, 4, obj, substitutions=substitutions)
 
 
 @pytest.mark.parametrize("solver, use_primal", generate_i3322_parameters())

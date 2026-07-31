@@ -39,6 +39,19 @@ def test_chsh_uniform_relaxation(benchmark):
     A, B, substitutions, obj, moment_constraints = _chsh_variables()
     benchmark(get_relaxation, A + B, 1, obj, substitutions=substitutions, moment_constraints=moment_constraints)
 
+
+def test_chsh_relaxation(benchmark):
+    """Measure a deep relaxation of plain CHSH, without the uniformity constraints.
+
+    The other relaxation benchmarks are either commutative or, in the case of I3322, stop at
+    level 3 and take around 20ms, which is close enough to the measurement noise to resolve
+    little. This one goes to level 11 and takes roughly 520ms, which makes it the case that
+    actually exercises the moment matrix fill over a deep non-commutative monomial hierarchy.
+    """
+    A, B, substitutions, obj, _ = _chsh_variables()
+    benchmark(get_relaxation, A + B, 11, obj, substitutions=substitutions)
+
+
 @pytest.mark.parametrize("solver", SOLVERS)
 @pytest.mark.parametrize("use_primal", [False, True])
 def test_chsh_uniform_solve(benchmark, chsh_sdp, solver, use_primal):

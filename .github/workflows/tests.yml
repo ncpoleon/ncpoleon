@@ -10,26 +10,107 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   pytest:
-    runs-on: ubuntu-latest
+    name: pytest (${{ matrix.os }}, Python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # One broken interpreter should not hide the state of the others.
+      fail-fast: false
+      matrix:
+        # One runner per target distribute.yml ships a wheel for. Linux x86_64
+        # is the primary and covers every supported interpreter; the rest cover
+        # the ends of the range, which is where version-specific breakage shows
+        # up -- the middle versions elsewhere would re-tread the same code paths
+        # at three times the cost.
+        #
+        # The one shipped target with no job here is musllinux: it needs an
+        # Alpine container rather than a runner label, and MOSEK publishes no
+        # musl wheel, so it would only ever run the solver-free subset.
+        os: [ubuntu-latest]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+        # Which optional solvers to install. `--all-extras` wherever MOSEK
+        # publishes a wheel; `--extra picos` where it does not, because asking
+        # uv for an unsatisfiable extra is a resolution error, not a skip.
+        # MOSEK 11.2 ships manylinux x86_64/aarch64, macosx arm64 and win_amd64
+        # only. `is_mosek_available()` returns False when the module is absent,
+        # so the solver tests skip themselves and the rest of the suite still
+        # covers the target.
+        extras: ["--all-extras"]
+        include:
+          - os: ubuntu-24.04-arm
+            python-version: "3.11"
+            extras: "--all-extras"
+          - os: ubuntu-24.04-arm
+            python-version: "3.14"
+            extras: "--all-extras"
+          - os: macos-latest # aarch64
+            python-version: "3.11"
+            extras: "--all-extras"
+          - os: macos-latest
+            python-version: "3.14"
+            extras: "--all-extras"
+          - os: macos-15-intel # x86_64: no MOSEK wheel
+            python-version: "3.11"
+            extras: "--extra picos"
+          - os: macos-15-intel
+            python-version: "3.14"
+            extras: "--extra picos"
+          - os: windows-latest # x64
+            python-version: "3.11"
+            extras: "--all-extras"
+          - os: windows-latest
+            python-version: "3.14"
+            extras: "--all-extras"
+          - os: windows-11-arm # arm64: no MOSEK wheel
+            python-version: "3.11"
+            extras: "--extra picos"
+          - os: windows-11-arm
+            python-version: "3.14"
+            extras: "--extra picos"
+    defaults:
+      run:
+        # Keep one shell across all three operating systems so the quoting in
+        # `--config-setting` means the same thing everywhere.
+        shell: bash
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
+        with:
+          # Without this every combination shares one cache entry and they
+          # overwrite each other's.
+          key: ${{ matrix.os }}-${{ matrix.python-version }}
       - uses: astral-sh/setup-uv@v8.3.2
       - name: Python tests
-        run: uv run --all-extras --dev --config-setting 'build-args=--profile=dev' pytest -x
+        run: uv run --python ${{ matrix.python-version }} ${{ matrix.extras }} --dev --config-setting 'build-args=--profile=dev' pytest -x
 
   cargo-test:
-    runs-on: ubuntu-latest
+    name: cargo test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - ubuntu-24.04-arm
+          - macos-latest
+          - macos-15-intel
+          - windows-latest
+          - windows-11-arm
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
+        with:
+          key: ${{ matrix.os }}
       - name: Rust tests
         run: cargo test

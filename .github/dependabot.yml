@@ -5,6 +5,12 @@ updates:
     schedule:
       interval: "weekly"
     target-branch: "buffer"
+    # A compromised release is usually yanked within days of publication, so
+    # sitting out the first week of every version means most supply-chain
+    # incidents are resolved before Dependabot ever proposes the bad version.
+    # Security advisories bypass this, so genuine CVE fixes still arrive at once.
+    cooldown:
+      default-days: 7
     groups:
       cargo:
         applies-to: version-updates
@@ -19,8 +25,35 @@ updates:
     schedule:
       interval: "weekly"
     target-branch: "buffer"
+    cooldown:
+      default-days: 7
     groups:
       github-actions:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - "major"
+          - "minor"
+          - "patch"
+  # The "uv" ecosystem is used rather than "pip" because the lockfile is uv's.
+  #
+  # `lockfile-only` is what keeps this from eroding the supported version range.
+  # The default strategy would rewrite the constraints in pyproject.toml, so
+  # `numpy>=2.3.0` would become `numpy>=2.4.6` and every user still on 2.3 would
+  # be dropped for no reason. Restricting Dependabot to uv.lock means the
+  # declared floors never move -- they stay a deliberate, manual decision --
+  # while the versions CI actually resolves and installs stay current.
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    target-branch: "buffer"
+    versioning-strategy: "lockfile-only"
+    cooldown:
+      default-days: 7
+    groups:
+      python:
         applies-to: version-updates
         patterns:
           - "*"

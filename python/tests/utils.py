@@ -41,5 +41,3 @@ def reduce_sos_decomposition(
         res += moment_decomposition.coefficient * moment_decomposition.generator
 
     return res
-
-
