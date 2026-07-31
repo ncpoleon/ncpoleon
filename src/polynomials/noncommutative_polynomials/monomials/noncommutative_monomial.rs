@@ -388,6 +388,12 @@ impl RewritingTrait<Self> for RustNonCommutativeMonomial {
         match strategy {
             RewritingStrategy::None => Ok(self.clone()),
             RewritingStrategy::Greedy => {
+                // TODO (perf, "Step 2"): the substitution rules are cloned and re-sorted on every
+                // `rewrite` call, but they don't change during a relaxation (~92k calls in the
+                // level-13 fill). Precompute the sorted rule list once in `set_relaxation` and pass a
+                // `&[(Self, Self)]` in via a `rewrite_with_rules` method on `RewritingTrait`, keeping
+                // this `rewrite` as a thin wrapper that sorts then delegates. Exact-output; measured
+                // at ~3% of rewrite time, so a small win (the reduction loop below dominates).
                 let sorted_substitutions: Vec<(Self, Self)> = substitutions
                     .iter()
                     .map(|(mon1, mon2)| (mon1.clone(), mon2.clone()))
