@@ -176,6 +176,10 @@ def main():
     parser.add_argument("--list", action="store_true", help="list the available cases and exit")
     parser.add_argument("--measure", metavar="CASE", help=argparse.SUPPRESS)
     args = parser.parse_args()
+    if args.rounds < 1:
+        parser.error("--rounds must be at least 1")
+    if args.warmup < 0:
+        parser.error("--warmup must be non-negative")
 
     if args.list:
         for name in CASES:
