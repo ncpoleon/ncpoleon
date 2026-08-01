@@ -97,8 +97,13 @@ jobs:
       - name: Check out the MOSEK license
         env:
           MSK_LICENSE: ${{ secrets.MSK_LICENSE }}
+          IS_FORK_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork }}
         run: |
           if [ -z "$MSK_LICENSE" ]; then
+            if [ "$IS_FORK_PR" != "true" ]; then
+              echo "::error::MSK_LICENSE is required for non-fork benchmark runs"
+              exit 1
+            fi
             echo "No MOSEK license available (fork pull request): the MOSEK-backed benchmarks will skip themselves. The picos/cvxopt solves and the relaxation benchmark still run." \
               >> "$GITHUB_STEP_SUMMARY"
             exit 0
