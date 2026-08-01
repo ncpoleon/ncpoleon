@@ -1067,11 +1067,7 @@ where
             }
 
             let is_problem_real_valued = self.objective.is_real();
-            let mut new_moment_matrix = RustMomentMatrix {
-                data: BTreeMap::new(),
-                adjoint_index: BTreeMap::new(),
-                size: monomials_sets.iter().map(|set| set.len()).sum(),
-            };
+            let mut new_moment_matrix = RustMomentMatrix::new(monomials_sets.iter().map(|set| set.len()).sum());
 
             // Determine the constraints on the moment matrix. This is where we build the map between
             // reduced monomials and indices within the moment matrix
@@ -1204,8 +1200,7 @@ where
         Polynomial<Monomial<Data>, Scalar>: Display,
     {
         let size = monomials_sets.iter().take((level + 1).into()).map(|set| set.len()).sum();
-        let mut new_localising_moment_matrix =
-            RustMomentMatrix { data: BTreeMap::new(), adjoint_index: BTreeMap::new(), size };
+        let mut new_localising_moment_matrix = RustMomentMatrix::new(size);
 
         let operators_iterator_rows = if verbosity > 0 {
             itertools::Either::Left(tqdm!(

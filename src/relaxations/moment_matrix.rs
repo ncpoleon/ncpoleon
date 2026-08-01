@@ -47,12 +47,12 @@ fn position_matrix_to_row_col_data_format<Scalar: PolynomialDtype>(
 //  variable is complex could suffice, modulo some changes in the code.
 #[derive(Clone)]
 pub(super) struct RustMomentMatrix<Scalar: PolynomialDtype, MonomialType: AdjointTrait + Ord> {
-    pub(super) data: BTreeMap<MonomialType, PositionMatrixPair<Scalar>>,
+    data: BTreeMap<MonomialType, PositionMatrixPair<Scalar>>,
     /// Maps the canonical form of each stored key's adjoint back to that key. Maintained by
     /// [`RustMomentMatrix::insert`], it lets [`RustMomentMatrix::get_mut`] resolve a monomial stored
     /// under the opposite (adjoint) orientation without recomputing `adjoint().rewrite()` on every
     /// lookup
-    pub(super) adjoint_index: BTreeMap<MonomialType, MonomialType>,
+    adjoint_index: BTreeMap<MonomialType, MonomialType>,
     pub(super) size: usize,
 }
 
@@ -61,6 +61,10 @@ where
     Scalar: PolynomialDtype,
     MonomialType: AdjointTrait + Ord + RewritingTrait<MonomialType> + Display + Clone,
 {
+    pub(super) fn new(size: usize) -> Self {
+        Self { data: BTreeMap::new(), adjoint_index: BTreeMap::new(), size }
+    }
+
     pub(super) fn get(
         &self,
         monomial: &MonomialType,

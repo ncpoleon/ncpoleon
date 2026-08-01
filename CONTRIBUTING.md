@@ -75,16 +75,27 @@ each in turn. On a machine with nothing else running:
 #    Your change has to beat that wobble to count as a real result.
 uv run scripts/benchmark_local.py --baseline
 
-# 2. Measure the code without your change
-git stash
+# 2. Measure the code without your change, in a throwaway worktree checked out at the
+#    commit you branched off `main` from.
+git worktree add ../ncpoleon-baseline "$(git merge-base HEAD main)"
+cd ../ncpoleon-baseline
 uv sync --dev --all-extras --config-setting 'build-args=--profile=release'
 uv run scripts/benchmark_local.py
 
 # 3. Measure it with your change
-git stash pop
+cd -
 uv sync --dev --all-extras --config-setting 'build-args=--profile=release'
 uv run scripts/benchmark_local.py
+
+# 4. Drop the worktree once you are done comparing
+git worktree remove ../ncpoleon-baseline
 ```
+
+Do not use `git stash` for step 2: it leaves untracked files behind, so a new `.rs` or `.py`
+file of yours would silently end up in the "baseline" measurement, and `git stash pop` will
+happily pop somebody else's stash if you had one before you started. The worktree has none of
+your edits, tracked or untracked, and touches neither your working tree nor your stash stack.
+It builds into its own `.venv`, so expect step 2 to pay for a full release build.
 
 Compare the `min` columns from steps 2 and 3. **If the difference is smaller than the floor step 1
 gave you for that case, you have not measured anything** — the machine moved more than your code

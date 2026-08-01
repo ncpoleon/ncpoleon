@@ -82,6 +82,12 @@ jobs:
         with:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          # uv hands the arm64 Windows runner an x86_64 interpreter, so maturin
+          # builds the extension for `x86_64-pc-windows-msvc` while rustup has
+          # installed only the aarch64 host toolchain. Installing the cross target
+          # is what lets that build link.
+          targets: ${{ matrix.os == 'windows-11-arm' && 'x86_64-pc-windows-msvc' || '' }}
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
         with:
           # Without this every combination shares one cache entry and they

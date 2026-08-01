@@ -45,10 +45,14 @@ mosek = ["mosek>=11.2.0"]
 picos = ["picos>=2.6.2", "scipy>=1.17.1"]
 
 [dependency-groups]
+# MOSEK is deliberately absent here: it belongs to the `mosek` extra alone. A
+# dev-group entry would be unconditional, and the platforms with no MOSEK wheel
+# (macOS x86_64, Windows arm64) select `--extra picos` precisely to leave it
+# out, which the group would silently undo, turning their test job into a
+# resolution error
 dev = [
     "mkdocs-material>=9.7.6",
     "mkdocstrings[python]>=1.0.4",
-    "mosek>=11.2.0",
     "picos>=2.6.2",
     "pytest>=9.0.3",
     "pytest-codspeed>=5.0.3",

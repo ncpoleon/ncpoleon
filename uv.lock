@@ -598,7 +598,6 @@ picos = [
 dev = [
     { name = "mkdocs-material" },
     { name = "mkdocstrings", extra = ["python"] },
-    { name = "mosek" },
     { name = "picos" },
     { name = "pytest" },
     { name = "pytest-codspeed" },
@@ -621,7 +620,6 @@ provides-extras = ["mosek", "picos"]
 dev = [
     { name = "mkdocs-material", specifier = ">=9.7.6" },
     { name = "mkdocstrings", extras = ["python"], specifier = ">=1.0.4" },
-    { name = "mosek", specifier = ">=11.2.0" },
     { name = "picos", specifier = ">=2.6.2" },
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-codspeed", specifier = ">=5.0.3" },
