@@ -1,8 +1,7 @@
 import pytest
 from ncpoleon import generate_noncommutative_variables, get_relaxation, solve
-from ncpoleon.utils import is_mosek_available
 
-from .utils import reduce_sos_decomposition
+from .utils import MOSEK_AVAILABLE, MOSEK_SKIP_REASON, reduce_sos_decomposition
 
 # TODO: Add complex-valued tests, tests for the attributes of the relaxations such that the equality constraints or the
 # monomial index
@@ -16,12 +15,7 @@ def generate_simple_noncommutative_parameters():
                     solver,
                     level,
                     expected,
-                    marks=[
-                        pytest.mark.skipif(
-                            not is_mosek_available(),
-                            reason="Mosek is not installed or a Mosek license is not available.",
-                        )
-                    ],
+                    marks=[pytest.mark.skipif(not MOSEK_AVAILABLE, reason=MOSEK_SKIP_REASON)],
                 )
 
             elif solver == "picos-cvxopt":
@@ -38,12 +32,7 @@ def generate_simple_noncommutative_with_equality_constraints_parameters():
                         level,
                         expected,
                         force_primal,
-                        marks=[
-                            pytest.mark.skipif(
-                                not is_mosek_available(),
-                                reason="Mosek is not installed or a Mosek license is not available.",
-                            )
-                        ],
+                        marks=[pytest.mark.skipif(not MOSEK_AVAILABLE, reason=MOSEK_SKIP_REASON)],
                     )
                 elif solver == "picos-cvxopt":
                     if level == 2 and force_primal:
@@ -71,12 +60,7 @@ def generate_simple_noncommutative_with_substitution_parameters():
                     solver,
                     level,
                     expected,
-                    marks=[
-                        pytest.mark.skipif(
-                            not is_mosek_available(),
-                            reason="Mosek is not installed or a Mosek license is not available.",
-                        )
-                    ],
+                    marks=[pytest.mark.skipif(not MOSEK_AVAILABLE, reason=MOSEK_SKIP_REASON)],
                 )
             elif solver == "picos-cvxopt":
                 yield pytest.param(solver, level, expected)

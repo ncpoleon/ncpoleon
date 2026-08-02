@@ -2,9 +2,8 @@ from math import sqrt
 
 import pytest
 from ncpoleon import generate_commutative_variables, get_relaxation, solve
-from ncpoleon.utils import is_mosek_available
 
-from .utils import reduce_sos_decomposition
+from .utils import MOSEK_AVAILABLE, MOSEK_SKIP_REASON, reduce_sos_decomposition
 
 # TODO: Add complex-valued tests, tests for the attributes of the relaxations such that the equality constraints or the
 # monomial index
@@ -18,12 +17,7 @@ def generate_simple_commutative_parameters():
                     solver,
                     level,
                     expected,
-                    marks=[
-                        pytest.mark.skipif(
-                            not is_mosek_available(),
-                            reason="Mosek is not installed or a Mosek license is not available.",
-                        )
-                    ],
+                    marks=[pytest.mark.skipif(not MOSEK_AVAILABLE, reason=MOSEK_SKIP_REASON)],
                 )
 
             elif solver == "picos-cvxopt":

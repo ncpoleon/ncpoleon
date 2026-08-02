@@ -10,14 +10,17 @@ from ncpoleon.utils import is_mosek_available
 if TYPE_CHECKING:
     from ncpoleon.polynomials import Polynomial
 
+# Resolved once for the whole session. `is_mosek_available()` is deliberately uncached so
+# that a license added mid-process is picked up, which means every caller pays for its own
+# check and the skipif marks below are evaluated once per parametrized case while pytest
+# expands the generators. On GitHub's macOS runners each call blocks for 70s, which is why
+# we want to call it only once.
+MOSEK_AVAILABLE = is_mosek_available()
+MOSEK_SKIP_REASON = "Mosek is not installed or a Mosek license is not available."
+
 SOLVERS = [
     "picos-cvxopt",
-    pytest.param(
-        "mosek",
-        marks=pytest.mark.skipif(
-            not is_mosek_available(), reason="Mosek is not installed or a Mosek license is not available."
-        ),
-    ),
+    pytest.param("mosek", marks=pytest.mark.skipif(not MOSEK_AVAILABLE, reason=MOSEK_SKIP_REASON)),
 ]
 
 

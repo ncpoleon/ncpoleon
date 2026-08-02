@@ -2,9 +2,8 @@ from math import log2, sqrt
 
 import pytest
 from ncpoleon import generate_noncommutative_variables, get_relaxation, solve
-from ncpoleon.utils import is_mosek_available
 
-from .utils import reduce_sos_decomposition
+from .utils import MOSEK_AVAILABLE, MOSEK_SKIP_REASON, reduce_sos_decomposition
 
 
 def generate_multiple_moment_matrices_parameters():
@@ -19,12 +18,7 @@ def generate_multiple_moment_matrices_parameters():
                 marks = []
 
                 if solver == "mosek":
-                    marks.append(
-                        pytest.mark.skipif(
-                            not is_mosek_available(),
-                            reason="Mosek is not installed or a Mosek license is not available.",
-                        )
-                    )
+                    marks.append(pytest.mark.skipif(not MOSEK_AVAILABLE, reason=MOSEK_SKIP_REASON))
 
                     if use_primal and level >= 2:
                         marks.append(
