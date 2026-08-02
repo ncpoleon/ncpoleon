@@ -1,7 +1,6 @@
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Display;
-use std::iter::repeat_n;
 use std::ops::Mul;
 
 use itertools::Itertools;
@@ -22,7 +21,7 @@ use crate::polynomials::commutative_polynomials::polynomials::commutative_polyno
     PythonComplexCoefficientsCommutativePolynomial, PythonRealCoefficientsCommutativePolynomial,
 };
 use crate::polynomials::monomial::{
-    AdjointTrait, HasAMomentMatrixId, Monomial, OneWithMomentMatrixId, RewritingStrategy, RewritingTrait,
+    AdjointTrait, HasAMomentMatrixId, HasLength, Monomial, OneWithMomentMatrixId, RewritingStrategy, RewritingTrait,
 };
 use crate::polynomials::noncommutative_polynomials::monomials::noncommutative_monomial::{
     PythonNonCommutativeMonomial, RustNonCommutativeMonomial,
@@ -32,7 +31,6 @@ use crate::polynomials::noncommutative_polynomials::polynomials::noncommutative_
     PythonComplexCoefficientsNonCommutativePolynomial, PythonRealCoefficientsNonCommutativePolynomial,
 };
 use crate::polynomials::polynomial::{Polynomial, PolynomialDtype, PolynomialTrait, TryIntoReal};
-use crate::progress::{MININTERVAL, with_bar};
 use crate::relaxations::constraint::{
     ConstraintKind, PythonComplexCoefficientsCommutativeConstraint, PythonComplexCoefficientsNonCommutativeConstraint,
     PythonRealCoefficientsCommutativeConstraint, PythonRealCoefficientsNonCommutativeConstraint,
@@ -50,7 +48,7 @@ macro_rules! build_relaxation_inner {
         $py:expr, $level:expr, $objective:expr,
         $operator_constraints_some:expr, $moment_constraints_some:expr, $normalization_constraints_some:expr,
         $variables:expr, $substitutions:expr, $strategy:expr,
-        $py_poly:ident, $py_relaxation:ident, $py_constraint:ident, $verbosity:expr $(,)?
+        $py_poly:ident, $py_relaxation:ident, $py_constraint:ident, $verbosity:expr, $check_uniqueness_with_length:expr $(,)?
     ) => {{
         let rust_objective = match $py_poly::try_from($objective) {
             Ok(polynomial) => polynomial.0,
@@ -167,7 +165,8 @@ macro_rules! build_relaxation_inner {
             rust_moment_inequalities,
             rust_normalization_equalities,
             rust_normalization_inequalities,
-            $verbosity
+            $verbosity,
+            $check_uniqueness_with_length
         )?;
         $py_relaxation(relaxation).into_py_any($py)
     }};
@@ -184,7 +183,7 @@ macro_rules! build_relaxation_arm {
         variables: $variables:expr,
         real_poly_and_relaxation: $real_py_poly:ident & $real_py_relaxation:ident & $real_py_constraint:ident,
         complex_poly_and_relaxation: $complex_py_poly:ident & $complex_py_relaxation:ident & $complex_py_constraint:ident,
-        is_real: $is_real:expr, verbosity: $verbosity:expr $(,)?
+        is_real: $is_real:expr, verbosity: $verbosity:expr, check_uniqueness_with_length:$check_uniqueness_with_length:expr $(,)?
     ) => {{
         let mut rust_substitutions: BTreeMap<$rust_monomial, $rust_monomial> = BTreeMap::new();
 
@@ -228,7 +227,8 @@ macro_rules! build_relaxation_arm {
                 $real_py_poly,
                 $real_py_relaxation,
                 $real_py_constraint,
-                $verbosity
+                $verbosity,
+                $check_uniqueness_with_length
             )
         } else {
             build_relaxation_inner!(
@@ -244,7 +244,8 @@ macro_rules! build_relaxation_arm {
                 $complex_py_poly,
                 $complex_py_relaxation,
                 $complex_py_constraint,
-                $verbosity
+                $verbosity,
+                $check_uniqueness_with_length
             )
         }
     }};
@@ -566,6 +567,11 @@ pub(crate) fn is_constraint_real_valued<'py>(bound: &Bound<'py, PyAny>, name: &s
 /// * `assume_real` – If `True`, the function assumes that the problem is real-valued, instead of trying to infer
 ///   whether it is the case by trying to covnert every polynomial to a real-valued one. Set this argument to `True` to
 ///   speed up the initial step of the relaxation if you know that your problem is real-valued.
+/// * `verbosity` – The level of verbosity of the relaxation. Notably, it controls whether progress bars are printed.
+/// * `check_uniqueness_with_length` – If `True`, then it is assumed that a monomial that is rewritten can always be
+///   expressed as a product of the operators present in `variables` and that rewriting a monomial can't increase its
+///   length. This allows to check more quickly whether a given monomial should be kept in the indexing set of the
+///   moment matrix.
 ///
 /// # Errors
 /// Raises `ValueError` if the variables list is empty, if a variable cannot
@@ -584,7 +590,8 @@ pub(crate) fn is_constraint_real_valued<'py>(bound: &Bound<'py, PyAny>, name: &s
         normalization_constraints=None,
         substitution_strategy=RewritingStrategy::Greedy,
         assume_real=false,
-        verbosity=0
+        verbosity=0,
+        check_uniqueness_with_length=true,
     )
 )]
 #[allow(clippy::too_many_arguments)]
@@ -599,6 +606,7 @@ pub(crate) fn get_relaxation<'py>(
     substitution_strategy: RewritingStrategy,
     assume_real: bool,
     verbosity: u8,
+    check_uniqueness_with_length: bool,
 ) -> PyResult<Py<PyAny>> {
     let py = objective.py();
     let default_dict = PyDict::new(py);
@@ -672,7 +680,7 @@ pub(crate) fn get_relaxation<'py>(
                 complex_poly_and_relaxation: PythonComplexCoefficientsNonCommutativePolynomial &
                     PythonComplexValuedNonCommutativeSdpRelaxation &
                     PythonComplexCoefficientsNonCommutativeConstraint,
-                is_real: is_problem_real_valued, verbosity: verbosity
+                is_real: is_problem_real_valued, verbosity: verbosity, check_uniqueness_with_length: check_uniqueness_with_length
             )
         }
         // Commutative problem
@@ -689,7 +697,7 @@ pub(crate) fn get_relaxation<'py>(
                 complex_poly_and_relaxation: PythonComplexCoefficientsCommutativePolynomial &
                     PythonComplexValuedCommutativeSdpRelaxation &
                     PythonComplexCoefficientsCommutativeConstraint,
-                is_real: is_problem_real_valued, verbosity: verbosity
+                is_real: is_problem_real_valued, verbosity: verbosity, check_uniqueness_with_length: check_uniqueness_with_length
             )
         }
         (false, false) => Err(PyNotImplementedError::new_err(
@@ -826,9 +834,11 @@ where
         normalization_equalities: Vec<(Polynomial<Monomial<Data>, Scalar>, Scalar)>,
         normalization_inequalities: Vec<(Polynomial<Monomial<Data>, Scalar>, f64)>,
         verbosity: u8,
+        check_uniqueness_with_length: bool,
     ) -> PyResult<()>
     where
-        Monomial<Data>: From<OperatorType> + RewritingTrait<Monomial<Data>> + Display,
+        Monomial<Data>: RewritingTrait<Monomial<Data>> + Display + HasLength,
+        for<'a, 'b> &'a Monomial<Data>: Mul<&'b OperatorType, Output = Result<Monomial<Data>, String>>,
         Polynomial<Monomial<Data>, Scalar>: RewritingTrait<Monomial<Data>> + Display,
     {
         let mut variables_with_adjoint = BTreeMap::new();
@@ -970,8 +980,7 @@ where
                 variables_with_adjoint.into_iter(),
                 desc = "Moment matrix index",
                 position = 0,
-                ncols = 0,
-                mininterval = MININTERVAL
+                ncols = 0
             ))
         } else {
             itertools::Either::Right(variables_with_adjoint.into_iter())
@@ -990,68 +999,75 @@ where
             // order to do so, we could add a is_commutative method to PolynomialTrait, just like we did
             // with is_real. This however wouldn't work to generate Hybrid monomials, we may want to have
             // two different sets of variables, one commutative and one non commutative
-
             let monomial_length_iterator = if verbosity > 0 {
                 itertools::Either::Left(tqdm!(
                     1..=level,
                     desc = "Generating monomials with length",
                     position = if top_bar { 1 } else { 0 },
-                    ncols = 0,
-                    mininterval = MININTERVAL
+                    ncols = 0
                 ))
             } else {
                 itertools::Either::Right(1..=level)
             };
 
-            // FIXME: it could be interesting performance-wise to generate the monomials of length t+1 from the
-            // monomials of length t in a sense. The reasoning is that is we can reduce X^daggerY to Z,
-            // then X^daggerYW can directly be rewritten as ZW. This should be formalized, but could work.
-            //  Or maybe we could store which monomials were rewritten in a HashMap and work from there. This would
-            // probably be much faster for high levels of relaxation, but would increase the memory usage.
             for monomial_length in monomial_length_iterator {
                 let mut level_set = BTreeSet::new();
+                if let Some(last_level_set) = monomials_sets.last() {
+                    let mut cartesian_product_iterator = if (verbosity > 0) & (verbosity < 3) {
+                        itertools::Either::Left(tqdm!(
+                            last_level_set.iter().cartesian_product(variables_set.iter()),
+                            desc = "Monomial combinations",
+                            position = if top_bar { 2 } else { 1 },
+                            total = last_level_set.len() * variables_set.len(),
+                            leave = false
+                        ))
+                    } else {
+                        itertools::Either::Right(last_level_set.iter().cartesian_product(variables_set.iter()))
+                    };
 
-                let monomial_combinations_bar = ((verbosity > 0) & (verbosity < 3)).then(|| {
-                    tqdm!(
-                        desc = "Monomial combinations",
-                        position = if top_bar { 2 } else { 1 },
-                        total = variables_set.len().pow(monomial_length as u32),
-                        leave = false,
-                        mininterval = MININTERVAL
-                    )
-                });
-                let mut multi_cartesian_product_iterator = with_bar(
-                    repeat_n(variables_set.iter().cloned(), monomial_length as usize).multi_cartesian_product(),
-                    monomial_combinations_bar,
-                );
-
-                multi_cartesian_product_iterator
-                    .try_for_each(|operators| -> Result<(), String> {
-                        let mut iter = operators.into_iter().map(Monomial::from);
-                        let first = iter.next().unwrap();
-                        let new_monomial = iter.try_fold(first, |acc, m| acc * &m)?;
-                        // We remove from the monomials set all monomials that can be reduced via
-                        // substitutions
-                        trace!("New monomial: {}.", new_monomial);
-                        let rewritten = new_monomial.rewrite(self.substitution_strategy, &self.substitutions)?;
-                        trace!("Rewritten monomial: {}.", rewritten);
-                        // We have to check that a reduced monomial has not been inserted in a previous
-                        // level
-                        if !level_set.contains(&rewritten)
-                            & !monomials_sets.iter().any(|monomial_set| monomial_set.contains(&rewritten))
-                        {
-                            trace!("Adding the rewritten monomial to the indexing set at level {}.", monomial_length);
-                            level_set.insert(rewritten.clone());
-                        }
-                        Ok(())
-                    })
-                    .map_err(PyValueError::new_err)?;
-                monomials_sets.push(level_set);
+                    cartesian_product_iterator
+                        .try_for_each(|(monomial, variable)| -> Result<(), String> {
+                            let new_monomial = (monomial * variable)?;
+                            // We remove from the monomials set all monomials that can be reduced via
+                            // substitutions
+                            trace!("New monomial: {}.", new_monomial);
+                            let rewritten = new_monomial.rewrite(self.substitution_strategy, &self.substitutions)?;
+                            trace!("Rewritten monomial: {}.", rewritten);
+                            // We have to check that a reduced monomial has not been inserted in a previous
+                            // level. In all generality, we can't simply check that its length is equal to
+                            // the current level, since this wouldn't work if the reduced monomial can't be
+                            // expressed as a product of the variables that were provided. Furthermore, this
+                            // assumes that rewriting a monomial can't increase its length. Though this is
+                            // reasonable, we allow the user to disable this simpler check if one of this
+                            // assumptions isn't verified
+                            if check_uniqueness_with_length {
+                                if (rewritten.len() == monomial_length) & !level_set.contains(&rewritten) {
+                                    trace!(
+                                        "Adding the rewritten monomial to the indexing set at level {}.",
+                                        monomial_length
+                                    );
+                                    level_set.insert(rewritten.clone());
+                                }
+                            } else {
+                                if !level_set.contains(&rewritten)
+                                    & !monomials_sets.iter().any(|monomial_set| monomial_set.contains(&rewritten))
+                                {
+                                    trace!(
+                                        "Adding the rewritten monomial to the indexing set at level {}.",
+                                        monomial_length
+                                    );
+                                    level_set.insert(rewritten.clone());
+                                }
+                            }
+                            Ok(())
+                        })
+                        .map_err(PyValueError::new_err)?;
+                    monomials_sets.push(level_set);
+                }
             }
 
             let is_problem_real_valued = self.objective.is_real();
-            let mut new_moment_matrix =
-                RustMomentMatrix { data: BTreeMap::new(), size: monomials_sets.iter().map(|set| set.len()).sum() };
+            let mut new_moment_matrix = RustMomentMatrix::new(monomials_sets.iter().map(|set| set.len()).sum());
 
             // Determine the constraints on the moment matrix. This is where we build the map between
             // reduced monomials and indices within the moment matrix
@@ -1061,14 +1077,15 @@ where
                     monomials_sets.iter().flatten().enumerate(),
                     desc = "Filling moment matrix rows",
                     position = if top_bar { 1 } else { 0 },
-                    total = monomials_sets.iter().map(|set| set.len()).sum::<usize>(),
-                    mininterval = MININTERVAL
+                    total = monomials_sets.iter().map(|set| set.len()).sum::<usize>()
                 ))
             } else {
                 itertools::Either::Right(monomials_sets.iter().flatten().enumerate())
             };
 
             for (index_row, monomial_row) in monomials_sets_iterator_rows {
+                // Computed once per row instead of once per cell.
+                let monomial_row_adjoint = monomial_row.adjoint();
                 // FIXME: using skip makes it run in n^2 instead of n*(n+1)/2. We can probably fix it
                 // by computing how many elements (i.e. lengths) should we skip, and then skip the first
                 // remaining elements of the first length that we consider. Maybe write this as a function
@@ -1078,18 +1095,15 @@ where
                     let new_monomial = if index_row == 0 {
                         monomial_column.clone()
                     } else {
-                        // FIXME: performance: no need to recompute monomial_row_adjoint within the loop
-                        let monomial_row_adjoint = monomial_row.adjoint();
-                        (monomial_row_adjoint * monomial_column)
+                        (&monomial_row_adjoint * monomial_column)
                             .map_err(PyValueError::new_err)?
                             .rewrite(self.substitution_strategy, &self.substitutions)
                             .map_err(PyValueError::new_err)?
                     };
 
-                    if let Some((position_matrix, position_matrix_conj)) = new_moment_matrix
-                        .get_mut(&new_monomial, self.substitution_strategy, &self.substitutions)
-                        .map_err(PyValueError::new_err)?
-                    {
+                    // `get_mut` finds the entry (in either orientation) via the matrix's own
+                    // `adjoint_index`, so no per-cell `adjoint().rewrite()` is needed here.
+                    if let Some((position_matrix, position_matrix_conj)) = new_moment_matrix.get_mut(&new_monomial) {
                         position_matrix.insert((index_row, index_column), Scalar::one());
                         if let Some(position_matrix_conj) = position_matrix_conj {
                             position_matrix_conj.insert((index_column, index_row), Scalar::one());
@@ -1121,7 +1135,11 @@ where
                             Some(BTreeMap::from([((index_column, index_row), Scalar::one())])),
                         )
                     };
-                    new_moment_matrix.data.insert(new_monomial, new_entry);
+                    // `insert` records the entry and registers its adjoint's canonical form in
+                    // `adjoint_index` (the single adjoint rewrite per stored monomial).
+                    new_moment_matrix
+                        .insert(new_monomial, new_entry, self.substitution_strategy, &self.substitutions)
+                        .map_err(PyValueError::new_err)?;
                 }
             }
 
@@ -1135,8 +1153,7 @@ where
                                 desc =
                                     format!("Building localising moment matrices ({})", stringify!($constraints_field)),
                                 position = if top_bar { 1 } else { 0 },
-                                ncols = 0,
-                                mininterval = MININTERVAL
+                                ncols = 0
                             ))
                         } else {
                             itertools::Either::Right(constraints.iter())
@@ -1183,14 +1200,13 @@ where
         Polynomial<Monomial<Data>, Scalar>: Display,
     {
         let size = monomials_sets.iter().take((level + 1).into()).map(|set| set.len()).sum();
-        let mut new_localising_moment_matrix = RustMomentMatrix { data: BTreeMap::new(), size };
+        let mut new_localising_moment_matrix = RustMomentMatrix::new(size);
 
         let operators_iterator_rows = if verbosity > 0 {
             itertools::Either::Left(tqdm!(
                 monomials_sets.iter().take((level + 1).into()).flatten().enumerate(),
                 desc = "Filling localising matrix rows",
                 position = if top_bar { 2 } else { 1 },
-                mininterval = MININTERVAL,
                 leave = false,
                 total = size
             ))
@@ -1218,9 +1234,8 @@ where
                 trace!("Adding the rewritten polynomial {} to the localizing matrix.", new_polynomial);
 
                 for (monomial, coefficient) in new_polynomial.data {
-                    if let Some((position_matrix, position_matrix_conj)) = new_localising_moment_matrix
-                        .get_mut(&monomial, self.substitution_strategy, &self.substitutions)
-                        .map_err(PyValueError::new_err)?
+                    if let Some((position_matrix, position_matrix_conj)) =
+                        new_localising_moment_matrix.get_mut(&monomial)
                     {
                         // Accumulate rather than insert: if `monomial` or its adjoint has already
                         // been processed for this same (row, col), we must add to the existing
@@ -1282,7 +1297,9 @@ where
                                 )));
                             }
                         };
-                        new_localising_moment_matrix.data.insert(key, new_entry);
+                        new_localising_moment_matrix
+                            .insert(key, new_entry, self.substitution_strategy, &self.substitutions)
+                            .map_err(PyValueError::new_err)?;
                     }
                 }
             }

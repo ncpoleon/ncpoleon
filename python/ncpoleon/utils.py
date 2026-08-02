@@ -9,10 +9,13 @@ def is_mosek_available():
         return False
     try:
         import mosek
+    except ImportError:
+        return False
 
+    try:
         with mosek.Env() as env:
             env.checkoutlicense(mosek.feature.pts)
         return True
     except mosek.Error:
-        logging.warning("MOSEK is installed but no valid license has been found.")
+        logger.warning("MOSEK is installed but no valid license has been found.")
         return False

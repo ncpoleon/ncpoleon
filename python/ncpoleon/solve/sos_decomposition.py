@@ -52,6 +52,7 @@ class SingleMomentEqualityDecomposition(Generic[PolynomialElements, Scalar]):
     generator: Polynomial[PolynomialElements, Scalar]
     coefficient: Scalar
 
+
 @dataclass(eq=False, order=False, kw_only=True)
 class SingleMomentInequalityDecomposition(Generic[PolynomialElements, Scalar]):
     """A single scalar moment contribution to a SoS decomposition.

@@ -95,10 +95,7 @@ class Polynomial(Generic[PolynomialElements, Scalar]):
     @overload
     def __eq__(self, other: Polynomial[PolynomialElements, float]) -> Constraint[PolynomialElements, Scalar]: ...
     @overload
-    def __eq__(
-        self,
-        other: Polynomial[PolynomialElements, complex]
-        ) -> Constraint[PolynomialElements, complex]: ...  # ty: ignore[invalid-method-override]
+    def __eq__(self, other: Polynomial[PolynomialElements, complex]) -> Constraint[PolynomialElements, complex]: ...  # ty: ignore[invalid-method-override]
     @overload
     def __ge__(self, other: float) -> Constraint[PolynomialElements, Scalar]: ...
     @overload

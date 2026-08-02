@@ -7,7 +7,6 @@ use pyo3_log::{Caching, Logger};
 
 mod logging;
 mod polynomials;
-mod progress;
 mod relaxations;
 
 /// A Python module implemented in Rust.

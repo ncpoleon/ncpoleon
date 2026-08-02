@@ -1,8 +1,7 @@
 import pytest
 from ncpoleon import generate_noncommutative_variables, get_relaxation, solve
-from ncpoleon.utils import is_mosek_available
 
-from .utils import reduce_sos_decomposition
+from .utils import SOLVER_SKIPS, reduce_sos_decomposition
 
 # TODO: Add complex-valued tests, tests for the attributes of the relaxations such that the equality constraints or the
 # monomial index
@@ -11,23 +10,16 @@ from .utils import reduce_sos_decomposition
 def generate_i3322_parameters():
     for solver in ["mosek", "picos-cvxopt"]:
         for use_primal in [True, False]:
-            marks = []
+            marks = [SOLVER_SKIPS[solver]]
 
-            if solver == "mosek":
+            if solver == "mosek" and use_primal:
                 marks.append(
-                    pytest.mark.skipif(
-                        not is_mosek_available(), reason="Mosek is not installed or a Mosek license is not available."
+                    pytest.mark.xfail(
+                        reason="Solving the primal using the MOSEK Python Fusion API may result in a Recursion "
+                        "Error because the involved LMI is too large.",
+                        raises=RecursionError,
                     )
                 )
-
-                if use_primal:
-                    marks.append(
-                        pytest.mark.xfail(
-                            reason="Solving the primal using the MOSEK Python Fusion API may result in a Recursion "
-                            "Error because the involved LMI is too large.",
-                            raises=RecursionError,
-                        )
-                    )
 
             yield pytest.param(solver, use_primal, marks=marks)
 
@@ -50,8 +42,14 @@ def _i3322_params():
 
 
 def test_i3322_relaxation(benchmark):
+    """Measure the relaxation at level 4 rather than the level 3 solved below.
+
+    Level 3 builds in about 18ms, which is close enough to the measurement noise that it cannot
+    resolve a small change. Level 4 takes around 190ms for the same problem shape, and level 5
+    would cost roughly 2s for no better reproducibility.
+    """
     variables, obj, substitutions = _i3322_params()
-    benchmark(get_relaxation, variables, 3, obj, substitutions=substitutions)
+    benchmark(get_relaxation, variables, 4, obj, substitutions=substitutions)
 
 
 @pytest.mark.parametrize("solver, use_primal", generate_i3322_parameters())

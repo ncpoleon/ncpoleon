@@ -149,6 +149,7 @@ def get_relaxation(  # type: ignore[overload-overlap]
     substitution_strategy: RewritingStrategy = RewritingStrategy.Greedy,
     assume_real: bool = False,
     verbosity: Literal[0] | Literal[1] | Literal[2] | Literal[3] = 0,
+    check_uniqueness_with_length: bool = True,
 ) -> RealValuedCommutativeSdpRelaxation: ...
 @overload
 def get_relaxation(
@@ -166,6 +167,7 @@ def get_relaxation(
     substitution_strategy: RewritingStrategy = RewritingStrategy.Greedy,
     assume_real: bool = False,
     verbosity: Literal[0] | Literal[1] | Literal[2] | Literal[3] = 0,
+    check_uniqueness_with_length: bool = True,
 ) -> ComplexValuedCommutativeSdpRelaxation: ...
 @overload
 def get_relaxation(  # type: ignore[overload-overlap]
@@ -180,6 +182,7 @@ def get_relaxation(  # type: ignore[overload-overlap]
     substitution_strategy: RewritingStrategy = RewritingStrategy.Greedy,
     assume_real: bool = False,
     verbosity: Literal[0] | Literal[1] | Literal[2] | Literal[3] = 0,
+    check_uniqueness_with_length: bool = True,
 ) -> RealValuedNonCommutativeSdpRelaxation: ...
 @overload
 def get_relaxation(
@@ -199,4 +202,5 @@ def get_relaxation(
     substitution_strategy: RewritingStrategy = RewritingStrategy.Greedy,
     assume_real: bool = False,
     verbosity: Literal[0] | Literal[1] | Literal[2] | Literal[3] = 0,
+    check_uniqueness_with_length: bool = True,
 ) -> ComplexValuedNonCommutativeSdpRelaxation: ...

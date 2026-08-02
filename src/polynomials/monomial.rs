@@ -28,6 +28,10 @@ pub(crate) trait HasAMomentMatrixId {
     fn moment_matrix_id(&self) -> u8;
 }
 
+pub(crate) trait HasLength {
+    fn len(&self) -> u8;
+}
+
 pub(crate) trait OneWithMomentMatrixId: HasAMomentMatrixId {
     fn one(moment_matrix_id: u8) -> Self;
     fn is_one(&self) -> bool;

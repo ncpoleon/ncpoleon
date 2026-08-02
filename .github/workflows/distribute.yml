@@ -21,10 +21,19 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The set of targets below is not "every architecture maturin can emit" but
+  # "every architecture on which this package can actually be installed".
+  # `numpy` and `scipy` are hard runtime dependencies and neither publishes a
+  # wheel for i686, armv7, s390x, ppc64le or win32 -- at any version, including
+  # the current 2.5.1 / 1.18.0. A wheel we ship for those targets installs only
+  # if the user first builds SciPy from source, so building them here spends
+  # (QEMU-emulated, very slow) CI time producing artifacts that resolve into a
+  # dead end. Re-add a target the day its dependencies grow a wheel.
+  #
   # Linux and musllinux build inside a manylinux container that ships every
   # supported CPython under /opt/python, so `--find-interpreter` really does
   # find them all and one job per target covers 3.11-3.14. Do not add a python
-  # matrix here -- it would only multiply the (slow, QEMU-emulated) cross jobs.
+  # matrix here -- it would only multiply the cross jobs.
   linux:
     runs-on: ${{ matrix.platform.runner }}
     strategy:
@@ -34,17 +43,11 @@ jobs:
           - runner: ubuntu-22.04
             target: x86_64
           - runner: ubuntu-22.04
-            target: x86
-          - runner: ubuntu-22.04
             target: aarch64
-          - runner: ubuntu-22.04
-            target: armv7
-          - runner: ubuntu-22.04
-            target: s390x
-          - runner: ubuntu-22.04
-            target: ppc64le
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: "3.11"
@@ -64,18 +67,17 @@ jobs:
   musllinux:
     runs-on: ${{ matrix.platform.runner }}
     strategy:
+      fail-fast: false
       matrix:
         platform:
           - runner: ubuntu-22.04
             target: x86_64
           - runner: ubuntu-22.04
-            target: x86
-          - runner: ubuntu-22.04
             target: aarch64
-          - runner: ubuntu-22.04
-            target: armv7
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: "3.11"
@@ -105,14 +107,13 @@ jobs:
           - runner: windows-latest
             target: x64
             python_arch: x64
-          - runner: windows-latest
-            target: x86
-            python_arch: x86
           - runner: windows-11-arm
             target: aarch64
             python_arch: arm64
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: ${{ matrix.python-version }}
@@ -142,6 +143,8 @@ jobs:
             target: aarch64
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: ${{ matrix.python-version }}
@@ -161,6 +164,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
       - name: Build sdist
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b
         with:
@@ -205,6 +210,4 @@ jobs:
           uv pip install --python .venv-smoke "$wheel"
           .venv-smoke/bin/python -c "import ncpoleon; from ncpoleon import _accelerate; print('import OK:', _accelerate.__file__)"
       - name: Publish to PyPI
-        run: uv publish 'wheels-*/*'
-        env:
-          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        run: uv publish --trusted-publishing always 'wheels-*/*'
