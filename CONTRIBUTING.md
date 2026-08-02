@@ -167,5 +167,3 @@ All incoming pull requests should be made against the `buffer` branch. Here's wh
    ensures that both branches stay in sync.
 
 We've adopted this framework because the CodSpeed action, which we use to test for performance regression, doesn't support the `pull_request_target` event. As a result, merging your code onto `buffer` means that your code should pass all the checks required to be merged on `main`. The second PR then checks that no performance regression happens when using a valid MOSEK license, in which case it is then merged onto `main`.
-
-Once the CodSpeed action supports the `pull_request_target`, we will make `main` the default branch once again and simplify this process to run all MOSEK-related workflows after a human verification to avoid any risk of pwn request.

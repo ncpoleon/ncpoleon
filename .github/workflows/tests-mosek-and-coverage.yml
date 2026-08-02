@@ -3,7 +3,7 @@ name: Tests with a MOSEK license and Coverage
 on:
   push:
     branches:
-      - main
+      - buffer
   pull_request_target:
     branches:
       - buffer
@@ -21,8 +21,10 @@ concurrency:
 
 
 jobs:
-  # push to main / manual dispatch: already requires write access to trigger,
-  # so these run immediately with no extra approval step.
+  # push to main or buffer / manual dispatch: already requires write access to
+  # trigger, so these run immediately with no extra approval step. A push to
+  # `buffer` is either a maintainer merging an already-approved pull request or
+  # the automated sync from `main`, so the code has been reviewed either way.
   trusted:
     if: github.event_name != 'pull_request_target'
     runs-on: ubuntu-latest
