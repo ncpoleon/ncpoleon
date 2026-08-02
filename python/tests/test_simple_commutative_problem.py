@@ -3,7 +3,7 @@ from math import sqrt
 import pytest
 from ncpoleon import generate_commutative_variables, get_relaxation, solve
 
-from .utils import MOSEK_AVAILABLE, MOSEK_SKIP_REASON, reduce_sos_decomposition
+from .utils import SOLVER_SKIPS, reduce_sos_decomposition
 
 # TODO: Add complex-valued tests, tests for the attributes of the relaxations such that the equality constraints or the
 # monomial index
@@ -12,16 +12,7 @@ from .utils import MOSEK_AVAILABLE, MOSEK_SKIP_REASON, reduce_sos_decomposition
 def generate_simple_commutative_parameters():
     for solver in ["picos-cvxopt", "mosek"]:
         for level, expected in [(1, -0.5), (2, 1 - sqrt(2))]:
-            if solver == "mosek":
-                yield pytest.param(
-                    solver,
-                    level,
-                    expected,
-                    marks=[pytest.mark.skipif(not MOSEK_AVAILABLE, reason=MOSEK_SKIP_REASON)],
-                )
-
-            elif solver == "picos-cvxopt":
-                yield pytest.param(solver, level, expected)
+            yield pytest.param(solver, level, expected, marks=[SOLVER_SKIPS[solver]])
 
 
 def _simple_commutative_params():

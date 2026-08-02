@@ -18,6 +18,8 @@ uv sync --dev --all-extras --config-setting 'build-args=--profile=dev'
 
 to build the library and install the required dependencies. Note that this will install MOSEK regardless of whether you have a license or not, but it won't be used if no valid license is detected.
 
+MOSEK does not publish a wheel for every platform `ncpoleon` supports, however, and `uv` treats an extra it cannot resolve as an error rather than as something to leave out. On macOS x86_64 and on musl-based Linux, use `--extra picos` in place of `--all-extras`. On Windows arm64, drop the extras entirely: cvxopt has no wheel there either, and its sdist does not build against MSVC, so PICOS is unavailable as well. The tests that need a solver skip themselves when it is missing, so the rest of the suite still runs. The same substitution applies to every `--all-extras` command below.
+
 ## Pull request checks
 
 After having made your changes, there are several checks that your code must pass in order to be merged:

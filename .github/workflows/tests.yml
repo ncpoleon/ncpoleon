@@ -40,6 +40,13 @@ jobs:
         # only. `is_mosek_available()` returns False when the module is absent,
         # so the solver tests skip themselves and the rest of the suite still
         # covers the target.
+        #
+        # Windows arm64 takes neither: cvxopt has no wheel for it either, and
+        # its sdist does not build against MSVC, so picos is unavailable too and
+        # the platform runs solver-free. That is deliberate -- the wheel
+        # distribute.yml ships for it is worth testing even with nothing to
+        # solve with, since generating, inspecting and exporting a relaxation is
+        # the bulk of the suite.
         extras: ["--all-extras"]
         include:
           - os: ubuntu-24.04-arm
@@ -66,12 +73,12 @@ jobs:
           - os: windows-latest
             python-version: "3.14"
             extras: "--all-extras"
-          - os: windows-11-arm # arm64: no MOSEK wheel
+          - os: windows-11-arm # arm64: no MOSEK and no cvxopt wheel
             python-version: "3.11"
-            extras: "--extra picos"
+            extras: ""
           - os: windows-11-arm
             python-version: "3.14"
-            extras: "--extra picos"
+            extras: ""
     defaults:
       run:
         # Keep one shell across all three operating systems so the quoting in
@@ -82,20 +89,30 @@ jobs:
         with:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          # uv hands the arm64 Windows runner an x86_64 interpreter, so maturin
-          # builds the extension for `x86_64-pc-windows-msvc` while rustup has
-          # installed only the aarch64 host toolchain. Installing the cross target
-          # is what lets that build link.
-          targets: ${{ matrix.os == 'windows-11-arm' && 'x86_64-pc-windows-msvc' || '' }}
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
         with:
           # Without this every combination shares one cache entry and they
           # overwrite each other's.
           key: ${{ matrix.os }}-${{ matrix.python-version }}
       - uses: astral-sh/setup-uv@v8.3.2
+      # uv downloads an interpreter only when no installed one matches, and its
+      # managed builds for this runner are x86_64. Taking one would make maturin
+      # target `x86_64-pc-windows-msvc` against an aarch64 host toolchain, which
+      # pyo3 refuses to build without the `PYO3_CROSS_*` variables -- and the
+      # wheel it produced would not be the aarch64 one distribute.yml ships.
+      # Installing the interpreter ourselves keeps the whole job native.
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        id: native-python
+        if: matrix.os == 'windows-11-arm'
+        with:
+          python-version: ${{ matrix.python-version }}
+          architecture: arm64
       - name: Python tests
-        run: uv run --python ${{ matrix.python-version }} ${{ matrix.extras }} --dev --config-setting 'build-args=--profile=dev' pytest -x
+        env:
+          # Empty when the step above did not run, which leaves the version
+          # request uv resolves on its own everywhere else.
+          UV_PYTHON: ${{ steps.native-python.outputs.python-path || matrix.python-version }}
+        run: uv run ${{ matrix.extras }} --dev --config-setting 'build-args=--profile=dev' pytest -x
 
   cargo-test:
     name: cargo test (${{ matrix.os }})

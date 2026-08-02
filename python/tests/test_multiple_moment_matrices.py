@@ -3,7 +3,7 @@ from math import log2, sqrt
 import pytest
 from ncpoleon import generate_noncommutative_variables, get_relaxation, solve
 
-from .utils import MOSEK_AVAILABLE, MOSEK_SKIP_REASON, reduce_sos_decomposition
+from .utils import SOLVER_SKIPS, reduce_sos_decomposition
 
 
 def generate_multiple_moment_matrices_parameters():
@@ -15,19 +15,16 @@ def generate_multiple_moment_matrices_parameters():
                 (2, 2.0, 0.0),
                 (2, 2.2, 1 - log2(1 + sqrt(2 - pow(2.2, 2) / 4))),
             ]:
-                marks = []
+                marks = [SOLVER_SKIPS[solver]]
 
-                if solver == "mosek":
-                    marks.append(pytest.mark.skipif(not MOSEK_AVAILABLE, reason=MOSEK_SKIP_REASON))
-
-                    if use_primal and level >= 2:
-                        marks.append(
-                            pytest.mark.xfail(
-                                reason="Solving the primal using the MOSEK Python Fusion API results in a Recursion "
-                                "Error because the involved LMI is too large.",
-                                raises=RecursionError,
-                            )
+                if solver == "mosek" and use_primal and level >= 2:
+                    marks.append(
+                        pytest.mark.xfail(
+                            reason="Solving the primal using the MOSEK Python Fusion API results in a Recursion "
+                            "Error because the involved LMI is too large.",
+                            raises=RecursionError,
                         )
+                    )
 
                 yield pytest.param(solver, use_primal, level, w, expected, marks=marks)
 
