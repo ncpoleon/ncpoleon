@@ -47,7 +47,12 @@ fn position_matrix_to_row_col_data_format<Scalar: PolynomialDtype>(
 //  variable is complex could suffice, modulo some changes in the code.
 #[derive(Clone)]
 pub(super) struct RustMomentMatrix<Scalar: PolynomialDtype, MonomialType: AdjointTrait + Ord> {
-    pub(super) data: BTreeMap<MonomialType, PositionMatrixPair<Scalar>>,
+    data: BTreeMap<MonomialType, PositionMatrixPair<Scalar>>,
+    /// Maps the canonical form of each stored key's adjoint back to that key. Maintained by
+    /// [`RustMomentMatrix::insert`], it lets [`RustMomentMatrix::get_mut`] resolve a monomial stored
+    /// under the opposite (adjoint) orientation without recomputing `adjoint().rewrite()` on every
+    /// lookup
+    adjoint_index: BTreeMap<MonomialType, MonomialType>,
     pub(super) size: usize,
 }
 
@@ -56,6 +61,10 @@ where
     Scalar: PolynomialDtype,
     MonomialType: AdjointTrait + Ord + RewritingTrait<MonomialType> + Display + Clone,
 {
+    pub(super) fn new(size: usize) -> Self {
+        Self { data: BTreeMap::new(), adjoint_index: BTreeMap::new(), size }
+    }
+
     pub(super) fn get(
         &self,
         monomial: &MonomialType,
@@ -77,25 +86,65 @@ where
         Ok(None)
     }
 
-    pub(super) fn get_mut(
+    /// Insert a fresh entry for `monomial`, registering its adjoint's canonical form in
+    /// `adjoint_index` so that later [`get_mut`](Self::get_mut) lookups for the opposite orientation
+    /// resolve without recomputing `adjoint().rewrite()`. This is the only place the adjoint of a
+    /// stored key is rewritten, and it also rejects `monomial` if rewriting turns out not to be
+    /// adjoint-stable on it (see below)
+    pub(super) fn insert(
         &mut self,
-        monomial: &MonomialType,
+        monomial: MonomialType,
+        entry: PositionMatrixPair<Scalar>,
         strategy: RewritingStrategy,
         substitutions: &BTreeMap<MonomialType, MonomialType>,
-    ) -> Result<Option<PositionMatrixMutPair<'_, Scalar>>, String> {
+    ) -> Result<(), String> {
+        let adjoint = monomial.adjoint().rewrite(strategy, substitutions)?;
+
+        // `get_mut` resolves the opposite orientation through `adjoint_index`, which agrees with
+        // `get`/`get_canonical` (they rewrite the adjoint of the *query*) only if `rewrite ∘ adjoint`
+        // is an involution on canonical monomials. That holds when the rewriting system is confluent
+        // *and* its rule set is closed under adjoint; the substitutions come straight from the user,
+        // so neither is currently guaranteed. Checked here in every profile rather than under
+        // `debug_assertions`: a violation makes the two lookups disagree and silently splits one
+        // moment class over two entries, which yields a wrong relaxation with no other symptom.
+        // TODO: once rewriting goes through a completed (confluent, adjoint-closed) rule set, this
+        //  invariant holds by construction and the check -- along with the extra rewrite it costs per
+        //  stored monomial -- can be dropped.
+        let roundtrip = adjoint.adjoint().rewrite(strategy, substitutions)?;
+        if roundtrip != monomial {
+            return Err(format!(
+                "Rewriting is not adjoint-stable: {} has adjoint {}, whose adjoint rewrites back to \
+                 {} instead. This usually means the substitution rules are not closed under adjoint \
+                 (a rule l -> r was given without its counterpart l* -> r*).",
+                monomial, adjoint, roundtrip
+            ));
+        }
+
+        if adjoint != monomial {
+            self.adjoint_index.insert(adjoint, monomial.clone());
+        }
+        self.data.insert(monomial, entry);
+        Ok(())
+    }
+
+    /// Look up the entry a monomial belongs to. A query resolves iff it is a stored key (direct
+    /// orientation) or the adjoint-canonical of a stored key (via `adjoint_index`); no rewriting is
+    /// performed here, so the query must already be in canonical form. Entries must be added through
+    /// [`insert`](Self::insert) for `adjoint_index` to stay consistent.
+    ///
+    /// This resolves the same queries as [`get`](Self::get) as long as `rewrite ∘ adjoint` is an
+    /// involution on canonical monomials, which [`insert`](Self::insert) rejects violations of.
+    pub(super) fn get_mut(&mut self, monomial: &MonomialType) -> Option<PositionMatrixMutPair<'_, Scalar>> {
         if self.data.contains_key(monomial) {
             let (position_matrix, position_matrix_conj) = self.data.get_mut(monomial).unwrap();
-            return Ok(Some((position_matrix, position_matrix_conj.as_mut())));
+            return Some((position_matrix, position_matrix_conj.as_mut()));
         }
-        let adjoint = monomial.adjoint().rewrite(strategy, substitutions)?;
-        if self.data.contains_key(&adjoint) {
-            let (position_matrix_conj, position_matrix) = self.data.get_mut(&adjoint).unwrap();
-            return Ok(Some(match position_matrix {
-                Some(position_matrix) => (position_matrix, Some(position_matrix_conj)),
-                None => (position_matrix_conj, None),
-            }));
-        }
-        Ok(None)
+        let key = self.adjoint_index.get(monomial).cloned()?;
+        let (position_matrix_conj, position_matrix) = self.data.get_mut(&key).unwrap();
+        Some(match position_matrix {
+            Some(position_matrix) => (position_matrix, Some(position_matrix_conj)),
+            None => (position_matrix_conj, None),
+        })
     }
 
     /// get_canonical is used to verify that a monomial or its adjoint are stored. If neither are stored, it raises

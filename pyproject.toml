@@ -45,11 +45,20 @@ mosek = ["mosek>=11.2.0"]
 picos = ["picos>=2.6.2", "scipy>=1.17.1"]
 
 [dependency-groups]
+# MOSEK is deliberately absent here: it belongs to the `mosek` extra alone. A
+# dev-group entry would be unconditional, and the platforms with no MOSEK wheel
+# (macOS x86_64, Windows arm64) leave the extra out precisely to avoid it, which
+# the group would silently undo, turning their test job into a resolution error
+#
+# picos is subject to the same problem one level down, but a marker is enough
+# because only one platform is affected: it pulls in cvxopt, which publishes no
+# Windows arm64 wheel and whose sdist asks MSVC for the Unix math library, so
+# the build fails at link time. The tests skip the picos solver when the import
+# is missing; drop the marker the day cvxopt ships that wheel
 dev = [
     "mkdocs-material>=9.7.6",
     "mkdocstrings[python]>=1.0.4",
-    "mosek>=11.2.0",
-    "picos>=2.6.2",
+    "picos>=2.6.2; sys_platform != 'win32' or platform_machine != 'ARM64'",
     "pytest>=9.0.3",
     "pytest-codspeed>=5.0.3",
     "pytest-cov>=7.1.0",
@@ -61,6 +70,9 @@ dev = [
 python-source = "python"
 features = ["pyo3/extension-module"]
 module-name = "ncpoleon._accelerate"
+
+[tool.maturin.generate-ci.github]
+trusted-publishing = true
 
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.
@@ -165,6 +177,6 @@ markers = [
 # Rebuild package when any rust files change
 cache-keys = [
     { file = "pyproject.toml" },
-    { file = "rust/Cargo.toml" },
+    { file = "Cargo.toml" },
     { file = "**/*.rs" },
 ]

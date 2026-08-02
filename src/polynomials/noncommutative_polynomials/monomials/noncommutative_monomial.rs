@@ -14,7 +14,7 @@ use pyo3::types::PyNone;
 use rustc_hash::FxHasher;
 
 use crate::polynomials::monomial::{
-    AdjointTrait, HasAMomentMatrixId, Monomial, OneWithMomentMatrixId, RewritingStrategy, RewritingTrait,
+    AdjointTrait, HasAMomentMatrixId, HasLength, Monomial, OneWithMomentMatrixId, RewritingStrategy, RewritingTrait,
 };
 use crate::polynomials::noncommutative_polynomials::operators::noncommutative_operator::{
     PythonNonCommutativeOperator, RustNonCommutativeOperator,
@@ -260,13 +260,38 @@ impl PythonNonCommutativeMonomial {
     }
 }
 
+/// Append `rhs` onto `result`, collapsing a single adjacent equal *projector* pair at the join so
+/// that the outcome matches multiplying the corresponding monomials with `*` (which collapses one
+/// `x·x → x` at a seam when `x` is a projector). Errors on a cross-party join, exactly as monomial
+/// multiplication does. Used by [`RustNonCommutativeMonomial::can_be_reduced`] to splice a
+/// substitution's replacement into place without allocating intermediate monomials.
+fn append_operators_with_seam(
+    result: &mut Vec<RustNonCommutativeOperator>,
+    rhs: &[RustNonCommutativeOperator],
+) -> Result<(), String> {
+    match (result.last().copied(), rhs.first().copied()) {
+        (Some(op_self), Some(op_rhs)) => {
+            if op_self.id.moment_matrix_id != op_rhs.id.moment_matrix_id {
+                return Err(format!(
+                    "Cannot multiply operators from different parties: {} and {}",
+                    op_self.id.moment_matrix_id, op_rhs.id.moment_matrix_id
+                ));
+            }
+            if (op_self == op_rhs) & op_self.id.is_projector {
+                result.extend_from_slice(&rhs[1..]);
+            } else {
+                result.extend_from_slice(rhs);
+            }
+        }
+        (None, _) => result.extend_from_slice(rhs),
+        (_, None) => {}
+    }
+    Ok(())
+}
+
 impl RustNonCommutativeMonomial {
     pub fn new(data: Vec<RustNonCommutativeOperator>, moment_matrix_id: u8) -> Self {
         Self { data: NonCommutativeMonomialDataWithMomentMatrixIndex { inner_data: data, moment_matrix_id } }
-    }
-
-    pub fn len(&self) -> u8 {
-        self.data.inner_data.len() as u8
     }
 
     pub(crate) fn __str__(&self) -> String {
@@ -303,17 +328,19 @@ impl RustNonCommutativeMonomial {
         let replacement_data = &substitution_rule.1.data.inner_data;
         let mmi = self.data.moment_matrix_id;
 
-        if divisor.len() > self.data.inner_data.len() {
+        let inner = &self.data.inner_data;
+        if divisor.len() > inner.len() {
             return Ok(None);
         }
 
-        for start in 0..=(self.data.inner_data.len() - divisor.len()) {
-            if self.data.inner_data[start..start + divisor.len()] == *divisor {
-                let prefix = Self::new(self.data.inner_data[..start].to_vec(), mmi);
-                let replacement = Self::new(replacement_data.to_vec(), substitution_rule.1.data.moment_matrix_id);
-                let suffix = Self::new(self.data.inner_data[start + divisor.len()..].to_vec(), mmi);
-                let tmp = (prefix * &replacement)?;
-                return Ok(Some((tmp * &suffix)?));
+        for start in 0..=(inner.len() - divisor.len()) {
+            if inner[start..start + divisor.len()] == *divisor {
+                let end = start + divisor.len();
+                let mut result = Vec::with_capacity(start + replacement_data.len() + (inner.len() - end));
+                result.extend_from_slice(&inner[..start]);
+                append_operators_with_seam(&mut result, replacement_data)?;
+                append_operators_with_seam(&mut result, &inner[end..])?;
+                return Ok(Some(Self::new(result, mmi)));
             }
         }
 
@@ -361,6 +388,12 @@ impl RewritingTrait<Self> for RustNonCommutativeMonomial {
         match strategy {
             RewritingStrategy::None => Ok(self.clone()),
             RewritingStrategy::Greedy => {
+                // TODO (perf, "Step 2"): the substitution rules are cloned and re-sorted on every
+                // `rewrite` call, but they don't change during a relaxation (~92k calls in the
+                // level-13 fill). Precompute the sorted rule list once in `set_relaxation` and pass a
+                // `&[(Self, Self)]` in via a `rewrite_with_rules` method on `RewritingTrait`, keeping
+                // this `rewrite` as a thin wrapper that sorts then delegates. Exact-output; measured
+                // at ~3% of rewrite time, so a small win (the reduction loop below dominates).
                 let sorted_substitutions: Vec<(Self, Self)> = substitutions
                     .iter()
                     .map(|(mon1, mon2)| (mon1.clone(), mon2.clone()))
@@ -381,6 +414,12 @@ impl RewritingTrait<Self> for RustNonCommutativeMonomial {
                 Ok(current)
             }
         }
+    }
+}
+
+impl HasLength for RustNonCommutativeMonomial {
+    fn len(&self) -> u8 {
+        self.data.inner_data.len() as u8
     }
 }
 

@@ -9,5 +9,5 @@ __all__ = [
     "generate_commutative_variables",
     "generate_noncommutative_variables",
     "get_relaxation",
-    "solve"
+    "solve",
 ]
