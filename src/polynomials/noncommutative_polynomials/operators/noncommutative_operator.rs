@@ -7,7 +7,7 @@ use std::ops::{Add, Mul, Neg, Sub};
 use num_complex::Complex;
 use num_traits::Pow;
 use pyo3::IntoPyObjectExt;
-use pyo3::exceptions::PyValueError;
+use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyNone;
 use rustc_hash::FxHasher;
@@ -55,6 +55,26 @@ pub(crate) type RustNonCommutativeOperator = Operator<NonCommutativeOperatorIden
 #[pyclass(frozen, module = "ncpoleon.polynomials.noncommutative_polynomials", name = "NonCommutativeOperator")]
 #[derive(Clone, Copy)]
 pub(crate) struct PythonNonCommutativeOperator(pub(crate) RustNonCommutativeOperator);
+
+impl<'py> TryFrom<&Bound<'py, PyAny>> for PythonNonCommutativeOperator {
+    type Error = PyErr;
+
+    fn try_from(value: &Bound<'py, PyAny>) -> Result<Self, Self::Error> {
+        if let Ok(mon) = value.cast::<PythonNonCommutativeOperator>() {
+            Ok(*mon.get())
+        } else {
+            Err(PyTypeError::new_err("Couldn't convert to PythonCommutativeOperator"))
+        }
+    }
+}
+
+impl<'py> TryFrom<Bound<'py, PyAny>> for PythonNonCommutativeOperator {
+    type Error = PyErr;
+
+    fn try_from(value: Bound<'py, PyAny>) -> Result<Self, Self::Error> {
+        (&value).try_into()
+    }
+}
 
 #[pymethods]
 impl PythonNonCommutativeOperator {

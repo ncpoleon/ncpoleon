@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
+import sys
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 try:
     # The following import allows to use dunder methods on MOSEK expressions
@@ -159,6 +160,7 @@ def to_mosek(
     objective_direction: str,
     *,
     primal: bool,
+    verbosity: Literal[0] | Literal[1] | Literal[2] | Literal[3] = 0,
     **model_kwargs: Any,
 ) -> Model:
     r"""Export a relaxation to MOSEK.
@@ -182,6 +184,10 @@ def to_mosek(
         )
 
     M = Model()
+
+    if verbosity > 0:
+        M.setSolverParam("log", verbosity)
+        M.setLogHandler(sys.stdout)
 
     for param, value in model_kwargs.items():
         M.setSolverParam(param, value)

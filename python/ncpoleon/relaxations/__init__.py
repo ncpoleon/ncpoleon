@@ -11,8 +11,17 @@ from ncpoleon._accelerate.relaxations import (
     RealValuedCommutativeSdpRelaxation,
     RealValuedNonCommutativeMomentMatrix,
     RealValuedNonCommutativeSdpRelaxation,
-    get_relaxation,
 )
+from ncpoleon._accelerate.relaxations import (
+    get_relaxation as _get_relaxation,
+)
+from ncpoleon.logging import set_verbosity_level
+
+
+def get_relaxation(variables, level, objective, *, verbosity=0, **kwargs):
+    set_verbosity_level(verbosity)
+    return _get_relaxation(variables, level, objective, verbosity=verbosity, **kwargs)
+
 
 __all__ = [
     "get_relaxation",

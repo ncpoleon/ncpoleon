@@ -1,4 +1,3 @@
-import logging
 from importlib.util import find_spec
 from typing import cast, overload
 
@@ -6,8 +5,6 @@ import numpy as np
 import numpy.typing as npt
 
 from ncpoleon.utils import is_mosek_available
-
-logger = logging.getLogger(__name__)
 
 
 def automatic_solver_detection() -> str:

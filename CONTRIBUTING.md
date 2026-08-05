@@ -18,6 +18,8 @@ uv sync --dev --all-extras --config-setting 'build-args=--profile=dev'
 
 to build the library and install the required dependencies. Note that this will install MOSEK regardless of whether you have a license or not, but it won't be used if no valid license is detected.
 
+MOSEK does not publish a wheel for every platform `ncpoleon` supports, however, and `uv` treats an extra it cannot resolve as an error rather than as something to leave out. On macOS x86_64 and on musl-based Linux, use `--extra picos` in place of `--all-extras`. On Windows arm64, drop the extras entirely: cvxopt has no wheel there either, and its sdist does not build against MSVC, so PICOS is unavailable as well. The tests that need a solver skip themselves when it is missing, so the rest of the suite still runs. The same substitution applies to every `--all-extras` command below.
+
 ## Pull request checks
 
 After having made your changes, there are several checks that your code must pass in order to be merged:
@@ -34,6 +36,10 @@ After having made your changes, there are several checks that your code must pas
  ```shell
  ruff check
  ```
+ and
+ ```shell
+ ruff format --check
+ ```
  - The Rust-side tests should pass using
  ```shell
  cargo test
@@ -49,6 +55,86 @@ After having made your changes, there are several checks that your code must pas
  Specifically, we will test whether your changes introduces a regression in performance before merging.
 
 Remember also to update the documentation and the `.pyi` stub files, and to add tests to cover your changes if applicable.
+
+## Benchmarking locally
+
+`scripts/benchmark_local.py` answers one question: *did my change make `get_relaxation` faster or
+slower?* Use it when you have touched something on the hot path and want an answer before pushing.
+
+Running `pytest --codspeed` outside CI will not tell you: it prints `no performance measurement
+will be made since it's running in an unknown environment` and just runs the benchmarks.
+
+The script needs nothing beyond the setup above — it is plain wall-clock timing, with no Valgrind
+and no CodSpeed instrumentation involved.
+
+### How to use it
+
+The script always measures whatever is currently built, so comparing two versions means building
+each in turn. On a machine with nothing else running:
+
+```shell
+# 1. Time the same build twice, to see how much this machine wobbles on its own.
+#    Your change has to beat that wobble to count as a real result.
+uv run scripts/benchmark_local.py --baseline
+
+# 2. Measure the code without your change, in a throwaway worktree checked out at the
+#    commit you branched off `main` from.
+git worktree add ../ncpoleon-baseline "$(git merge-base HEAD main)"
+cd ../ncpoleon-baseline
+uv sync --dev --all-extras --config-setting 'build-args=--profile=release'
+uv run scripts/benchmark_local.py
+
+# 3. Measure it with your change
+cd -
+uv sync --dev --all-extras --config-setting 'build-args=--profile=release'
+uv run scripts/benchmark_local.py
+
+# 4. Drop the worktree once you are done comparing
+git worktree remove ../ncpoleon-baseline
+```
+
+Do not use `git stash` for step 2: it leaves untracked files behind, so a new `.rs` or `.py`
+file of yours would silently end up in the "baseline" measurement, and `git stash pop` will
+happily pop somebody else's stash if you had one before you started. The worktree has none of
+your edits, tracked or untracked, and touches neither your working tree nor your stash stack.
+It builds into its own `.venv`, so expect step 2 to pay for a full release build.
+
+Compare the `min` columns from steps 2 and 3. **If the difference is smaller than the floor step 1
+gave you for that case, you have not measured anything** — the machine moved more than your code
+did. When a result matters, repeat steps 2 and 3 once more; load drifts over minutes, and a single
+before/after pair quietly blames your change for that drift.
+
+Run every case, which is the default. The whole sweep takes about 40 seconds, and a change that
+helps one problem size can easily hurt another: the level 1 and level 2 max-cut cases stress the
+moment matrix fill by very different amounts, while `chsh-L11` and `i3322-L4` are non-commutative
+and exercise code the max-cut cases never touch. Measuring a single case hides all of that.
+
+Naming one case — `--list` shows them all — is for tightening the feedback loop while you are
+actively tuning something, where 40 seconds a round starts to hurt. `max_cut-L2-n25` (~680ms) and
+`chsh-L11` (~520ms) are the ones to pick, being the largest commutative and non-commutative cases
+respectively. Come back to the full sweep before you conclude anything.
+
+### Reading the output
+
+`--baseline` runs the same build twice, so every difference it reports is noise. It prints a floor
+per case rather than one overall number, because the noise is a roughly fixed number of
+milliseconds: `max_cut-L2-n25` (~680ms) reproduces to 0.5%, while `max_cut-L1-n5` (~0.1ms) swings
+by over 100% and is marked `below resolution`. Ignore anything under about 20ms.
+
+Read the `min` rather than the mean. The noise is additive and one-sided — interference only ever
+makes a run slower — so the fastest round is the closest to the truth. The `median` is a useful
+second opinion; the mean is not.
+
+### If the numbers look unstable
+
+ - Close anything running in the background.
+ - Pin the CPU with `--pin <cpu>`, which uses `taskset`, and on Linux set the governor to
+   `performance`; `powersave` leaves frequency scaling live.
+ - Each case already runs in its own interpreter, because benchmarks sharing a process contaminate
+   each other: `max_cut-L2-n20` measures 220ms alone but 410ms when it follows the smaller cases.
+
+To find out *why* something is slow, profile it instead. `perf record` shows where the time went,
+whereas a timer only gives one number per run.
 
 ## Continuous integration and the MOSEK license
 
@@ -78,9 +164,6 @@ All incoming pull requests should be made against the `buffer` branch. Here's wh
    merge it once everything is green.
 4. On every push on `main`, including the merging of the PR originating 
    from `buffer`, `buffer` is force-pushed into the state of `main`. This
-   ensures that both branches stay in sync. For this reason, you should
-   **never** fork the `buffer` branch, always fork the `main` one.
+   ensures that both branches stay in sync.
 
-We've adopted this framework because the CodSpeed action, which we use to test for performance regression, doesn't support the `pull_request_target` event yet. As a result, merging your code onto `buffer` means that your code should pass all the checks required to be merged on `main`. The second PR then checks that no performance regression happens when using a valid MOSEK license, in which case it is then merged onto `main`.
-
-Once the CodSpeed action supports the `pull_request_target`, we will make `main` the default branch once again and simplify this process to run all MOSEK-related workflows after a human verification to avoid any risk of pwn request.
+We've adopted this framework because the CodSpeed action, which we use to test for performance regression, doesn't support the `pull_request_target` event. As a result, merging your code onto `buffer` means that your code should pass all the checks required to be merged on `main`. The second PR then checks that no performance regression happens when using a valid MOSEK license, in which case it is then merged onto `main`.

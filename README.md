@@ -1,3 +1,6 @@
+[![codecov](https://codecov.io/gh/ncpoleon/ncpoleon/graph/badge.svg?token=D5QGB5Z41U)](https://codecov.io/gh/ncpoleon/ncpoleon)
+[![CodSpeed Badge](https://img.shields.io/endpoint?url=https://app.codspeed.io//badge.json)](https://app.codspeed.io//ncpoleon/ncpoleon?utm_source=badge)
+
 # Ncpoleon
 
 Ncpoleon approximates polynomial optimization problems of (non)commutative variables through semidefinite programming (SDP) relaxations. It is intended as a followup to [ncpol2sdpa](https://gitlab.com/peterwittek/ncpol2sdpa/), focused on improved performance, functionality and long-term improvements. Currently the package can relax polynomial optimization problems in both commutative and noncommutative variables, i.e., we implement
@@ -11,7 +14,7 @@ Ncpoleon can be installed using `pip` via
 ```bash
 pip install ncpoleon
 ```
-Ncpoleon depends solely on numpy to compute the square root of SDP matrices, in order to extract the SOS decomposition, no matter which solver is used. It includes optional dependencies to solve the generated SDP problem, namely:
+Ncpoleon includes optional dependencies to solve the generated SDP problem, namely:
  - `picos`, to export the generated SDP to a [Picos](https://gitlab.com/picos-api/picos) problem, or to solve the generated problem using Picos and its default solver CVXOPT.
  - `mosek`, to export the generated SDP to a MOSEK Python Fusion problem, or to solve the generated problem using the MOSEK Python Fusion API. Note that this requires a MOSEK license.
 
@@ -60,3 +63,10 @@ solution = solve(sdp, "max")
 # Print the solution
 print(solution.value)
 ```
+
+# Sponsors
+
+## CodSpeed
+<a href= "https://codspeed.io/?utm_source=ncpoleon&utm_medium=readme"><img class="sponsor-logo" src="https://mintcdn.com/codspeed/GDLcp8Ny8u4pFbNX/assets/logo/dark.svg?fit=max&auto=format&n=GDLcp8Ny8u4pFbNX&q=85&s=23dfd47abfa1a88171517e4455c37899" alt="CodSpeed" width="50%"></a>
+
+CodSpeed supports Ncpoleon through their open source program by providing us with monthly macro runner credits for our continuous benchmarking. You can find more about CodSpeed [here](https://codspeed.io/?utm_source=ncpoleon&utm_medium=readme).

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, overload
+from typing import TYPE_CHECKING, Any, overload, Literal
 
 import numpy as np
 from scipy.sparse import coo_matrix
@@ -49,6 +49,7 @@ def to_picos(
     objective_direction: str,
     *,
     primal: bool,
+    verbosity: Literal[0] | Literal[1] | Literal[2] | Literal[3] = 0,
     **problem_kwargs: Any,
 ) -> tuple[pc.modeling.Problem, dict[str, pc.Constraint]]:
     r"""Export a relaxation to PICOS.
@@ -69,7 +70,7 @@ def to_picos(
             f"The only supported objective directions are min and max, but {objective_direction} was provided."
         )
 
-    problem = pc.Problem(**problem_kwargs)
+    problem = pc.Problem(**problem_kwargs, verbosity=verbosity)
     constraints = {}
 
     if primal:

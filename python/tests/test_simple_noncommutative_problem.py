@@ -1,8 +1,7 @@
 import pytest
 from ncpoleon import generate_noncommutative_variables, get_relaxation, solve
-from ncpoleon.utils import is_mosek_available
 
-from .utils import reduce_sos_decomposition
+from .utils import SOLVER_SKIPS, reduce_sos_decomposition
 
 # TODO: Add complex-valued tests, tests for the attributes of the relaxations such that the equality constraints or the
 # monomial index
@@ -11,75 +10,30 @@ from .utils import reduce_sos_decomposition
 def generate_simple_noncommutative_parameters():
     for solver in ["picos-cvxopt", "mosek"]:
         for level, expected in [(1, 1 / 8), (2, 1 / 8)]:
-            if solver == "mosek":
-                yield pytest.param(
-                    solver,
-                    level,
-                    expected,
-                    marks=[
-                        pytest.mark.skipif(
-                            not is_mosek_available(),
-                            reason="Mosek is not installed or a Mosek license is not available.",
-                        )
-                    ],
-                )
-
-            elif solver == "picos-cvxopt":
-                yield pytest.param(solver, level, expected)
+            yield pytest.param(solver, level, expected, marks=[SOLVER_SKIPS[solver]])
 
 
 def generate_simple_noncommutative_with_equality_constraints_parameters():
     for solver in ["picos-cvxopt", "mosek"]:
         for level, expected in [(1, 1 / 8), (2, 1 / 8)]:
             for force_primal in [True, False]:
-                if solver == "mosek":
-                    yield pytest.param(
-                        solver,
-                        level,
-                        expected,
-                        force_primal,
-                        marks=[
-                            pytest.mark.skipif(
-                                not is_mosek_available(),
-                                reason="Mosek is not installed or a Mosek license is not available.",
-                            )
-                        ],
-                    )
-                elif solver == "picos-cvxopt":
-                    if level == 2 and force_primal:
-                        yield pytest.param(
-                            solver,
-                            level,
-                            expected,
-                            force_primal,
-                            marks=[
-                                pytest.mark.xfail(
-                                    reason="Solving the primal at level 2 using the CVXOPT Solver results in an error",
-                                    raises=ArithmeticError,
-                                )
-                            ],
+                marks = [SOLVER_SKIPS[solver]]
+
+                if solver == "picos-cvxopt" and level == 2 and force_primal:
+                    marks.append(
+                        pytest.mark.xfail(
+                            reason="Solving the primal at level 2 using the CVXOPT Solver results in an error",
+                            raises=ArithmeticError,
                         )
-                    else:
-                        yield pytest.param(solver, level, expected, force_primal)
+                    )
+
+                yield pytest.param(solver, level, expected, force_primal, marks=marks)
 
 
 def generate_simple_noncommutative_with_substitution_parameters():
     for solver in ["picos-cvxopt", "mosek"]:
         for level, expected in [(1, 1 / 8), (2, 2.15e-05)]:
-            if solver == "mosek":
-                yield pytest.param(
-                    solver,
-                    level,
-                    expected,
-                    marks=[
-                        pytest.mark.skipif(
-                            not is_mosek_available(),
-                            reason="Mosek is not installed or a Mosek license is not available.",
-                        )
-                    ],
-                )
-            elif solver == "picos-cvxopt":
-                yield pytest.param(solver, level, expected)
+            yield pytest.param(solver, level, expected, marks=[SOLVER_SKIPS[solver]])
 
 
 def _simple_noncommutative_vars():

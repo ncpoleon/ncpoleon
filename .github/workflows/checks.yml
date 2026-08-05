@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   clippy:
     runs-on: ubuntu-latest
@@ -44,8 +48,16 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           persist-credentials: false
-      - name: Ruff
-        uses: astral-sh/ruff-action@v4.0.0
+      - name: Ruff lint
+        uses: astral-sh/ruff-action@v4.1.0
+      # The linter has no opinion on how a call is broken across lines, so a
+      # lint-clean tree can still be unformatted. `--diff` prints the exact
+      # change `ruff format` would make, which is what a contributor needs in
+      # order to fix a red check without guessing.
+      - name: Ruff format
+        uses: astral-sh/ruff-action@v4.1.0
+        with:
+          args: format --check --diff
 
   # TODO: re-enable once ty passes
   # ty:

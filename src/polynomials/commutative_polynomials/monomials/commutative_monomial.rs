@@ -21,7 +21,7 @@ use crate::polynomials::commutative_polynomials::polynomials::commutative_polyno
     RustComplexCoefficientsCommutativePolynomial, RustRealCoefficientsCommutativePolynomial,
 };
 use crate::polynomials::monomial::{
-    AdjointTrait, HasAMomentMatrixId, Monomial, OneWithMomentMatrixId, RewritingStrategy, RewritingTrait,
+    AdjointTrait, HasAMomentMatrixId, HasLength, Monomial, OneWithMomentMatrixId, RewritingStrategy, RewritingTrait,
 };
 use crate::polynomials::utils::merge_btreemaps::merge_btreemaps;
 use crate::relaxations::constraint::{ConstraintKind, make_commutative_constraint};
@@ -260,10 +260,6 @@ impl RustCommutativeMonomial {
         Self { data: CommutativeMonomialDataWithMomentMatrixIndex { inner_data: data, moment_matrix_id } }
     }
 
-    pub fn len(&self) -> u8 {
-        self.data.inner_data.values().sum()
-    }
-
     pub(crate) fn __str__(&self) -> String {
         self.to_string()
     }
@@ -440,6 +436,12 @@ impl OneWithMomentMatrixId for RustCommutativeMonomial {
     }
     fn is_one(&self) -> bool {
         self.data.inner_data.is_empty()
+    }
+}
+
+impl HasLength for RustCommutativeMonomial {
+    fn len(&self) -> u8 {
+        self.data.inner_data.values().sum()
     }
 }
 

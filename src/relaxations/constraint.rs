@@ -33,6 +33,11 @@ pub(crate) struct Constraint<MonomialType: Ord, Scalar: PolynomialDtype> {
     pub(crate) rhs: ConstraintSide<MonomialType, Scalar>,
 }
 
+pub(crate) struct ConstraintWithGeneratingSet<MonomialType: Ord, Scalar: PolynomialDtype> {
+    pub(crate) constraint: Constraint<MonomialType, Scalar>,
+    pub(crate) generating_set: Option<Vec<MonomialType>>,
+}
+
 #[pyclass(frozen, module = "ncpoleon.relaxations", name = "RealCoefficientsCommutativeConstraint")]
 #[derive(Clone)]
 pub(crate) struct PythonRealCoefficientsCommutativeConstraint(pub(crate) Constraint<RustCommutativeMonomial, f64>);
