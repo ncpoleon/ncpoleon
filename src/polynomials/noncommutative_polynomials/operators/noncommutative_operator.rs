@@ -63,7 +63,7 @@ impl<'py> TryFrom<&Bound<'py, PyAny>> for PythonNonCommutativeOperator {
         if let Ok(mon) = value.cast::<PythonNonCommutativeOperator>() {
             Ok(*mon.get())
         } else {
-            Err(PyTypeError::new_err("Couldn't convert to PythonCommutativeOperator"))
+            Err(PyTypeError::new_err("Couldn't convert to PythonNonCommutativeOperator"))
         }
     }
 }

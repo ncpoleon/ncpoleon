@@ -1291,6 +1291,9 @@ where
             }
         }
 
+        let all_moment_matrices_identifers =
+            BTreeSet::from_iter(variables_with_adjoint.keys().copied().chain(self.extra_monomials.keys().copied()));
+
         // We do this here so that if there's an error, the user doesn't have to wait for the
         // generating sets to be created. The temporary BTreeMaps are here so that self isn't
         // borrowed mutably when we change the generating sets for these constraints
@@ -1303,7 +1306,7 @@ where
                 debug!("Partitioning operator {} constraints.", stringify!($constraints_field));
                 for (index, (constraint, generating_set)) in $constraints_field.into_iter().enumerate() {
                     if let Some(moment_matrix_id) = constraint.get_unique_moment_matrix_id() {
-                        if !variables_with_adjoint.contains_key(&moment_matrix_id) {
+                        if !all_moment_matrices_identifers.contains(&moment_matrix_id) {
                             return Err(PyValueError::new_err(format!(
                                 "The polynomial at index {} in the operator {} constraints is defined using the moment
                                 matrix identifier {} which isn't associated with a moment matrix.",
@@ -1347,7 +1350,7 @@ where
                 covered_indices.insert(monomial.moment_matrix_id());
             }
         }
-        for &k in variables_with_adjoint.keys() {
+        for &k in all_moment_matrices_identifers.iter() {
             if !covered_indices.contains(&k) && (level > -1) {
                 debug!("Setting default normalization constraint for the moment matrix at index {}.", k);
                 normalization_equalities
@@ -1398,16 +1401,17 @@ where
 
         let mm_iterator = if top_bar {
             itertools::Either::Left(tqdm!(
-                variables_with_adjoint.into_iter(),
+                all_moment_matrices_identifers.into_iter(),
                 desc = "Moment matrix index",
                 position = 0,
                 ncols = 0
             ))
         } else {
-            itertools::Either::Right(variables_with_adjoint.into_iter())
+            itertools::Either::Right(all_moment_matrices_identifers.into_iter())
         };
 
-        for (moment_matrix_id, variables_set) in mm_iterator {
+        for moment_matrix_id in mm_iterator {
+            let variables_set = variables_with_adjoint.remove(&moment_matrix_id).unwrap_or_default();
             // The i-th element of monomials_sets contains the set of monomials of length i + 1
             // This allows us to access the monomials for lower k_i when dealing with
             // localizing moment matrices

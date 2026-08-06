@@ -242,7 +242,6 @@ def get_relaxation(
     assume_complex: bool = False,
     assume_commutative: bool = False,
     assume_noncommutative: bool = False,
-    assume_hybrid: bool = False,
     extra_monomials: list[NonCommutativePolynomialElement | float] | None = None,
     verbosity: Literal[0] | Literal[1] | Literal[2] | Literal[3] = 0,
     check_uniqueness_with_length: bool = True,

@@ -60,7 +60,7 @@ def test_simple_real_noncommutative_problem_with_extra_monomials(
 
     sdp = benchmark(
         get_relaxation,
-        [x0, x1],
+        [],
         level=-1,
         objective=obj,
         substitutions={x0**2: x0},

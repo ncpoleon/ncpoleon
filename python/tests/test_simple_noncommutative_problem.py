@@ -144,7 +144,7 @@ def test_simple_real_noncommutative_problem_with_extra_monomials(
 
     sdp = benchmark(
         get_relaxation,
-        [x1, x2],
+        [],
         level=-1,
         objective=obj,
         operator_constraints=operator_constraints,
