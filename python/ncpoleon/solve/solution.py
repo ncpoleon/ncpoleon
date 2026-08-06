@@ -70,6 +70,7 @@ class BaseSolution(ABC, Generic[PolynomialElements, Scalar]):
         tuple[
             Polynomial[PolynomialElements, Scalar],
             np.ndarray[tuple[int, int], np.dtype[np.float64] | np.dtype[np.complex128]],
+            list[PolynomialElements],
         ]
     ]:
         localizing_matrices_multipliers = self.localizing_matrices_equality_multipliers_by_mm_id
@@ -91,6 +92,7 @@ class BaseSolution(ABC, Generic[PolynomialElements, Scalar]):
             tuple[
                 Polynomial[PolynomialElements, Scalar],
                 np.ndarray[tuple[int, int], np.dtype[np.float64] | np.dtype[np.complex128]],
+                list[PolynomialElements],
             ]
         ],
     ]: ...
@@ -134,6 +136,7 @@ class BaseSolution(ABC, Generic[PolynomialElements, Scalar]):
         tuple[
             Polynomial[PolynomialElements, Scalar],
             np.ndarray[tuple[int, int], np.dtype[np.float64] | np.dtype[np.complex128]],
+            list[PolynomialElements],
         ]
     ]:
         localizing_matrices_multipliers = self.localizing_matrices_inequality_multipliers_by_mm_id
@@ -156,6 +159,7 @@ class BaseSolution(ABC, Generic[PolynomialElements, Scalar]):
             tuple[
                 Polynomial[PolynomialElements, Scalar],
                 np.ndarray[tuple[int, int], np.dtype[np.float64] | np.dtype[np.complex128]],
+                list[PolynomialElements],
             ]
         ],
     ]: ...
@@ -217,27 +221,25 @@ class BaseSolution(ABC, Generic[PolynomialElements, Scalar]):
 
             inequalities_terms = []
 
-            for generator, coefficient in localizing_moment_matrices_multipliers_inequality.get(mm_id, []):
+            for generator, coefficient, generating_set in localizing_moment_matrices_multipliers_inequality.get(
+                mm_id, []
+            ):
                 sos_vectors = sos_vectors_of_hermitian_matrix(coefficient, cutoff)[0]
                 n_monomials = sos_vectors.shape[1]
-                decompositions = (
-                    (sos_vectors @ self.relaxation.generating_sets[mm_id][:n_monomials]).reshape(-1).tolist()
-                )
+                decompositions = (sos_vectors @ generating_set).reshape(-1).tolist()
                 inequalities_terms.append(
                     LocalizingMomentMatrixInequalityDecomposition(generator=generator, decomposition=decompositions)
                 )
 
             equalities_terms = []
 
-            for generator, coefficient in localizing_moment_matrices_multipliers_equality.get(mm_id, []):
+            for generator, coefficient, generating_set in localizing_moment_matrices_multipliers_equality.get(
+                mm_id, []
+            ):
                 sos_vectors_pos, sos_vectors_neg = sos_vectors_of_hermitian_matrix(coefficient, cutoff)
                 n_monomials = sos_vectors_pos.shape[1]
-                decomposition_positive = (
-                    (sos_vectors_pos @ self.relaxation.generating_sets[mm_id][:n_monomials]).reshape(-1).tolist()
-                )
-                decomposition_negative = (
-                    (sos_vectors_neg @ self.relaxation.generating_sets[mm_id][:n_monomials]).reshape(-1).tolist()
-                )
+                decomposition_positive = (sos_vectors_pos @ generating_set).reshape(-1).tolist()
+                decomposition_negative = (sos_vectors_neg @ generating_set).reshape(-1).tolist()
                 equalities_terms.append(
                     LocalizingMomentMatrixEqualityDecomposition(
                         generator=generator,

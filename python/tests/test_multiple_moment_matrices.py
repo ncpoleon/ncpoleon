@@ -7,6 +7,8 @@ from .utils import SOLVER_SKIPS, reduce_sos_decomposition
 
 
 def generate_multiple_moment_matrices_parameters():
+    res = []
+
     for solver in ["mosek", "picos-cvxopt"]:
         for use_primal in [True, False]:
             for level, w, expected in [
@@ -26,7 +28,9 @@ def generate_multiple_moment_matrices_parameters():
                         )
                     )
 
-                yield pytest.param(solver, use_primal, level, w, expected, marks=marks)
+                res.append(pytest.param(solver, use_primal, level, w, expected, marks=marks))
+
+    return res
 
 
 def _multiple_moment_matrices_params(w):
@@ -70,13 +74,53 @@ def _multiple_moment_matrices_params(w):
     normalization_constraints = [I_0 + I_1 == 1]
     objective = F[0] + M[2]
 
-    return F + G + M + N, objective, substitutions, operator_constraints, moment_constraints, normalization_constraints
+    # The operators of each moment matrix, ordered so that the family the other one commutes past
+    # comes first, together with the identity of that moment matrix
+    moment_matrices_operators = [(F + G, I_0), (M + N, I_1)]
+
+    return (
+        F + G + M + N,
+        objective,
+        substitutions,
+        operator_constraints,
+        moment_constraints,
+        normalization_constraints,
+        moment_matrices_operators,
+    )
+
+
+def _generating_set(level, operators, identity):
+    """Rebuild the generating set that ``get_relaxation`` builds at ``level`` for one moment matrix.
+
+    ``operators`` is the concatenation of the two commuting families of operators of that moment
+    matrix, the family the other one commutes past coming first. Only the levels 0, 1 and 2 that the
+    tests below need are supported.
+    """
+    monomials = [identity]
+
+    if level >= 1:
+        monomials.extend(operators)
+
+    if level >= 2:
+        first_family_size = len(operators) // 2
+
+        for index_left, left in enumerate(operators):
+            for index_right, right in enumerate(operators):
+                # The operators are projectors, hence the squares reduce to a monomial of length 1,
+                # and the second family commutes past the first one, hence `right * left` reduces to
+                # the already generated `left * right`
+                if (index_left == index_right) or (index_left >= first_family_size > index_right):
+                    continue
+
+                monomials.append(left * right)
+
+    return monomials
 
 
 @pytest.mark.parametrize("level", [1, 2])
 def test_multiple_moment_matrices_relaxation(benchmark, level):
     # TODO: write docstring about the problem and change the name, it's about CHSH
-    variables, objective, substitutions, operator_constraints, moment_constraints, normalization_constraints = (
+    variables, objective, substitutions, operator_constraints, moment_constraints, normalization_constraints, _ = (
         _multiple_moment_matrices_params(2.0)
     )
     benchmark(
@@ -95,7 +139,7 @@ def test_multiple_moment_matrices_relaxation(benchmark, level):
 @pytest.mark.walltime
 def test_multiple_moment_matrices_solve(benchmark, solver, use_primal, level, w, expected):
     # TODO: write docstring about the problem and change the name, it's about CHSH
-    variables, objective, substitutions, operator_constraints, moment_constraints, normalization_constraints = (
+    variables, objective, substitutions, operator_constraints, moment_constraints, normalization_constraints, _ = (
         _multiple_moment_matrices_params(w)
     )
     sdp = get_relaxation(
@@ -108,6 +152,58 @@ def test_multiple_moment_matrices_solve(benchmark, solver, use_primal, level, w,
         normalization_constraints=normalization_constraints,
     )
     sol = benchmark(solve, sdp, "max", force_primal=use_primal, solver=solver)
+    assert -log2(sol.value) == pytest.approx(expected, abs=1e-6)
+    sos_decompositions = sol.get_sos_decomposition_by_mm_id()
+    reduced_0 = reduce_sos_decomposition(sos_decompositions[0])
+    reduced_1 = reduce_sos_decomposition(sos_decompositions[1])
+    assert sdp.rewrite(reduced_0 + reduced_1 + objective).is_zero(1e-7)
+
+
+@pytest.mark.parametrize("solver, use_primal, level, w, expected", generate_multiple_moment_matrices_parameters())
+@pytest.mark.walltime
+def test_multiple_moment_matrices_with_extra_monomials(benchmark, solver, use_primal, level, w, expected):
+    """Solve the problem at level -1, the generating sets being given rather than generated.
+
+    The generating sets that are handed over are the ones that ``get_relaxation`` would have built
+    at ``level``, so that the relaxation, and hence the optimal value, are the ones of ``level``.
+    """
+    (
+        variables,
+        objective,
+        substitutions,
+        operator_constraints,
+        moment_constraints,
+        normalization_constraints,
+        moment_matrices_operators,
+    ) = _multiple_moment_matrices_params(w)
+
+    extra_monomials = [
+        monomial
+        for operators, identity in moment_matrices_operators
+        for monomial in _generating_set(level, operators, identity)
+    ]
+    # The operator constraints all are of degree 1, so that their localising moment matrices are
+    # indexed by the generating set of the previous level. The first four constraints belong to the
+    # first moment matrix, the last four to the second one
+    localising_generating_sets = [
+        _generating_set(level - 1, operators, identity) for operators, identity in moment_matrices_operators
+    ]
+    operator_constraints = [
+        (constraint, localising_generating_sets[index // 4]) for index, constraint in enumerate(operator_constraints)
+    ]
+
+    sdp = benchmark(
+        get_relaxation,
+        variables,
+        level=-1,
+        objective=objective,
+        substitutions=substitutions,
+        operator_constraints=operator_constraints,
+        moment_constraints=moment_constraints,
+        normalization_constraints=normalization_constraints,
+        extra_monomials=extra_monomials,
+    )
+    sol = solve(sdp, "max", verbosity=0, force_primal=use_primal, solver=solver)
     assert -log2(sol.value) == pytest.approx(expected, abs=1e-6)
     sos_decompositions = sol.get_sos_decomposition_by_mm_id()
     reduced_0 = reduce_sos_decomposition(sos_decompositions[0])

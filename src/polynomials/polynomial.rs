@@ -11,9 +11,9 @@ use crate::polynomials::monomial::{
 };
 use crate::polynomials::operator::Operator;
 use crate::polynomials::utils::add::manage_entry;
-use crate::polynomials::utils::merge_btreemaps::merge_btreemaps;
 use crate::polynomials::utils::mul::poly_mul;
 use crate::polynomials::utils::pow::fallible_exponentiation_by_squaring;
+use crate::utils::merge_btreemaps::merge_btreemaps;
 
 pub(crate) trait Conjugate {
     fn conjugate(&self) -> Self;
@@ -37,6 +37,7 @@ pub(crate) trait PolynomialDtype:
     + Display
     + Conjugate
     + TryIntoReal
+    + Default
 {
 }
 

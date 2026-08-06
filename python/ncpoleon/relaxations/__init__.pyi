@@ -118,11 +118,11 @@ class BaseSdpRelaxation(Generic[PolynomialElements, Scalar]):
     @property
     def equalities(
         self,
-    ) -> dict[int, list[tuple[Polynomial[PolynomialElements, Scalar], list[PolynomialElements] | None]]]: ...
+    ) -> dict[int, list[tuple[Polynomial[PolynomialElements, Scalar], list[PolynomialElements]]]]: ...
     @property
     def inequalities(
         self,
-    ) -> dict[int, list[tuple[Polynomial[PolynomialElements, Scalar], list[PolynomialElements] | None]]]: ...
+    ) -> dict[int, list[tuple[Polynomial[PolynomialElements, Scalar], list[PolynomialElements]]]]: ...
 
 class RealValuedCommutativeSdpRelaxation(BaseSdpRelaxation[CommutativePolynomialElement, float]):
     @property
