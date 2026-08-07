@@ -44,7 +44,12 @@ pub(crate) type RustCommutativeMonomial = Monomial<CommutativeMonomialDataWithMo
 ///
 /// A `CommutativeMonomial` represents a product of [`CommutativeOperator`]
 /// instances raised to non-negative integer powers, e.g. `x_(0)^2 * x_(1)`.
-#[pyclass(frozen, module = "ncpoleon.polynomials.commutative_polynomials", name = "CommutativeMonomial")]
+#[pyclass(
+    frozen,
+    module = "ncpoleon.polynomials.commutative_polynomials",
+    name = "CommutativeMonomial",
+    skip_from_py_object
+)]
 #[derive(Clone, PartialOrd, Ord, PartialEq, Eq)]
 pub(crate) struct PythonCommutativeMonomial(pub(crate) RustCommutativeMonomial);
 

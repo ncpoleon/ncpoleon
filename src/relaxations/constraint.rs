@@ -33,23 +33,38 @@ pub(crate) struct Constraint<MonomialType: Ord, Scalar: PolynomialDtype> {
     pub(crate) rhs: ConstraintSide<MonomialType, Scalar>,
 }
 
-#[pyclass(frozen, module = "ncpoleon.relaxations", name = "RealCoefficientsCommutativeConstraint")]
+#[pyclass(frozen, module = "ncpoleon.relaxations", name = "RealCoefficientsCommutativeConstraint", skip_from_py_object)]
 #[derive(Clone)]
 pub(crate) struct PythonRealCoefficientsCommutativeConstraint(pub(crate) Constraint<RustCommutativeMonomial, f64>);
 
-#[pyclass(frozen, module = "ncpoleon.relaxations", name = "ComplexCoefficientsCommutativeConstraint")]
+#[pyclass(
+    frozen,
+    module = "ncpoleon.relaxations",
+    name = "ComplexCoefficientsCommutativeConstraint",
+    skip_from_py_object
+)]
 #[derive(Clone)]
 pub(crate) struct PythonComplexCoefficientsCommutativeConstraint(
     pub(crate) Constraint<RustCommutativeMonomial, Complex<f64>>,
 );
 
-#[pyclass(frozen, module = "ncpoleon.relaxations", name = "RealCoefficientsNonCommutativeConstraint")]
+#[pyclass(
+    frozen,
+    module = "ncpoleon.relaxations",
+    name = "RealCoefficientsNonCommutativeConstraint",
+    skip_from_py_object
+)]
 #[derive(Clone)]
 pub(crate) struct PythonRealCoefficientsNonCommutativeConstraint(
     pub(crate) Constraint<RustNonCommutativeMonomial, f64>,
 );
 
-#[pyclass(frozen, module = "ncpoleon.relaxations", name = "ComplexCoefficientsNonCommutativeConstraint")]
+#[pyclass(
+    frozen,
+    module = "ncpoleon.relaxations",
+    name = "ComplexCoefficientsNonCommutativeConstraint",
+    skip_from_py_object
+)]
 #[derive(Clone)]
 pub(crate) struct PythonComplexCoefficientsNonCommutativeConstraint(
     pub(crate) Constraint<RustNonCommutativeMonomial, Complex<f64>>,
