@@ -28,8 +28,6 @@ def _guessing_probability_chsh_params(w):
 
     return [M0, M1, N0, N1, E], obj, substitutions, moment_constraints
 
-from .utils import reduce_sos_decomposition
-
 
 @pytest.mark.parametrize("level", [1, 2])
 @pytest.mark.parametrize("w", [2.0, 2.25, 2.5])

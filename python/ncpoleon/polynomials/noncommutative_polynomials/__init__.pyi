@@ -121,8 +121,7 @@ class NonCommutativeMonomial:
 
 NonCommutativePolynomialElement: TypeAlias = NonCommutativeMonomial | NonCommutativeOperator
 
-class NonCommutativePolynomial(Polynomial[NonCommutativePolynomialElement, Scalar]):
-    ...
+class NonCommutativePolynomial(Polynomial[NonCommutativePolynomialElement, Scalar]): ...
 
 RealCoefficientsNonCommutativePolynomial: TypeAlias = NonCommutativePolynomial[float]
 ComplexCoefficientsNonCommutativePolynomial: TypeAlias = NonCommutativePolynomial[complex]

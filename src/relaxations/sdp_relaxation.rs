@@ -11,7 +11,7 @@ use num_traits::Zero;
 use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::{PyNotImplementedError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyComplex, PyDict, PyFloat, PyList};
+use pyo3::types::{PyComplex, PyDict, PyFloat, PyInt, PyList};
 
 use crate::polynomials::commutative_polynomials::monomials::commutative_monomial::{
     PythonCommutativeMonomial, RustCommutativeMonomial,
@@ -534,7 +534,7 @@ pub(crate) fn get_relaxation<'py>(
         let commutativity =
             get_commutativity_from_bound(&value, assume_commutative, assume_noncommutative).map_err(|_err| {
                 PyValueError::new_err(format!(
-                    "Couldn't convert the key at index {} of the substitutions to a supported monomial.",
+                    "Couldn't convert the substitute at index {} of the substitutions to a supported monomial.",
                     index
                 ))
             })?;
@@ -609,7 +609,7 @@ fn get_commutativity_from_bound<'py>(
     } else if assume_noncommutative {
         Ok(Some(MonomialCommutativity::NonCommutative))
     } else {
-        if bound.cast::<PyFloat>().is_ok() || bound.cast::<PyComplex>().is_ok() {
+        if bound.cast::<PyInt>().is_ok() || bound.cast::<PyFloat>().is_ok() || bound.cast::<PyComplex>().is_ok() {
             Ok(None)
         } else if bound.cast::<PythonCommutativeOperator>().is_ok() || bound.cast::<PythonCommutativeMonomial>().is_ok()
         {
@@ -639,9 +639,9 @@ fn get_realness_and_commutativity_of_polynomial_from_bound<'py>(
         } else if assume_noncommutative {
             Ok((true, Some(MonomialCommutativity::NonCommutative)))
         } else {
-            // We don't use the TryFrom trait of the polynomials since they will also try to extract into f64, which is
-            // a check we already performed
-            if bound.cast::<PyFloat>().is_ok() {
+            // We don't use the TryFrom trait of the polynomials since they will also try to extract from a float,
+            // which is a check we already performed
+            if bound.cast::<PyInt>().is_ok() || bound.cast::<PyFloat>().is_ok() {
                 Ok((true, None))
             } else if bound.cast::<PythonCommutativeOperator>().is_ok()
                 || bound.cast::<PythonCommutativeMonomial>().is_ok()
@@ -665,7 +665,7 @@ fn get_realness_and_commutativity_of_polynomial_from_bound<'py>(
         } else {
             // We don't use the TryFrom trait of the polynomials since they will also try to extract into Complex<f64>,
             // which is a check we already performed
-            if bound.cast::<PyFloat>().is_ok() || bound.cast::<PyComplex>().is_ok() {
+            if bound.cast::<PyInt>().is_ok() || bound.cast::<PyFloat>().is_ok() || bound.cast::<PyComplex>().is_ok() {
                 Ok((false, None))
             } else if bound.cast::<PythonCommutativeOperator>().is_ok()
                 || bound.cast::<PythonCommutativeMonomial>().is_ok()
@@ -684,7 +684,7 @@ fn get_realness_and_commutativity_of_polynomial_from_bound<'py>(
             }
         }
     } else if assume_commutative {
-        if bound.cast::<PyFloat>().is_ok() {
+        if bound.cast::<PyInt>().is_ok() || bound.cast::<PyFloat>().is_ok() {
             Ok((true, Some(MonomialCommutativity::Commutative)))
         } else if bound.cast::<PyComplex>().is_ok() {
             Ok((false, Some(MonomialCommutativity::Commutative)))
@@ -699,7 +699,7 @@ fn get_realness_and_commutativity_of_polynomial_from_bound<'py>(
             Err(())
         }
     } else if assume_noncommutative {
-        if bound.cast::<PyFloat>().is_ok() {
+        if bound.cast::<PyInt>().is_ok() || bound.cast::<PyFloat>().is_ok() {
             Ok((true, Some(MonomialCommutativity::NonCommutative)))
         } else if bound.cast::<PyComplex>().is_ok() {
             Ok((false, Some(MonomialCommutativity::NonCommutative)))
@@ -714,7 +714,7 @@ fn get_realness_and_commutativity_of_polynomial_from_bound<'py>(
             Err(())
         }
     } else {
-        if bound.cast::<PyFloat>().is_ok() {
+        if bound.cast::<PyInt>().is_ok() || bound.cast::<PyFloat>().is_ok() {
             Ok((true, None))
         } else if bound.cast::<PyComplex>().is_ok() {
             Ok((false, None))

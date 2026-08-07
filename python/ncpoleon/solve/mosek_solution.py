@@ -277,7 +277,7 @@ class MosekSolution(BaseSolution[PolynomialElements, Scalar]):
                             localizing_moment_matrix_dual.reshape(
                                 localizing_moment_matrix.size, localizing_moment_matrix.size
                             ),
-                            generating_set
+                            generating_set,
                         )
                     )
                 else:
@@ -294,7 +294,7 @@ class MosekSolution(BaseSolution[PolynomialElements, Scalar]):
                             * localizing_moment_matrix_dual[
                                 localizing_moment_matrix.size :, : localizing_moment_matrix.size
                             ],
-                            generating_set
+                            generating_set,
                         )
                     )
 
