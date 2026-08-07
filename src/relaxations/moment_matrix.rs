@@ -171,25 +171,49 @@ where
 type RustRealValuedMomentMatrix<MonomialType> = RustMomentMatrix<f64, MonomialType>;
 type RustComplexValuedMomentMatrix<MonomialType> = RustMomentMatrix<Complex<f64>, MonomialType>;
 
-#[pyclass(frozen, module = "ncpoleon.relaxations", name = "RealValuedCommutativeMomentMatrix", mapping)]
+#[pyclass(
+    frozen,
+    module = "ncpoleon.relaxations",
+    name = "RealValuedCommutativeMomentMatrix",
+    mapping,
+    skip_from_py_object
+)]
 #[derive(Clone)]
 pub(super) struct PythonRealValuedCommutativeMomentMatrix(
     pub(super) RustRealValuedMomentMatrix<RustCommutativeMonomial>,
 );
 
-#[pyclass(frozen, module = "ncpoleon.relaxations", name = "ComplexValuedCommutativeMomentMatrix", mapping)]
+#[pyclass(
+    frozen,
+    module = "ncpoleon.relaxations",
+    name = "ComplexValuedCommutativeMomentMatrix",
+    mapping,
+    skip_from_py_object
+)]
 #[derive(Clone)]
 pub(super) struct PythonComplexValuedCommutativeMomentMatrix(
     pub(super) RustComplexValuedMomentMatrix<RustCommutativeMonomial>,
 );
 
-#[pyclass(frozen, module = "ncpoleon.relaxations", name = "RealValuedNonCommutativeMomentMatrix", mapping)]
+#[pyclass(
+    frozen,
+    module = "ncpoleon.relaxations",
+    name = "RealValuedNonCommutativeMomentMatrix",
+    mapping,
+    skip_from_py_object
+)]
 #[derive(Clone)]
 pub(super) struct PythonRealValuedNonCommutativeMomentMatrix(
     pub(super) RustRealValuedMomentMatrix<RustNonCommutativeMonomial>,
 );
 
-#[pyclass(frozen, module = "ncpoleon.relaxations", name = "ComplexValuedNonCommutativeMomentMatrix", mapping)]
+#[pyclass(
+    frozen,
+    module = "ncpoleon.relaxations",
+    name = "ComplexValuedNonCommutativeMomentMatrix",
+    mapping,
+    skip_from_py_object
+)]
 #[derive(Clone)]
 pub(super) struct PythonComplexValuedNonCommutativeMomentMatrix(
     pub(super) RustComplexValuedMomentMatrix<RustNonCommutativeMonomial>,

@@ -52,7 +52,12 @@ pub(crate) type RustNonCommutativeOperator = Operator<NonCommutativeOperatorIden
 ///
 /// Instances are normally created in bulk via
 /// [`generate_noncommutative_variables`].
-#[pyclass(frozen, module = "ncpoleon.polynomials.noncommutative_polynomials", name = "NonCommutativeOperator")]
+#[pyclass(
+    frozen,
+    module = "ncpoleon.polynomials.noncommutative_polynomials",
+    name = "NonCommutativeOperator",
+    skip_from_py_object
+)]
 #[derive(Clone, Copy)]
 pub(crate) struct PythonNonCommutativeOperator(pub(crate) RustNonCommutativeOperator);
 

@@ -32,7 +32,8 @@ pub(crate) type RustComplexCoefficientsCommutativePolynomial = RustCommutativePo
 #[pyclass(
     frozen,
     module = "ncpoleon.polynomials.commutative_polynomials",
-    name = "RealCoefficientsCommutativePolynomial"
+    name = "RealCoefficientsCommutativePolynomial",
+    skip_from_py_object
 )]
 #[derive(Clone)]
 // TODO: Seems like we can remove this, maybe it's because we add to the module manually? If yes,
@@ -47,7 +48,8 @@ pub(crate) struct PythonRealCoefficientsCommutativePolynomial(pub(crate) RustRea
 #[pyclass(
     frozen,
     module = "ncpoleon.polynomials.commutative_polynomials",
-    name = "ComplexCoefficientsCommutativePolynomial"
+    name = "ComplexCoefficientsCommutativePolynomial",
+    skip_from_py_object
 )]
 #[derive(Clone)]
 // TODO: Seems like we can remove this, maybe it's because we add to the module manually? If yes,
@@ -67,6 +69,28 @@ impl<'py> TryFrom<&Bound<'py, PyAny>> for PythonRealCoefficientsCommutativePolyn
         } else if let Ok(op) = value.cast::<PythonCommutativeOperator>() {
             Ok((*op.get()).into())
         } else if let Ok(f64_value) = value.extract::<f64>() {
+            // Caution! We can't know the moment matrix index when converting here, so we instead set it to zero, and
+            // it is then the responsability of the caller to sanitize the moment_matrix_id
+            Ok(Self(RustRealCoefficientsCommutativePolynomial {
+                data: BTreeMap::from([(RustCommutativeMonomial::one(0), f64_value)]),
+            }))
+        } else {
+            Err(PyTypeError::new_err("Couldn't convert to PythonRealCoefficientsCommutativePolynomial"))
+        }
+    }
+}
+
+impl<'py> FromPyObject<'_, 'py> for PythonRealCoefficientsCommutativePolynomial {
+    type Error = PyErr;
+
+    fn extract(obj: pyo3::Borrowed<'_, 'py, pyo3::PyAny>) -> Result<Self, Self::Error> {
+        if let Ok(poly) = obj.cast::<PythonRealCoefficientsCommutativePolynomial>() {
+            Ok(poly.get().clone())
+        } else if let Ok(mon) = obj.cast::<PythonCommutativeMonomial>() {
+            Ok(mon.get().clone().into())
+        } else if let Ok(op) = obj.cast::<PythonCommutativeOperator>() {
+            Ok((*op.get()).into())
+        } else if let Ok(f64_value) = obj.extract::<f64>() {
             // Caution! We can't know the moment matrix index when converting here, so we instead set it to zero, and
             // it is then the responsability of the caller to sanitize the moment_matrix_id
             Ok(Self(RustRealCoefficientsCommutativePolynomial {
@@ -99,6 +123,26 @@ impl<'py> TryFrom<&Bound<'py, PyAny>> for PythonComplexCoefficientsCommutativePo
                 data: BTreeMap::from([(RustCommutativeMonomial::one(0), complex_value)]),
             }))
         } else if let Ok(real_poly) = PythonRealCoefficientsCommutativePolynomial::try_from(value) {
+            Ok(real_poly.into())
+        } else {
+            Err(PyTypeError::new_err("Couldn't convert to PythonComplexCoefficientsCommutativePolynomial"))
+        }
+    }
+}
+
+impl<'py> FromPyObject<'_, 'py> for PythonComplexCoefficientsCommutativePolynomial {
+    type Error = PyErr;
+
+    fn extract(obj: pyo3::Borrowed<'_, 'py, pyo3::PyAny>) -> Result<Self, Self::Error> {
+        if let Ok(poly) = obj.cast::<PythonComplexCoefficientsCommutativePolynomial>() {
+            Ok(poly.get().clone())
+        } else if let Ok(complex_value) = obj.extract::<Complex<f64>>() {
+            // Caution! We can't know the moment matrix index when converting here, so we instead set it to zero, and
+            // it is then the responsability of the caller to sanitize the moment_matrix_id
+            Ok(Self(RustComplexCoefficientsCommutativePolynomial {
+                data: BTreeMap::from([(RustCommutativeMonomial::one(0), complex_value)]),
+            }))
+        } else if let Ok(real_poly) = obj.extract::<PythonRealCoefficientsCommutativePolynomial>() {
             Ok(real_poly.into())
         } else {
             Err(PyTypeError::new_err("Couldn't convert to PythonComplexCoefficientsCommutativePolynomial"))

@@ -45,7 +45,12 @@ pub(crate) type RustNonCommutativeMonomial = Monomial<NonCommutativeMonomialData
 ///
 /// A `NonCommutativeMonomial` represents an ordered product of
 /// [`NonCommutativeOperator`] instances, e.g. `A(0) * A(1) * A(0)`.
-#[pyclass(frozen, module = "ncpoleon.polynomials.noncommutative_polynomials", name = "NonCommutativeMonomial")]
+#[pyclass(
+    frozen,
+    module = "ncpoleon.polynomials.noncommutative_polynomials",
+    name = "NonCommutativeMonomial",
+    skip_from_py_object
+)]
 #[derive(Clone, PartialOrd, Ord, PartialEq, Eq)]
 pub(crate) struct PythonNonCommutativeMonomial(pub(crate) RustNonCommutativeMonomial);
 
