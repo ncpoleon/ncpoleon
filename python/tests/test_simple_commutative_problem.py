@@ -10,9 +10,13 @@ from .utils import SOLVER_SKIPS, reduce_sos_decomposition
 
 
 def generate_simple_commutative_parameters():
+    res = []
+
     for solver in ["picos-cvxopt", "mosek"]:
         for level, expected in [(1, -0.5), (2, 1 - sqrt(2))]:
-            yield pytest.param(solver, level, expected, marks=[SOLVER_SKIPS[solver]])
+            res.append(pytest.param(solver, level, expected, marks=[SOLVER_SKIPS[solver]]))
+
+    return res
 
 
 def _simple_commutative_params():
@@ -36,4 +40,34 @@ def test_simple_real_commutative_problem(benchmark, solver: str, level: int, exp
     sdp = get_relaxation([x0, x1], level, obj, operator_constraints=operator_constraints)
     sol = benchmark(solve, sdp, "min", force_primal=force_primal, solver=solver)
     assert sol.value == pytest.approx(expected)
+    assert (sdp.rewrite(reduce_sos_decomposition(sol.get_sos_decomposition()) - obj)).is_zero(1e-7)
+
+
+@pytest.mark.parametrize("solver, level, expected", generate_simple_commutative_parameters())
+@pytest.mark.parametrize("force_primal", [True, False])
+def test_simple_real_noncommutative_problem_with_extra_monomials(
+    benchmark, solver: str, level: int, expected: float, force_primal: bool
+):
+    (x0, x1), identity = generate_commutative_variables("x", 2, real=True, return_identity=True)
+    obj = 2 * x0 * x1
+
+    if level == 1:
+        extra_monomials = [identity, x0, x1]
+        operator_constraints = [(-(x1**2) + x1 + 1 / 4 >= 0, [identity])]
+    elif level == 2:
+        extra_monomials = [identity, x0, x1, x0 * x1, x1**2]
+        operator_constraints = [(-(x1**2) + x1 + 1 / 4 >= 0, [identity, x0, x1])]
+
+    sdp = benchmark(
+        get_relaxation,
+        [],
+        level=-1,
+        objective=obj,
+        substitutions={x0**2: x0},
+        operator_constraints=operator_constraints,
+        extra_monomials=extra_monomials,
+        normalization_constraints=[identity == 1],
+    )
+    sol = solve(sdp, "min", verbosity=0, solver=solver, force_primal=force_primal)
+    assert sol.value == pytest.approx(expected, abs=1e-6)
     assert (sdp.rewrite(reduce_sos_decomposition(sol.get_sos_decomposition()) - obj)).is_zero(1e-7)

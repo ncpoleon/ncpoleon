@@ -23,8 +23,8 @@ use crate::polynomials::commutative_polynomials::polynomials::commutative_polyno
 use crate::polynomials::monomial::{
     AdjointTrait, HasAMomentMatrixId, HasLength, Monomial, OneWithMomentMatrixId, RewritingStrategy, RewritingTrait,
 };
-use crate::polynomials::utils::merge_btreemaps::merge_btreemaps;
 use crate::relaxations::constraint::{ConstraintKind, make_commutative_constraint};
+use crate::utils::merge_btreemaps::merge_btreemaps;
 
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub(crate) struct CommutativeMonomialDataWithMomentMatrixIndex {

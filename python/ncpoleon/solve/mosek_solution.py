@@ -127,6 +127,7 @@ class MosekSolution(BaseSolution[PolynomialElements, Scalar]):
             tuple[
                 Polynomial[PolynomialElements, Scalar],
                 np.ndarray[tuple[int, int], np.dtype[np.float64] | np.dtype[np.complex128]],
+                list[PolynomialElements],
             ]
         ],
     ]:
@@ -138,7 +139,7 @@ class MosekSolution(BaseSolution[PolynomialElements, Scalar]):
         ) in self._relaxation.localising_moment_matrices_equalities.items():
             to_add = []
 
-            for index, (localizing_moment_matrix, equality_constraint) in enumerate(
+            for index, (localizing_moment_matrix, (equality_constraint, generating_set)) in enumerate(
                 zip(localizing_moment_matrices_equalities_id, self._relaxation.equalities.get(id, []), strict=True)
             ):
                 # The equality constraints on symmetric matrices are redundant, and thus Mosek only returns a
@@ -159,8 +160,6 @@ class MosekSolution(BaseSolution[PolynomialElements, Scalar]):
 
                     if self._primal:
                         to_hermitianize = (to_hermitianize + to_hermitianize.T.conj()) / 2
-
-                    to_add.append((equality_constraint, to_hermitianize))
                 else:
                     localizing_moment_matrix_dual = localizing_moment_matrix_dual.reshape(
                         2 * localizing_moment_matrix.size, 2 * localizing_moment_matrix.size
@@ -176,7 +175,7 @@ class MosekSolution(BaseSolution[PolynomialElements, Scalar]):
                     if self._primal:
                         to_hermitianize = (to_hermitianize + to_hermitianize.T.conj()) / 2
 
-                    to_add.append((equality_constraint, to_hermitianize))
+                to_add.append((equality_constraint, to_hermitianize, generating_set))
 
             res[id] = to_add
 
@@ -250,6 +249,7 @@ class MosekSolution(BaseSolution[PolynomialElements, Scalar]):
             tuple[
                 Polynomial[PolynomialElements, Scalar],
                 np.ndarray[tuple[int, int], np.dtype[np.float64] | np.dtype[np.complex128]],
+                list[PolynomialElements],
             ]
         ],
     ]:
@@ -261,7 +261,7 @@ class MosekSolution(BaseSolution[PolynomialElements, Scalar]):
         ) in self._relaxation.localising_moment_matrices_inequalities.items():
             to_add = []
 
-            for index, (localizing_moment_matrix, inequality_constraint) in enumerate(
+            for index, (localizing_moment_matrix, (inequality_constraint, generating_set)) in enumerate(
                 zip(localizing_moment_matrices_inequalities_id, self._relaxation.inequalities.get(id, []), strict=True)
             ):
                 if self._primal:
@@ -277,6 +277,7 @@ class MosekSolution(BaseSolution[PolynomialElements, Scalar]):
                             localizing_moment_matrix_dual.reshape(
                                 localizing_moment_matrix.size, localizing_moment_matrix.size
                             ),
+                            generating_set,
                         )
                     )
                 else:
@@ -293,6 +294,7 @@ class MosekSolution(BaseSolution[PolynomialElements, Scalar]):
                             * localizing_moment_matrix_dual[
                                 localizing_moment_matrix.size :, : localizing_moment_matrix.size
                             ],
+                            generating_set,
                         )
                     )
 

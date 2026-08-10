@@ -2,6 +2,7 @@ from math import sqrt
 
 import pytest
 from ncpoleon import generate_noncommutative_variables, get_relaxation, solve
+
 from .utils import SOLVERS, reduce_sos_decomposition
 
 

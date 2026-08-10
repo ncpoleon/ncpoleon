@@ -4,7 +4,6 @@ use std::collections::btree_map::{IntoIter, Iter};
 use std::iter::Map;
 
 use log::trace;
-use num_traits::Zero;
 
 pub(crate) trait IntoIterOfOwned<U, V> {
     type IterType: Iterator<Item = (U, V)>;
@@ -35,7 +34,7 @@ where
 pub(crate) fn merge_btreemaps<U, V, L, R, F>(left: L, right: R, aggregator: F) -> BTreeMap<U, V>
 where
     U: Ord,
-    V: Zero,
+    V: Default + PartialEq,
     L: IntoIterOfOwned<U, V>,
     R: IntoIterOfOwned<U, V>,
     // The aggregator takes a reference to the insert key as input if further normalization is
@@ -63,7 +62,7 @@ where
 
                 match left_key.cmp(&right_key) {
                     Ordering::Less => {
-                        new_value = aggregator(&left_key, left_value, V::zero());
+                        new_value = aggregator(&left_key, left_value, V::default());
                         insert_key = left_key;
                         left_elt = left_iter.next();
                         right_elt = Some((right_key, right_value));
@@ -76,21 +75,21 @@ where
                         right_elt = right_iter.next();
                     }
                     Ordering::Greater => {
-                        new_value = aggregator(&right_key, V::zero(), right_value);
+                        new_value = aggregator(&right_key, V::default(), right_value);
                         insert_key = right_key;
                         right_elt = right_iter.next();
                         left_elt = Some((left_key, left_value))
                     }
                 }
 
-                if !new_value.is_zero() {
+                if new_value != V::default() {
                     res.insert(insert_key, new_value);
                 }
             }
             (Some((left_key, left_value)), None) => {
                 for (key, value) in std::iter::once((left_key, left_value)).chain(left_iter) {
-                    let new_value = aggregator(&key, value, V::zero());
-                    if !new_value.is_zero() {
+                    let new_value = aggregator(&key, value, V::default());
+                    if new_value != V::default() {
                         res.insert(key, new_value);
                     }
                 }
@@ -98,8 +97,8 @@ where
             }
             (None, Some((right_key, right_value))) => {
                 for (key, value) in std::iter::once((right_key, right_value)).chain(right_iter) {
-                    let new_value = aggregator(&key, V::zero(), value);
-                    if !new_value.is_zero() {
+                    let new_value = aggregator(&key, V::default(), value);
+                    if new_value != V::default() {
                         res.insert(key, new_value);
                     }
                 }
