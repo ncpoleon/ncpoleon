@@ -38,25 +38,25 @@ jobs:
         shard: [1, 2, 3]
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
       - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version-file: pyproject.toml
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
       - name: Install uv
-        uses: astral-sh/setup-uv@v8.3.2
+        uses: astral-sh/setup-uv@v9.0.0
       # Built here rather than inside the CodSpeed action's `run:` so that cargo
       # and rustc are not executed under the measurement harness.
       - name: Build the extension module
         run: uv sync --all-extras --dev --config-setting 'build-args=--profile=release'
       # No benchmark in this selection calls `solve`, so MOSEK is not needed here.
       - name: Run the benchmarks
-        uses: CodSpeedHQ/action@f99becdce5e5d51fd556489ebef684f4ecfd6286
+        uses: CodSpeedHQ/action@0ca9cbbf4623b599a6c3ed4fc8a922942705d9f1
         with:
           mode: simulation
           run: uv run --no-sync pytest -x --codspeed --splits 3 --group ${{ matrix.shard }} -m "not walltime" -v --durations=0
@@ -70,18 +70,18 @@ jobs:
     needs: [approve-benchmarks]
     timeout-minutes: 90 # The Codspeed runner macro hard stops after one hour anyway
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
       - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version-file: pyproject.toml
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
       - name: Install uv
-        uses: astral-sh/setup-uv@v8.3.2
+        uses: astral-sh/setup-uv@v9.0.0
       - name: Build the extension module
         run: uv sync --all-extras --dev --config-setting 'build-args=--profile=release'
       # A pull request from a fork gets no secrets, so `MSK_LICENSE` is empty
@@ -117,7 +117,7 @@ jobs:
           MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run --no-sync python -c \
             "from ncpoleon.utils import is_mosek_available; assert is_mosek_available(), 'MOSEK license checkout failed'"
       - name: Run the walltime benchmarks
-        uses: CodSpeedHQ/action@f99becdce5e5d51fd556489ebef684f4ecfd6286
+        uses: CodSpeedHQ/action@0ca9cbbf4623b599a6c3ed4fc8a922942705d9f1
         with:
           mode: walltime
           run: uv run --no-sync pytest -x --codspeed --splits 3 --group ${{ matrix.shard }} -m walltime -v --durations=0
