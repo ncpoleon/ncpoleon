@@ -8,12 +8,18 @@ from .utils import SOLVER_SKIPS, reduce_sos_decomposition
 
 
 def generate_simple_noncommutative_parameters():
+    res = []
+
     for solver in ["picos-cvxopt", "mosek"]:
         for level, expected in [(1, 1 / 8), (2, 1 / 8)]:
-            yield pytest.param(solver, level, expected, marks=[SOLVER_SKIPS[solver]])
+            res.append(pytest.param(solver, level, expected, marks=[SOLVER_SKIPS[solver]]))
+
+    return res
 
 
 def generate_simple_noncommutative_with_equality_constraints_parameters():
+    res = []
+
     for solver in ["picos-cvxopt", "mosek"]:
         for level, expected in [(1, 1 / 8), (2, 1 / 8)]:
             for force_primal in [True, False]:
@@ -27,19 +33,32 @@ def generate_simple_noncommutative_with_equality_constraints_parameters():
                         )
                     )
 
-                yield pytest.param(solver, level, expected, force_primal, marks=marks)
+                res.append(pytest.param(solver, level, expected, force_primal, marks=marks))
+
+    return res
 
 
 def generate_simple_noncommutative_with_substitution_parameters():
+    res = []
+
     for solver in ["picos-cvxopt", "mosek"]:
         for level, expected in [(1, 1 / 8), (2, 2.15e-05)]:
-            yield pytest.param(solver, level, expected, marks=[SOLVER_SKIPS[solver]])
+            res.append(pytest.param(solver, level, expected, marks=[SOLVER_SKIPS[solver]]))
+
+    return res
 
 
-def _simple_noncommutative_vars():
-    x1, x2 = generate_noncommutative_variables("x", 2, starting_index=1, hermitian=True)
-    obj = x2**2 - x1 * x2 / 2 - x2 * x1 / 2 - x2
-    return x1, x2, obj
+def _simple_noncommutative_vars(with_identity: bool = False):
+    if with_identity:
+        (x1, x2), identity = generate_noncommutative_variables(
+            "x", 2, starting_index=1, hermitian=True, return_identity=True
+        )
+        obj = x2**2 - x1 * x2 / 2 - x2 * x1 / 2 - x2
+        return x1, x2, obj, identity
+    else:
+        x1, x2 = generate_noncommutative_variables("x", 2, starting_index=1, hermitian=True)
+        obj = x2**2 - x1 * x2 / 2 - x2 * x1 / 2 - x2
+        return x1, x2, obj
 
 
 @pytest.mark.parametrize("level", [1, 2])
@@ -98,12 +117,41 @@ def test_simple_real_noncommutative_problem_with_commutative_substitution_relaxa
 @pytest.mark.parametrize("solver, level, expected", generate_simple_noncommutative_with_substitution_parameters())
 @pytest.mark.parametrize("force_primal", [True, False])
 def test_simple_real_noncommutative_problem_with_commutative_substitution(
-    solver: str, level: int, expected: float, force_primal: bool, benchmark
+    benchmark, solver: str, level: int, expected: float, force_primal: bool
 ):
     x1, x2, obj = _simple_noncommutative_vars()
     operator_constraints = [x1 - x1**2 >= 0, x2 - x2**2 >= 0]
     substitutions = {x2 * x1: x1 * x2}
     sdp = get_relaxation([x1, x2], level, obj, operator_constraints=operator_constraints, substitutions=substitutions)
     sol = benchmark(solve, sdp, "max", force_primal=force_primal, solver=solver)
+    assert sol.value == pytest.approx(expected, abs=1e-6)
+    assert (sdp.rewrite(reduce_sos_decomposition(sol.get_sos_decomposition()) + obj)).is_zero(1e-7)
+
+
+@pytest.mark.parametrize("solver, level, expected", generate_simple_noncommutative_parameters())
+@pytest.mark.parametrize("force_primal", [True, False])
+def test_simple_real_noncommutative_problem_with_extra_monomials(
+    benchmark, solver: str, level: int, expected: float, force_primal: bool
+):
+    x1, x2, obj, identity = _simple_noncommutative_vars(with_identity=True)
+
+    if level == 1:
+        extra_monomials = [identity, x1, x2]
+        operator_constraints = [(x1 - x1**2 >= 0, [identity]), (x2 - x2**2 >= 0, [identity])]
+    elif level == 2:
+        extra_monomials = [identity, x1, x2, x1**2, x1 * x2, x2 * x1, x2**2]
+        operator_constraints = [(x1 - x1**2 >= 0, [identity, x1, x2]), (x2 - x2**2 >= 0, [identity, x1, x2])]
+
+    sdp = benchmark(
+        get_relaxation,
+        [],
+        level=-1,
+        objective=obj,
+        operator_constraints=operator_constraints,
+        extra_monomials=extra_monomials,
+        normalization_constraints=[identity == 1],
+    )
+
+    sol = solve(sdp, "max", verbosity=0, solver=solver, force_primal=force_primal)
     assert sol.value == pytest.approx(expected, abs=1e-6)
     assert (sdp.rewrite(reduce_sos_decomposition(sol.get_sos_decomposition()) + obj)).is_zero(1e-7)

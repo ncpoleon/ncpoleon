@@ -72,6 +72,14 @@ impl<'py> TryFrom<&Bound<'py, PyAny>> for PythonCommutativeOperator {
     }
 }
 
+impl<'py> TryFrom<Bound<'py, PyAny>> for PythonCommutativeOperator {
+    type Error = PyErr;
+
+    fn try_from(value: Bound<'py, PyAny>) -> Result<Self, Self::Error> {
+        (&value).try_into()
+    }
+}
+
 #[pymethods]
 impl PythonCommutativeOperator {
     fn __add__<'py>(&self, other: &Bound<'py, PyAny>) -> PyResult<Py<PyAny>> {

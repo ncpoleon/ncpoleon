@@ -13,7 +13,7 @@ from ncpoleon._typing import PolynomialElements, Scalar
 class MomentMatrixDecomposition(Generic[PolynomialElements, Scalar]):
     """A single moment matrix contribution to a SoS decomposition.
 
-    Docs TODO
+    Docs TODO:
     """
 
     decomposition: list[Polynomial[PolynomialElements, Scalar]]
@@ -23,7 +23,7 @@ class MomentMatrixDecomposition(Generic[PolynomialElements, Scalar]):
 class LocalizingMomentMatrixInequalityDecomposition(Generic[PolynomialElements, Scalar]):
     """A single localizing moment matrix inequality contribution to a SoS decomposition.
 
-    Docs TODO
+    Docs TODO:
     """
 
     generator: Polynomial[PolynomialElements, Scalar]
@@ -34,7 +34,7 @@ class LocalizingMomentMatrixInequalityDecomposition(Generic[PolynomialElements, 
 class LocalizingMomentMatrixEqualityDecomposition(Generic[PolynomialElements, Scalar]):
     """A single localizing moment matrix equality contribution to a SoS decomposition.
 
-    Docs TODO
+    Docs TODO:
     """
 
     generator: Polynomial[PolynomialElements, Scalar]
@@ -46,7 +46,7 @@ class LocalizingMomentMatrixEqualityDecomposition(Generic[PolynomialElements, Sc
 class SingleMomentEqualityDecomposition(Generic[PolynomialElements, Scalar]):
     """A single scalar moment contribution to a SoS decomposition.
 
-    Docs TODO
+    Docs TODO:
     """
 
     generator: Polynomial[PolynomialElements, Scalar]
@@ -57,7 +57,7 @@ class SingleMomentEqualityDecomposition(Generic[PolynomialElements, Scalar]):
 class SingleMomentInequalityDecomposition(Generic[PolynomialElements, Scalar]):
     """A single scalar moment contribution to a SoS decomposition.
 
-    Docs TODO
+    Docs TODO:
     """
 
     generator: Polynomial[PolynomialElements, Scalar]

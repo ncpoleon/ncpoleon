@@ -92,6 +92,7 @@ class PicosSolution(BaseSolution[PolynomialElements, Scalar]):
             tuple[
                 Polynomial[PolynomialElements, Scalar],
                 np.ndarray[tuple[int, int], np.dtype[np.float64] | np.dtype[np.complex128]],
+                list[PolynomialElements],
             ]
         ],
     ]:
@@ -100,7 +101,7 @@ class PicosSolution(BaseSolution[PolynomialElements, Scalar]):
         for id in self._relaxation.localising_moment_matrices_equalities:
             to_add = []
 
-            for index, equality_constraint in enumerate(self._relaxation.equalities.get(id, [])):
+            for index, (equality_constraint, generating_set) in enumerate(self._relaxation.equalities.get(id, [])):
                 # The equality constraints on symmetric matrices are redundant, and thus Picos doesn't return a
                 # Hermitian matrix for the dual, so we have to hermitianize it
                 if self._primal:
@@ -114,7 +115,7 @@ class PicosSolution(BaseSolution[PolynomialElements, Scalar]):
                 if not to_append.shape:  # For 1x1 constraints or variables, Picos returns a 0D array
                     to_append = to_append.reshape((1, 1))
 
-                to_add.append((equality_constraint, to_append))
+                to_add.append((equality_constraint, to_append, generating_set))
 
             res[id] = to_add
 
@@ -163,6 +164,7 @@ class PicosSolution(BaseSolution[PolynomialElements, Scalar]):
             tuple[
                 Polynomial[PolynomialElements, Scalar],
                 np.ndarray[tuple[int, int], np.dtype[np.float64] | np.dtype[np.complex128]],
+                list[PolynomialElements],
             ]
         ],
     ]:
@@ -171,7 +173,7 @@ class PicosSolution(BaseSolution[PolynomialElements, Scalar]):
         for id in self._relaxation.localising_moment_matrices_inequalities:
             to_add = []
 
-            for index, inequality_constraint in enumerate(self._relaxation.inequalities.get(id, [])):
+            for index, (inequality_constraint, generating_set) in enumerate(self._relaxation.inequalities.get(id, [])):
                 if self._primal:
                     to_append = np.array(self._problem.get_constraint(self._constraints[f"LMMI-{id}-{index}"]).dual)
                 else:
@@ -180,7 +182,7 @@ class PicosSolution(BaseSolution[PolynomialElements, Scalar]):
                 if not to_append.shape:  # For 1x1 constraints or variables, Picos returns a 0D array
                     to_append = to_append.reshape((1, 1))
 
-                to_add.append((inequality_constraint, to_append))
+                to_add.append((inequality_constraint, to_append, generating_set))
 
             res[id] = to_add
 

@@ -116,9 +116,13 @@ class BaseSdpRelaxation(Generic[PolynomialElements, Scalar]):
     @property
     def generating_sets(self) -> dict[int, list[PolynomialElements]]: ...
     @property
-    def equalities(self) -> dict[int, list[Polynomial[PolynomialElements, Scalar]]]: ...
+    def equalities(
+        self,
+    ) -> dict[int, list[tuple[Polynomial[PolynomialElements, Scalar], list[PolynomialElements]]]]: ...
     @property
-    def inequalities(self) -> dict[int, list[Polynomial[PolynomialElements, Scalar]]]: ...
+    def inequalities(
+        self,
+    ) -> dict[int, list[tuple[Polynomial[PolynomialElements, Scalar], list[PolynomialElements]]]]: ...
 
 class RealValuedCommutativeSdpRelaxation(BaseSdpRelaxation[CommutativePolynomialElement, float]):
     @property
@@ -137,17 +141,25 @@ class ComplexValuedNonCommutativeSdpRelaxation(BaseSdpRelaxation[NonCommutativeP
     def is_real(self) -> Literal[False]: ...
 
 @overload
-def get_relaxation(  # type: ignore[overload-overlap]
+def get_relaxation(
     variables: list[CommutativeOperator],
     level: int,
     objective: RealCoefficientsCommutativePolynomial,
     *,
     substitutions: dict[CommutativePolynomialElement, float | CommutativePolynomialElement] | None = None,
-    operator_constraints: list[RealCoefficientsCommutativeConstraint] | None = None,
+    operator_constraints: list[
+        RealCoefficientsCommutativeConstraint
+        | tuple[RealCoefficientsCommutativeConstraint, list[CommutativePolynomialElement | float] | None]
+    ]
+    | None = None,
     moment_constraints: list[RealCoefficientsCommutativeConstraint] | None = None,
     normalization_constraints: list[RealCoefficientsCommutativeConstraint] | None = None,
     substitution_strategy: RewritingStrategy = RewritingStrategy.Greedy,
     assume_real: bool = False,
+    assume_complex: bool = False,
+    assume_commutative: bool = False,
+    assume_noncommutative: bool = False,
+    extra_monomials: list[CommutativePolynomialElement | float] | None = None,
     verbosity: Literal[0] | Literal[1] | Literal[2] | Literal[3] = 0,
     check_uniqueness_with_length: bool = True,
 ) -> RealValuedCommutativeSdpRelaxation: ...
@@ -158,7 +170,14 @@ def get_relaxation(
     objective: RealCoefficientsCommutativePolynomial | ComplexCoefficientsCommutativePolynomial,
     *,
     substitutions: dict[CommutativePolynomialElement, float | CommutativePolynomialElement] | None = None,
-    operator_constraints: list[RealCoefficientsCommutativeConstraint | ComplexCoefficientsCommutativeConstraint]
+    operator_constraints: list[
+        RealCoefficientsCommutativeConstraint
+        | ComplexCoefficientsCommutativeConstraint
+        | tuple[
+            RealCoefficientsCommutativeConstraint | ComplexCoefficientsCommutativeConstraint,
+            list[CommutativePolynomialElement | float] | None,
+        ]
+    ]
     | None = None,
     moment_constraints: list[RealCoefficientsCommutativeConstraint | ComplexCoefficientsCommutativeConstraint]
     | None = None,
@@ -166,21 +185,33 @@ def get_relaxation(
     | None = None,
     substitution_strategy: RewritingStrategy = RewritingStrategy.Greedy,
     assume_real: bool = False,
+    assume_complex: bool = False,
+    assume_commutative: bool = False,
+    assume_noncommutative: bool = False,
+    extra_monomials: list[CommutativePolynomialElement | float] | None = None,
     verbosity: Literal[0] | Literal[1] | Literal[2] | Literal[3] = 0,
     check_uniqueness_with_length: bool = True,
 ) -> ComplexValuedCommutativeSdpRelaxation: ...
 @overload
-def get_relaxation(  # type: ignore[overload-overlap]
+def get_relaxation(
     variables: list[NonCommutativeOperator],
     level: int,
     objective: RealCoefficientsNonCommutativePolynomial,
     *,
     substitutions: dict[NonCommutativePolynomialElement, float | NonCommutativePolynomialElement] | None = None,
-    operator_constraints: list[RealCoefficientsNonCommutativeConstraint] | None = None,
+    operator_constraints: list[
+        RealCoefficientsNonCommutativeConstraint
+        | tuple[RealCoefficientsNonCommutativeConstraint, list[NonCommutativePolynomialElement | float] | None]
+    ]
+    | None = None,
     moment_constraints: list[RealCoefficientsNonCommutativeConstraint] | None = None,
     normalization_constraints: list[RealCoefficientsNonCommutativeConstraint] | None = None,
     substitution_strategy: RewritingStrategy = RewritingStrategy.Greedy,
     assume_real: bool = False,
+    assume_complex: bool = False,
+    assume_commutative: bool = False,
+    assume_noncommutative: bool = False,
+    extra_monomials: list[NonCommutativePolynomialElement | float] | None = None,
     verbosity: Literal[0] | Literal[1] | Literal[2] | Literal[3] = 0,
     check_uniqueness_with_length: bool = True,
 ) -> RealValuedNonCommutativeSdpRelaxation: ...
@@ -191,7 +222,14 @@ def get_relaxation(
     objective: RealCoefficientsNonCommutativePolynomial | ComplexCoefficientsNonCommutativePolynomial,
     *,
     substitutions: dict[NonCommutativePolynomialElement, float | NonCommutativePolynomialElement] | None = None,
-    operator_constraints: list[RealCoefficientsNonCommutativeConstraint | ComplexCoefficientsNonCommutativeConstraint]
+    operator_constraints: list[
+        RealCoefficientsNonCommutativeConstraint
+        | ComplexCoefficientsNonCommutativeConstraint
+        | tuple[
+            RealCoefficientsNonCommutativeConstraint | ComplexCoefficientsNonCommutativeConstraint,
+            list[NonCommutativePolynomialElement | float] | None,
+        ]
+    ]
     | None = None,
     moment_constraints: list[RealCoefficientsNonCommutativeConstraint | ComplexCoefficientsNonCommutativeConstraint]
     | None = None,
@@ -201,6 +239,10 @@ def get_relaxation(
     | None = None,
     substitution_strategy: RewritingStrategy = RewritingStrategy.Greedy,
     assume_real: bool = False,
+    assume_complex: bool = False,
+    assume_commutative: bool = False,
+    assume_noncommutative: bool = False,
+    extra_monomials: list[NonCommutativePolynomialElement | float] | None = None,
     verbosity: Literal[0] | Literal[1] | Literal[2] | Literal[3] = 0,
     check_uniqueness_with_length: bool = True,
 ) -> ComplexValuedNonCommutativeSdpRelaxation: ...
