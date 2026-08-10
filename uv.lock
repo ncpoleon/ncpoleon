@@ -582,7 +582,6 @@ name = "ncpoleon"
 source = { editable = "." }
 dependencies = [
     { name = "numpy" },
-    { name = "pytest-split" },
     { name = "scipy" },
 ]
 
@@ -603,6 +602,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-codspeed" },
     { name = "pytest-cov" },
+    { name = "pytest-split" },
     { name = "scipy-stubs" },
     { name = "ty" },
 ]
@@ -612,7 +612,6 @@ requires-dist = [
     { name = "mosek", marker = "extra == 'mosek'", specifier = ">=11.2.0" },
     { name = "numpy", specifier = ">=2.3.0" },
     { name = "picos", marker = "extra == 'picos'", specifier = ">=2.6.2" },
-    { name = "pytest-split", specifier = ">=0.11.0" },
     { name = "scipy", specifier = ">=1.17.1" },
     { name = "scipy", marker = "extra == 'picos'", specifier = ">=1.17.1" },
 ]
@@ -626,6 +625,7 @@ dev = [
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-codspeed", specifier = ">=5.0.3" },
     { name = "pytest-cov", specifier = ">=7.1.0" },
+    { name = "pytest-split", specifier = ">=0.11.0" },
     { name = "scipy-stubs", specifier = ">=1.17.1.5" },
     { name = "ty", specifier = ">=0.0.40" },
 ]
