@@ -33,6 +33,9 @@ jobs:
   benchmarks:
     name: Run benchmarks
     runs-on: codspeed-macro
+    strategy:
+      matrix:
+        shard: [1, 2, 3]
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
@@ -56,15 +59,16 @@ jobs:
         uses: CodSpeedHQ/action@f99becdce5e5d51fd556489ebef684f4ecfd6286
         with:
           mode: simulation
-          run: uv run --no-sync pytest -x --codspeed -m "not walltime" -v --durations=0
+          run: uv run --no-sync pytest -x --codspeed --splits 3 --group ${{ matrix.shard }} -m "not walltime" -v --durations=0
 
   benchmarks-walltime:
     name: Run benchmarks with walltime
     runs-on: codspeed-macro
+    strategy:
+      matrix:
+        shard: [1, 2, 3]
     needs: [approve-benchmarks]
-    # The solver benchmarks legitimately take ~48 minutes; this only guards
-    # against a hang, so it sits well above the observed runtime.
-    timeout-minutes: 90
+    timeout-minutes: 90 # The Codspeed runner macro hard stops after one hour anyway
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
@@ -116,4 +120,4 @@ jobs:
         uses: CodSpeedHQ/action@f99becdce5e5d51fd556489ebef684f4ecfd6286
         with:
           mode: walltime
-          run: uv run --no-sync pytest -x --codspeed -m walltime -v --durations=0
+          run: uv run --no-sync pytest -x --codspeed --splits 3 --group ${{ matrix.shard }} -m walltime -v --durations=0
