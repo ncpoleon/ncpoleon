@@ -253,7 +253,7 @@ fn try_into_real_commutative_side<'py>(
     if let Ok(scalar) = value.extract::<f64>() {
         return Ok(ConstraintSide::Scalar(scalar));
     }
-    let poly = PythonRealCoefficientsCommutativePolynomial::try_from(value)?;
+    let poly = PythonRealCoefficientsCommutativePolynomial::try_from_reference_bound(value, None)?;
     Ok(ConstraintSide::Polynomial(poly.0))
 }
 
@@ -263,7 +263,7 @@ fn try_into_complex_commutative_side<'py>(
     if let Ok(scalar) = value.extract::<Complex<f64>>() {
         return Ok(ConstraintSide::Scalar(scalar));
     }
-    let poly = PythonComplexCoefficientsCommutativePolynomial::try_from(value)?;
+    let poly = PythonComplexCoefficientsCommutativePolynomial::try_from_reference_bound(value, None)?;
     Ok(ConstraintSide::Polynomial(poly.0))
 }
 
@@ -273,7 +273,7 @@ fn try_into_real_noncommutative_side<'py>(
     if let Ok(scalar) = value.extract::<f64>() {
         return Ok(ConstraintSide::Scalar(scalar));
     }
-    let poly = PythonRealCoefficientsNonCommutativePolynomial::try_from(value)?;
+    let poly = PythonRealCoefficientsNonCommutativePolynomial::try_from_reference_bound(value, None)?;
     Ok(ConstraintSide::Polynomial(poly.0))
 }
 
@@ -283,7 +283,7 @@ fn try_into_complex_noncommutative_side<'py>(
     if let Ok(scalar) = value.extract::<Complex<f64>>() {
         return Ok(ConstraintSide::Scalar(scalar));
     }
-    let poly = PythonComplexCoefficientsNonCommutativePolynomial::try_from(value)?;
+    let poly = PythonComplexCoefficientsNonCommutativePolynomial::try_from_reference_bound(value, None)?;
     Ok(ConstraintSide::Polynomial(poly.0))
 }
 

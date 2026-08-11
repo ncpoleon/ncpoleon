@@ -47,6 +47,7 @@ fn position_matrix_to_row_col_data_format<Scalar: PolynomialDtype>(
 //  variable is complex could suffice, modulo some changes in the code.
 #[derive(Clone)]
 pub(super) struct RustMomentMatrix<Scalar: PolynomialDtype, MonomialType: AdjointTrait + Ord> {
+    pub(super) associated_id: u8,
     data: BTreeMap<MonomialType, PositionMatrixPair<Scalar>>,
     /// Maps the canonical form of each stored key's adjoint back to that key. Maintained by
     /// [`RustMomentMatrix::insert`], it lets [`RustMomentMatrix::get_mut`] resolve a monomial stored
@@ -61,8 +62,8 @@ where
     Scalar: PolynomialDtype,
     MonomialType: AdjointTrait + Ord + RewritingTrait<MonomialType> + Display + Clone,
 {
-    pub(super) fn new(size: usize) -> Self {
-        Self { data: BTreeMap::new(), adjoint_index: BTreeMap::new(), size }
+    pub(super) fn new(associated_id: u8, size: usize) -> Self {
+        Self { associated_id, data: BTreeMap::new(), adjoint_index: BTreeMap::new(), size }
     }
 
     pub(super) fn get(
@@ -253,7 +254,7 @@ macro_rules! impl_moment_matrix_pymethods {
             }
 
             fn __contains__<'py>(&self, item: &Bound<'py, PyAny>) -> bool {
-                let rust_monomial: Result<$py_monomial, PyErr> = item.try_into();
+                let rust_monomial = $py_monomial::try_from_reference_bound(item, Some(self.0.associated_id));
                 rust_monomial.is_ok()
             }
 
@@ -261,7 +262,7 @@ macro_rules! impl_moment_matrix_pymethods {
                 &self,
                 key: &Bound<'py, PyAny>,
             ) -> PyResult<PositionMatrixRowColDataFormat<$scalar_type>> {
-                let python_monomial: $py_monomial = key.try_into()?;
+                let python_monomial = $py_monomial::try_from_reference_bound(key, Some(self.0.associated_id))?;
                 let res = self
                     .0
                     .get(&python_monomial.0, RewritingStrategy::None, &BTreeMap::new())
@@ -278,7 +279,7 @@ macro_rules! impl_moment_matrix_pymethods {
             }
 
             fn get_canonical<'py>(&self, monomial: &Bound<'py, PyAny>) -> PyResult<($py_monomial, bool, bool)> {
-                let python_monomial: $py_monomial = monomial.try_into()?;
+                let python_monomial = $py_monomial::try_from_reference_bound(monomial, Some(self.0.associated_id))?;
                 let (rust_monomial, is_adjoint, is_real_valued) = self
                     .0
                     .get_canonical(&python_monomial.0, RewritingStrategy::None, &BTreeMap::new())

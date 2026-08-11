@@ -59,10 +59,8 @@ pub(crate) struct PythonComplexCoefficientsNonCommutativePolynomial(
     pub(crate) RustComplexCoefficientsNonCommutativePolynomial,
 );
 
-impl<'py> TryFrom<&Bound<'py, PyAny>> for PythonRealCoefficientsNonCommutativePolynomial {
-    type Error = PyErr;
-
-    fn try_from(value: &Bound<'py, PyAny>) -> Result<Self, Self::Error> {
+impl PythonRealCoefficientsNonCommutativePolynomial {
+    pub(crate) fn try_from_reference_bound<'py>(value: &Bound<'py, PyAny>, unique_moment_id: Option<u8>) -> PyResult<Self> {
         if let Ok(poly) = value.cast::<PythonRealCoefficientsNonCommutativePolynomial>() {
             Ok(poly.get().clone())
         } else if let Ok(mon) = value.cast::<PythonNonCommutativeMonomial>() {
@@ -74,12 +72,15 @@ impl<'py> TryFrom<&Bound<'py, PyAny>> for PythonRealCoefficientsNonCommutativePo
                 data: BTreeMap::from([(RustNonCommutativeMonomial::from(op.get().0), 1.0)]),
             }))
         } else if let Ok(f64_value) = value.extract::<f64>() {
-            Ok(Self(RustRealCoefficientsNonCommutativePolynomial {
-                // Caution! We can't know the moment matrix index when converting here, so we
-                // instead set it to zero, and it is then the responsibility of the caller to
-                // sanitize the moment_matrix_id
-                data: BTreeMap::from([(RustNonCommutativeMonomial::one(0), f64_value)]),
-            }))
+            match unique_moment_id {
+                Some(mm_id) => Ok(Self(RustRealCoefficientsNonCommutativePolynomial {
+                    data: BTreeMap::from([(RustNonCommutativeMonomial::one(mm_id), f64_value)]),
+                })),
+                None => Err(PyTypeError::new_err(format!(
+                    "Couldn't assign the float {} a unique moment matrix identifier.",
+                    f64_value
+                ))),
+            }
         } else {
             Err(PyTypeError::new_err("Couldn't convert to PythonRealCoefficientsNonCommutativePolynomial"))
         }
@@ -100,41 +101,29 @@ impl<'py> FromPyObject<'_, 'py> for PythonRealCoefficientsNonCommutativePolynomi
             Ok(Self(RustRealCoefficientsNonCommutativePolynomial {
                 data: BTreeMap::from([(RustNonCommutativeMonomial::from(op.get().0), 1.0)]),
             }))
-        } else if let Ok(f64_value) = obj.extract::<f64>() {
-            Ok(Self(RustRealCoefficientsNonCommutativePolynomial {
-                // Caution! We can't know the moment matrix index when converting here, so we
-                // instead set it to zero, and it is then the responsibility of the caller to
-                // sanitize the moment_matrix_id
-                data: BTreeMap::from([(RustNonCommutativeMonomial::one(0), f64_value)]),
-            }))
         } else {
             Err(PyTypeError::new_err("Couldn't convert to PythonRealCoefficientsNonCommutativePolynomial"))
         }
     }
 }
 
-impl<'py> TryFrom<Bound<'py, PyAny>> for PythonRealCoefficientsNonCommutativePolynomial {
-    type Error = PyErr;
-
-    fn try_from(value: Bound<'py, PyAny>) -> Result<Self, Self::Error> {
-        (&value).try_into()
-    }
-}
-
-impl<'py> TryFrom<&Bound<'py, PyAny>> for PythonComplexCoefficientsNonCommutativePolynomial {
-    type Error = PyErr;
-
-    fn try_from(value: &Bound<'py, PyAny>) -> Result<Self, Self::Error> {
+impl PythonComplexCoefficientsNonCommutativePolynomial {
+    pub(crate) fn try_from_reference_bound<'py>(value: &Bound<'py, PyAny>, unique_moment_id: Option<u8>) -> PyResult<Self> {
         if let Ok(poly) = value.cast::<PythonComplexCoefficientsNonCommutativePolynomial>() {
             Ok(poly.get().clone())
         } else if let Ok(complex_value) = value.extract::<Complex<f64>>() {
-            Ok(Self(RustComplexCoefficientsNonCommutativePolynomial {
-                // Caution! We can't know the moment matrix index when converting here, so we
-                // instead set it to zero, and it is then the responsibility of the caller to
-                // sanitize the moment_matrix_id
-                data: BTreeMap::from([(RustNonCommutativeMonomial::one(0), complex_value)]),
-            }))
-        } else if let Ok(real_poly) = PythonRealCoefficientsNonCommutativePolynomial::try_from(value) {
+            match unique_moment_id {
+                Some(mm_id) => Ok(Self(RustComplexCoefficientsNonCommutativePolynomial {
+                    data: BTreeMap::from([(RustNonCommutativeMonomial::one(mm_id), complex_value)]),
+                })),
+                None => Err(PyTypeError::new_err(format!(
+                    "Couldn't assign the complex {} a unique moment matrix identifier.",
+                    complex_value
+                ))),
+            }
+        } else if let Ok(real_poly) =
+            PythonRealCoefficientsNonCommutativePolynomial::try_from_reference_bound(value, unique_moment_id)
+        {
             Ok(real_poly.into())
         } else {
             Err(PyTypeError::new_err("Couldn't convert to PythonComplexCoefficientsNonCommutativePolynomial"))
@@ -148,26 +137,11 @@ impl<'py> FromPyObject<'_, 'py> for PythonComplexCoefficientsNonCommutativePolyn
     fn extract(obj: pyo3::Borrowed<'_, 'py, pyo3::PyAny>) -> Result<Self, Self::Error> {
         if let Ok(poly) = obj.cast::<PythonComplexCoefficientsNonCommutativePolynomial>() {
             Ok(poly.get().clone())
-        } else if let Ok(complex_value) = obj.extract::<Complex<f64>>() {
-            Ok(Self(RustComplexCoefficientsNonCommutativePolynomial {
-                // Caution! We can't know the moment matrix index when converting here, so we
-                // instead set it to zero, and it is then the responsibility of the caller to
-                // sanitize the moment_matrix_id
-                data: BTreeMap::from([(RustNonCommutativeMonomial::one(0), complex_value)]),
-            }))
-        } else if let Ok(real_poly) = obj.extract::<PythonRealCoefficientsNonCommutativePolynomial>() {
-            Ok(real_poly.into())
+        } else if let Ok(real_poly) = obj.cast::<PythonRealCoefficientsNonCommutativePolynomial>() {
+            Ok(real_poly.get().clone().into())
         } else {
             Err(PyTypeError::new_err("Couldn't convert to PythonComplexCoefficientsNonCommutativePolynomial"))
         }
-    }
-}
-
-impl<'py> TryFrom<Bound<'py, PyAny>> for PythonComplexCoefficientsNonCommutativePolynomial {
-    type Error = PyErr;
-
-    fn try_from(value: Bound<'py, PyAny>) -> Result<Self, Self::Error> {
-        (&value).try_into()
     }
 }
 
