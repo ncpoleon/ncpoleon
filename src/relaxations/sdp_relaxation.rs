@@ -623,10 +623,12 @@ fn get_commutativity_and_mm_index_from_bound<'py>(
     }
 }
 
+type SetOfMomentMatrixIds = BTreeSet<u8>;
+
 /// Get whether a polynomial a real-valued and its type of variables
 fn get_realness_and_commutativity_and_all_mm_id_of_polynomial_from_bound<'py>(
     bound: &Bound<'py, PyAny>,
-) -> Result<(bool, Option<MonomialCommutativity>, Option<BTreeSet<u8>>), ()> {
+) -> Result<(bool, Option<MonomialCommutativity>, Option<SetOfMomentMatrixIds>), ()> {
     if bound.cast::<PyInt>().is_ok() || bound.cast::<PyFloat>().is_ok() {
         Ok((true, None, None))
     } else if bound.cast::<PyComplex>().is_ok() {
