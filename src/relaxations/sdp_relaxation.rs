@@ -5,7 +5,7 @@ use std::ops::Mul;
 
 use itertools::Itertools;
 use kdam::tqdm;
-use log::{debug, info, trace, warn};
+use log::{debug, info, trace};
 use num_complex::Complex;
 use num_traits::Zero;
 use pyo3::IntoPyObjectExt;
@@ -189,10 +189,7 @@ macro_rules! build_relaxation_arm {
 
         for (index, monom) in $extra_monomials_some.into_iter().enumerate() {
             if let Ok(rust_monom) = $py_monomial::try_from_reference_bound(&monom, $unique_moment_id) {
-                rust_extra_monomials
-                    .entry(rust_monom.0.moment_matrix_id())
-                    .or_default()
-                    .push(rust_monom.0);
+                rust_extra_monomials.entry(rust_monom.0.moment_matrix_id()).or_default().push(rust_monom.0);
             } else {
                 return Err(PyValueError::new_err(format!(
                     "Couldn't convert extra monomial at index {} to a monomial.",
@@ -202,34 +199,35 @@ macro_rules! build_relaxation_arm {
         }
 
         let operator_constraints_with_generating_sets: Vec<(Bound<'_, PyAny>, Option<Vec<$rust_monomial>>)> =
-            $operator_constraints_with_generating_sets.into_iter().map(|(constraint, generating_set_option)| {
-                let generating_set = generating_set_option.map(|generating_set| {
-                    generating_set.into_iter().map(|variable| {
-                        $py_monomial::try_from_reference_bound(&variable, $unique_moment_id).map(|res| res.0)
-                    }).collect::<Result<Vec<$rust_monomial>, PyErr>>()
-                }).transpose()?;
+            $operator_constraints_with_generating_sets
+                .into_iter()
+                .map(|(constraint, generating_set_option)| {
+                    let generating_set = generating_set_option
+                        .map(|generating_set| {
+                            generating_set
+                                .into_iter()
+                                .map(|variable| {
+                                    $py_monomial::try_from_reference_bound(&variable, $unique_moment_id)
+                                        .map(|res| res.0)
+                                })
+                                .collect::<Result<Vec<$rust_monomial>, PyErr>>()
+                        })
+                        .transpose()?;
 
-                Ok((constraint, generating_set))
-            }).collect::<Result<Vec<_>, PyErr>>()?;
+                    Ok((constraint, generating_set))
+                })
+                .collect::<Result<Vec<_>, PyErr>>()?;
 
         debug!("Converting substitutions.");
         let mut rust_substitutions: BTreeMap<$rust_monomial, $rust_monomial> = BTreeMap::new();
+        debug!("Unique moment id {:?}", $unique_moment_id);
 
         for (index, (monom_key, monom_value)) in $substitutions_some.into_iter().enumerate() {
             let try_rust_monom_key = $py_monomial::try_from_reference_bound(&monom_key, $unique_moment_id);
             let try_rust_monom_value = $py_monomial::try_from_reference_bound(&monom_value, $unique_moment_id);
 
             match (try_rust_monom_key, try_rust_monom_value) {
-                (Ok(key), Ok(mut value)) => {
-                    // If the RHS term is the identity, it may have been converted from 1, in which
-                    // case the conversion couldn't know the moment_matrix index. We set it to the
-                    // same one as the monomial to replace
-                    // TODO: we should instead check in the setup whether there is a unique moment matix identifier. If yes,
-                    //  we can convert 1 or 1.0 to the intended monomial, and error otherwise
-                    if value.0.is_one() {
-                        warn!("Set the moment matrix index of the identity operator to the same one as {} in a substitution constraint.", key.0);
-                        value.0.data.moment_matrix_id = key.0.data.moment_matrix_id;
-                    }
+                (Ok(key), Ok(value)) => {
                     trace!("Adding substitution at index {} to the substitutions ({} -> {}).", index, key.0, value.0);
                     rust_substitutions.insert(key.0, value.0);
                 }
@@ -375,8 +373,8 @@ pub(crate) fn get_relaxation<'py>(
     let mut problem_contains_commutative: bool = false;
     let mut problem_contains_noncommutative: bool = false;
 
-    let (realness, commutativity, mut unique_moment_id) =
-        get_realness_and_commutativity_and_unique_mm_id_of_polynomial_from_bound(objective)
+    let (realness, commutativity, mut unique_moment_ids) =
+        get_realness_and_commutativity_and_all_mm_id_of_polynomial_from_bound(objective)
             .map_err(|_err| PyValueError::new_err("Couldn't convert the objective into a supported polynomial."))?;
 
     is_problem_real_valued &= realness;
@@ -435,15 +433,14 @@ pub(crate) fn get_relaxation<'py>(
                     }
                 }
 
-                unique_moment_id = match (unique_moment_id, mm_id) {
-                    (Some(mm_id1), Some(mm_id2)) => {
-                        if mm_id1 == mm_id2 {
-                            Some(mm_id1)
-                        } else {
-                            None
-                        }
+                unique_moment_ids = match (unique_moment_ids, mm_id) {
+                    (Some(mut unique_moment_ids_some), Some(mm_id)) => {
+                        unique_moment_ids_some.insert(mm_id);
+                        Some(unique_moment_ids_some)
                     }
-                    _ => None,
+                    (None, Some(mm_id)) => Some(BTreeSet::from([mm_id])),
+                    (Some(unique_moment_ids_some), None) => Some(unique_moment_ids_some),
+                    (None, None) => None,
                 };
             }
         }
@@ -484,15 +481,14 @@ pub(crate) fn get_relaxation<'py>(
                 }
             }
 
-            unique_moment_id = match (unique_moment_id, mm_id) {
-                (Some(mm_id1), Some(mm_id2)) => {
-                    if mm_id1 == mm_id2 {
-                        Some(mm_id1)
-                    } else {
-                        None
-                    }
+            unique_moment_ids = match (unique_moment_ids, mm_id) {
+                (Some(mut unique_moment_ids_some), Some(mm_id)) => {
+                    unique_moment_ids_some.insert(mm_id);
+                    Some(unique_moment_ids_some)
                 }
-                _ => None,
+                (None, Some(mm_id)) => Some(BTreeSet::from([mm_id])),
+                (Some(unique_moment_ids_some), None) => Some(unique_moment_ids_some),
+                (None, None) => None,
             };
         }
     }
@@ -514,15 +510,14 @@ pub(crate) fn get_relaxation<'py>(
             }
         }
 
-        unique_moment_id = match (unique_moment_id, mm_id) {
-            (Some(mm_id1), Some(mm_id2)) => {
-                if mm_id1 == mm_id2 {
-                    Some(mm_id1)
-                } else {
-                    None
-                }
+        unique_moment_ids = match (unique_moment_ids, mm_id) {
+            (Some(mut unique_moment_ids_some), Some(mm_id)) => {
+                unique_moment_ids_some.insert(mm_id);
+                Some(unique_moment_ids_some)
             }
-            _ => None,
+            (None, Some(mm_id)) => Some(BTreeSet::from([mm_id])),
+            (Some(unique_moment_ids_some), None) => Some(unique_moment_ids_some),
+            (None, None) => None,
         };
 
         let (commutativity, mm_id) = get_commutativity_and_mm_index_from_bound(&value).map_err(|_err| {
@@ -539,17 +534,22 @@ pub(crate) fn get_relaxation<'py>(
             }
         }
 
-        unique_moment_id = match (unique_moment_id, mm_id) {
-            (Some(mm_id1), Some(mm_id2)) => {
-                if mm_id1 == mm_id2 {
-                    Some(mm_id1)
-                } else {
-                    None
-                }
+        unique_moment_ids = match (unique_moment_ids, mm_id) {
+            (Some(mut unique_moment_ids_some), Some(mm_id)) => {
+                unique_moment_ids_some.insert(mm_id);
+                Some(unique_moment_ids_some)
             }
-            _ => None,
+            (None, Some(mm_id)) => Some(BTreeSet::from([mm_id])),
+            (Some(unique_moment_ids_some), None) => Some(unique_moment_ids_some),
+            (None, None) => None,
         };
     }
+
+    let unique_moment_id = if let Some(unique_moment_ids_some) = unique_moment_ids {
+        if unique_moment_ids_some.len() == 1 { Some(*unique_moment_ids_some.first().unwrap()) } else { None }
+    } else {
+        None
+    };
 
     match (problem_contains_commutative, problem_contains_noncommutative) {
         (false, false) => Err(PyValueError::new_err("Variables must be provided.")),
@@ -624,29 +624,45 @@ fn get_commutativity_and_mm_index_from_bound<'py>(
 }
 
 /// Get whether a polynomial a real-valued and its type of variables
-fn get_realness_and_commutativity_and_unique_mm_id_of_polynomial_from_bound<'py>(
+fn get_realness_and_commutativity_and_all_mm_id_of_polynomial_from_bound<'py>(
     bound: &Bound<'py, PyAny>,
-) -> Result<(bool, Option<MonomialCommutativity>, Option<u8>), ()> {
+) -> Result<(bool, Option<MonomialCommutativity>, Option<BTreeSet<u8>>), ()> {
     if bound.cast::<PyInt>().is_ok() || bound.cast::<PyFloat>().is_ok() {
         Ok((true, None, None))
     } else if bound.cast::<PyComplex>().is_ok() {
         Ok((false, None, None))
     } else if let Ok(op_bound) = bound.cast::<PythonCommutativeOperator>() {
-        Ok((true, Some(MonomialCommutativity::Commutative), Some(op_bound.get().0.moment_matrix_id())))
+        Ok((
+            true,
+            Some(MonomialCommutativity::Commutative),
+            Some(BTreeSet::from([op_bound.get().0.moment_matrix_id()])),
+        ))
     } else if let Ok(monom_bound) = bound.cast::<PythonCommutativeMonomial>() {
-        Ok((true, Some(MonomialCommutativity::Commutative), Some(monom_bound.get().0.moment_matrix_id())))
+        Ok((
+            true,
+            Some(MonomialCommutativity::Commutative),
+            Some(BTreeSet::from([monom_bound.get().0.moment_matrix_id()])),
+        ))
     } else if let Ok(op_bound) = bound.cast::<PythonNonCommutativeOperator>() {
-        Ok((true, Some(MonomialCommutativity::NonCommutative), Some(op_bound.get().0.moment_matrix_id())))
+        Ok((
+            true,
+            Some(MonomialCommutativity::NonCommutative),
+            Some(BTreeSet::from([op_bound.get().0.moment_matrix_id()])),
+        ))
     } else if let Ok(monom_bound) = bound.cast::<PythonNonCommutativeMonomial>() {
-        Ok((true, Some(MonomialCommutativity::NonCommutative), Some(monom_bound.get().0.moment_matrix_id())))
+        Ok((
+            true,
+            Some(MonomialCommutativity::NonCommutative),
+            Some(BTreeSet::from([monom_bound.get().0.moment_matrix_id()])),
+        ))
     } else if let Ok(poly_bound) = bound.cast::<PythonRealCoefficientsCommutativePolynomial>() {
-        Ok((true, Some(MonomialCommutativity::Commutative), poly_bound.get().0.get_unique_moment_matrix_id()))
+        Ok((true, Some(MonomialCommutativity::Commutative), Some(poly_bound.get().0.get_all_moment_matrix_id())))
     } else if let Ok(poly_bound) = bound.cast::<PythonRealCoefficientsNonCommutativePolynomial>() {
-        Ok((true, Some(MonomialCommutativity::NonCommutative), poly_bound.get().0.get_unique_moment_matrix_id()))
+        Ok((true, Some(MonomialCommutativity::NonCommutative), Some(poly_bound.get().0.get_all_moment_matrix_id())))
     } else if let Ok(poly_bound) = bound.cast::<PythonComplexCoefficientsCommutativePolynomial>() {
-        Ok((false, Some(MonomialCommutativity::Commutative), poly_bound.get().0.get_unique_moment_matrix_id()))
+        Ok((false, Some(MonomialCommutativity::Commutative), Some(poly_bound.get().0.get_all_moment_matrix_id())))
     } else if let Ok(poly_bound) = bound.cast::<PythonComplexCoefficientsNonCommutativePolynomial>() {
-        Ok((false, Some(MonomialCommutativity::NonCommutative), poly_bound.get().0.get_unique_moment_matrix_id()))
+        Ok((false, Some(MonomialCommutativity::NonCommutative), Some(poly_bound.get().0.get_all_moment_matrix_id())))
     } else {
         Err(())
     }
@@ -1364,7 +1380,8 @@ where
 
             let is_problem_real_valued = self.objective.is_real();
             let mut new_moment_matrix = RustMomentMatrix::new(
-                moment_matrix_id, monomials_sets.iter().map(|set| set.len()).sum::<usize>() + extra_monomials.len(),
+                moment_matrix_id,
+                monomials_sets.iter().map(|set| set.len()).sum::<usize>() + extra_monomials.len(),
             );
 
             // Determine the constraints on the moment matrix. This is where we build the map between
