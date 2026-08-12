@@ -59,7 +59,10 @@ pub(crate) struct PythonComplexCoefficientsCommutativePolynomial(
 );
 
 impl PythonRealCoefficientsCommutativePolynomial {
-    pub(crate) fn try_from_reference_bound<'py>(value: &Bound<'py, PyAny>, unique_moment_id: Option<u8>) -> PyResult<Self> {
+    pub(crate) fn try_from_reference_bound<'py>(
+        value: &Bound<'py, PyAny>,
+        unique_moment_id: Option<u8>,
+    ) -> PyResult<Self> {
         if let Ok(poly) = value.cast::<PythonRealCoefficientsCommutativePolynomial>() {
             Ok(poly.get().clone())
         } else if let Ok(mon) = value.cast::<PythonCommutativeMonomial>() {
@@ -99,7 +102,10 @@ impl<'py> FromPyObject<'_, 'py> for PythonRealCoefficientsCommutativePolynomial 
 }
 
 impl PythonComplexCoefficientsCommutativePolynomial {
-    pub(crate) fn try_from_reference_bound<'py>(value: &Bound<'py, PyAny>, unique_moment_id: Option<u8>) -> PyResult<Self> {
+    pub(crate) fn try_from_reference_bound<'py>(
+        value: &Bound<'py, PyAny>,
+        unique_moment_id: Option<u8>,
+    ) -> PyResult<Self> {
         if let Ok(poly) = value.cast::<PythonComplexCoefficientsCommutativePolynomial>() {
             Ok(poly.get().clone())
         } else if let Ok(complex_value) = value.extract::<Complex<f64>>() {

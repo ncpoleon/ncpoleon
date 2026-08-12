@@ -60,7 +60,10 @@ pub(crate) struct PythonComplexCoefficientsNonCommutativePolynomial(
 );
 
 impl PythonRealCoefficientsNonCommutativePolynomial {
-    pub(crate) fn try_from_reference_bound<'py>(value: &Bound<'py, PyAny>, unique_moment_id: Option<u8>) -> PyResult<Self> {
+    pub(crate) fn try_from_reference_bound<'py>(
+        value: &Bound<'py, PyAny>,
+        unique_moment_id: Option<u8>,
+    ) -> PyResult<Self> {
         if let Ok(poly) = value.cast::<PythonRealCoefficientsNonCommutativePolynomial>() {
             Ok(poly.get().clone())
         } else if let Ok(mon) = value.cast::<PythonNonCommutativeMonomial>() {
@@ -108,7 +111,10 @@ impl<'py> FromPyObject<'_, 'py> for PythonRealCoefficientsNonCommutativePolynomi
 }
 
 impl PythonComplexCoefficientsNonCommutativePolynomial {
-    pub(crate) fn try_from_reference_bound<'py>(value: &Bound<'py, PyAny>, unique_moment_id: Option<u8>) -> PyResult<Self> {
+    pub(crate) fn try_from_reference_bound<'py>(
+        value: &Bound<'py, PyAny>,
+        unique_moment_id: Option<u8>,
+    ) -> PyResult<Self> {
         if let Ok(poly) = value.cast::<PythonComplexCoefficientsNonCommutativePolynomial>() {
             Ok(poly.get().clone())
         } else if let Ok(complex_value) = value.extract::<Complex<f64>>() {

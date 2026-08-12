@@ -54,7 +54,10 @@ pub(crate) type RustCommutativeMonomial = Monomial<CommutativeMonomialDataWithMo
 pub(crate) struct PythonCommutativeMonomial(pub(crate) RustCommutativeMonomial);
 
 impl PythonCommutativeMonomial {
-    pub(crate) fn try_from_reference_bound<'py>(value: &Bound<'py, PyAny>, unique_moment_id: Option<u8>) -> PyResult<Self> {
+    pub(crate) fn try_from_reference_bound<'py>(
+        value: &Bound<'py, PyAny>,
+        unique_moment_id: Option<u8>,
+    ) -> PyResult<Self> {
         if let Ok(mon) = value.cast::<PythonCommutativeMonomial>() {
             Ok(mon.get().clone())
         } else if let Ok(op) = value.cast::<PythonCommutativeOperator>() {

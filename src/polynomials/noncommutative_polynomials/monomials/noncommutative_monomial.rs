@@ -55,7 +55,10 @@ pub(crate) type RustNonCommutativeMonomial = Monomial<NonCommutativeMonomialData
 pub(crate) struct PythonNonCommutativeMonomial(pub(crate) RustNonCommutativeMonomial);
 
 impl PythonNonCommutativeMonomial {
-    pub(crate) fn try_from_reference_bound<'py>(value: &Bound<'py, PyAny>, unique_moment_id: Option<u8>) -> PyResult<Self> {
+    pub(crate) fn try_from_reference_bound<'py>(
+        value: &Bound<'py, PyAny>,
+        unique_moment_id: Option<u8>,
+    ) -> PyResult<Self> {
         if let Ok(mon) = value.cast::<PythonNonCommutativeMonomial>() {
             Ok(PythonNonCommutativeMonomial(mon.get().0.clone()))
         } else if let Ok(op) = value.cast::<PythonNonCommutativeOperator>() {
