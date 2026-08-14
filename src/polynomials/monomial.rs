@@ -55,7 +55,7 @@ pub(crate) struct Monomial<Data> {
 ///
 /// The strategy controls how the substitution rules are applied when
 /// simplifying or normalizing monomials.
-#[pyclass(frozen, module = "ncpoleon.polynomials")]
+#[pyclass(frozen, module = "ncpoleon.polynomials", from_py_object)]
 #[derive(Clone, Copy)]
 pub(crate) enum RewritingStrategy {
     /// Do not perform any substitution

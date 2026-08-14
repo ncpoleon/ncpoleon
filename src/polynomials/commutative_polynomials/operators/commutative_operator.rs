@@ -56,7 +56,12 @@ pub(crate) type RustCommutativeOperator = Operator<CommutativeOperatorIdentifier
 ///
 /// Instances are normally created in bulk via
 /// [`generate_commutative_variables`].
-#[pyclass(frozen, module = "ncpoleon.polynomials.commutative_polynomials", name = "CommutativeOperator")]
+#[pyclass(
+    frozen,
+    module = "ncpoleon.polynomials.commutative_polynomials",
+    name = "CommutativeOperator",
+    skip_from_py_object
+)]
 #[derive(Clone, Copy)]
 pub(crate) struct PythonCommutativeOperator(pub(crate) RustCommutativeOperator);
 

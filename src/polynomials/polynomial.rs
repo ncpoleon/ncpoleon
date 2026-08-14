@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{self, Display};
 use std::ops::{Add, Div, Mul, Neg, Sub};
 
@@ -99,6 +99,10 @@ where
         } else {
             None
         }
+    }
+
+    pub(crate) fn get_all_moment_matrix_id(&self) -> BTreeSet<u8> {
+        self.data.keys().map(|monomial| monomial.moment_matrix_id()).collect()
     }
 
     pub(crate) fn by_moment_matrix_id(&self) -> BTreeMap<u8, Self> {

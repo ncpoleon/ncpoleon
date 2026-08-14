@@ -45,33 +45,32 @@ pub(crate) type RustNonCommutativeMonomial = Monomial<NonCommutativeMonomialData
 ///
 /// A `NonCommutativeMonomial` represents an ordered product of
 /// [`NonCommutativeOperator`] instances, e.g. `A(0) * A(1) * A(0)`.
-#[pyclass(frozen, module = "ncpoleon.polynomials.noncommutative_polynomials", name = "NonCommutativeMonomial")]
+#[pyclass(
+    frozen,
+    module = "ncpoleon.polynomials.noncommutative_polynomials",
+    name = "NonCommutativeMonomial",
+    skip_from_py_object
+)]
 #[derive(Clone, PartialOrd, Ord, PartialEq, Eq)]
 pub(crate) struct PythonNonCommutativeMonomial(pub(crate) RustNonCommutativeMonomial);
 
-impl<'py> TryFrom<&Bound<'py, PyAny>> for PythonNonCommutativeMonomial {
-    type Error = PyErr;
-
-    fn try_from(value: &Bound<'py, PyAny>) -> Result<Self, Self::Error> {
+impl PythonNonCommutativeMonomial {
+    pub(crate) fn try_from_reference_bound<'py>(
+        value: &Bound<'py, PyAny>,
+        unique_moment_id: Option<u8>,
+    ) -> PyResult<Self> {
         if let Ok(mon) = value.cast::<PythonNonCommutativeMonomial>() {
             Ok(PythonNonCommutativeMonomial(mon.get().0.clone()))
         } else if let Ok(op) = value.cast::<PythonNonCommutativeOperator>() {
             Ok(PythonNonCommutativeMonomial(op.get().0.into()))
         } else if value.extract::<f64>().is_ok_and(|f| f == 1.0) {
-            // Caution! We can't know the moment matrix index when converting here, so we instead set it to zero,
-            // and it is then the responsibility of the caller to sanitize the moment_matrix_id
-            Ok(PythonNonCommutativeMonomial(RustNonCommutativeMonomial::one(0)))
+            match unique_moment_id {
+                Some(mm_id) => Ok(PythonNonCommutativeMonomial(RustNonCommutativeMonomial::one(mm_id))),
+                None => Err(PyTypeError::new_err("Couldn't assign a unique moment matrix index to a unit float.")),
+            }
         } else {
             Err(PyTypeError::new_err("Couldn't convert to NonCommutativeMonomial"))
         }
-    }
-}
-
-impl<'py> TryFrom<Bound<'py, PyAny>> for PythonNonCommutativeMonomial {
-    type Error = PyErr;
-
-    fn try_from(value: Bound<'py, PyAny>) -> Result<Self, Self::Error> {
-        (&value).try_into()
     }
 }
 

@@ -44,33 +44,32 @@ pub(crate) type RustCommutativeMonomial = Monomial<CommutativeMonomialDataWithMo
 ///
 /// A `CommutativeMonomial` represents a product of [`CommutativeOperator`]
 /// instances raised to non-negative integer powers, e.g. `x_(0)^2 * x_(1)`.
-#[pyclass(frozen, module = "ncpoleon.polynomials.commutative_polynomials", name = "CommutativeMonomial")]
+#[pyclass(
+    frozen,
+    module = "ncpoleon.polynomials.commutative_polynomials",
+    name = "CommutativeMonomial",
+    skip_from_py_object
+)]
 #[derive(Clone, PartialOrd, Ord, PartialEq, Eq)]
 pub(crate) struct PythonCommutativeMonomial(pub(crate) RustCommutativeMonomial);
 
-impl<'py> TryFrom<&Bound<'py, PyAny>> for PythonCommutativeMonomial {
-    type Error = PyErr;
-
-    fn try_from(value: &Bound<'py, PyAny>) -> Result<Self, Self::Error> {
+impl PythonCommutativeMonomial {
+    pub(crate) fn try_from_reference_bound<'py>(
+        value: &Bound<'py, PyAny>,
+        unique_moment_id: Option<u8>,
+    ) -> PyResult<Self> {
         if let Ok(mon) = value.cast::<PythonCommutativeMonomial>() {
             Ok(mon.get().clone())
         } else if let Ok(op) = value.cast::<PythonCommutativeOperator>() {
             Ok((*op.get()).into())
         } else if value.extract::<f64>().is_ok_and(|f| f == 1.0) {
-            // Caution! We can't know the moment matrix index when converting here, so we instead set it to zero, and
-            // it is then the responsability of the caller to sanitize the moment_matrix_id
-            Ok(PythonCommutativeMonomial(RustCommutativeMonomial::one(0)))
+            match unique_moment_id {
+                Some(mm_id) => Ok(PythonCommutativeMonomial(RustCommutativeMonomial::one(mm_id))),
+                None => Err(PyTypeError::new_err("Couldn't assign a unique moment matrix index to a unit float.")),
+            }
         } else {
             Err(PyTypeError::new_err("Couldn't convert to CommutativeMonomial"))
         }
-    }
-}
-
-impl<'py> TryFrom<Bound<'py, PyAny>> for PythonCommutativeMonomial {
-    type Error = PyErr;
-
-    fn try_from(value: Bound<'py, PyAny>) -> Result<Self, Self::Error> {
-        (&value).try_into()
     }
 }
 
