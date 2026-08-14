@@ -5,7 +5,7 @@ use std::ops::Mul;
 
 use itertools::Itertools;
 use kdam::tqdm;
-use log::{debug, info, trace, warn};
+use log::{debug, info, trace};
 use num_complex::Complex;
 use num_traits::Zero;
 use pyo3::IntoPyObjectExt;
@@ -52,17 +52,16 @@ macro_rules! build_relaxation_inner {
     (
         $py:expr, $level:expr, $objective:expr,
         $operator_constraints_with_generating_sets:expr, $moment_constraints_some:expr, $normalization_constraints_some:expr,
-        $variables:expr, $extra_monomials:expr, $substitutions:expr, $strategy:expr,
+        $variables:expr, $extra_monomials:expr, $unique_moment_id:expr, $substitutions:expr, $strategy:expr,
         $py_poly:ident, $py_relaxation:ident, $py_constraint:ident, $verbosity:expr, $check_uniqueness_with_length:expr $(,)?
     ) => {{
-        // We have checked the type of the polynomial beforehand, so we can afford to unwrap here
-        let rust_objective = $py_poly::try_from($objective).unwrap().0;
+        let rust_objective = $py_poly::try_from_reference_bound($objective, $unique_moment_id)?.0;
 
         let mut rust_equalities = Vec::new();
         let mut rust_inequalities = Vec::new();
         debug!("Converting operator constraints.");
         for (index, (constraint, generating_set)) in $operator_constraints_with_generating_sets.into_iter().enumerate() {
-            let constraint = $py_constraint::try_from(&constraint).unwrap().0;
+            let constraint = $py_constraint::try_from(&constraint)?.0;
             let kind = constraint.kind;
             let diff = constraint.into_polynomial_diff().map_err(PyValueError::new_err)?;
             match kind {
@@ -165,6 +164,7 @@ macro_rules! build_relaxation_arm {
         $extra_monomials_some: expr, $substitutions_some:expr, $substitution_strategy:expr,
         operators: $py_operator:ident & $rust_operator:ty,
         monomials: $py_monomial:ident & $rust_monomial:ty,
+        $unique_moment_id:expr,
         variables: $variables:expr,
         real_poly_and_relaxation: $real_py_poly:ident & $real_py_relaxation:ident & $real_py_constraint:ident,
         complex_poly_and_relaxation: $complex_py_poly:ident & $complex_py_relaxation:ident & $complex_py_constraint:ident,
@@ -187,47 +187,41 @@ macro_rules! build_relaxation_arm {
         debug!("Converting extra monomials.");
         let mut rust_extra_monomials: BTreeMap<u8, Vec<$rust_monomial>> = BTreeMap::new();
 
-        for (index, monom) in $extra_monomials_some.into_iter().enumerate() {
-            if let Ok(rust_monom) = $py_monomial::try_from(monom) {
-                rust_extra_monomials
-                    .entry(rust_monom.0.moment_matrix_id())
-                    .or_default()
-                    .push(rust_monom.0);
-            } else {
-                return Err(PyValueError::new_err(format!(
-                    "Couldn't convert extra monomial at index {} to a monomial.",
-                    index
-                )));
-            }
+        for monom in $extra_monomials_some {
+            let rust_monom = $py_monomial::try_from_reference_bound(&monom, $unique_moment_id)?;
+            rust_extra_monomials.entry(rust_monom.0.moment_matrix_id()).or_default().push(rust_monom.0);
         }
 
         let operator_constraints_with_generating_sets: Vec<(Bound<'_, PyAny>, Option<Vec<$rust_monomial>>)> =
-            $operator_constraints_with_generating_sets.into_iter().map(|(constraint, generating_set_option)| {
-                let generating_set = generating_set_option.map(|generating_set| {
-                    generating_set.into_iter().map(|variable| {
-                        $py_monomial::try_from(variable).map(|res| res.0)
-                    }).collect::<Result<Vec<$rust_monomial>, PyErr>>()
-                }).transpose()?;
+            $operator_constraints_with_generating_sets
+                .into_iter()
+                .map(|(constraint, generating_set_option)| {
+                    let generating_set = generating_set_option
+                        .map(|generating_set| {
+                            generating_set
+                                .into_iter()
+                                .map(|variable| {
+                                    $py_monomial::try_from_reference_bound(&variable, $unique_moment_id)
+                                        .map(|res| res.0)
+                                })
+                                .collect::<Result<Vec<$rust_monomial>, PyErr>>()
+                        })
+                        .transpose()?;
 
-                Ok((constraint, generating_set))
-            }).collect::<Result<Vec<_>, PyErr>>()?;
+                    Ok((constraint, generating_set))
+                })
+                .collect::<Result<Vec<_>, PyErr>>()?;
 
         debug!("Converting substitutions.");
         let mut rust_substitutions: BTreeMap<$rust_monomial, $rust_monomial> = BTreeMap::new();
+        debug!("Unique moment id {:?}", $unique_moment_id);
 
         for (index, (monom_key, monom_value)) in $substitutions_some.into_iter().enumerate() {
-            let try_rust_monom_key = $py_monomial::try_from(monom_key);
-            let try_rust_monom_value = $py_monomial::try_from(monom_value);
+            let try_rust_monom_key = $py_monomial::try_from_reference_bound(&monom_key, $unique_moment_id);
+            let try_rust_monom_value = $py_monomial::try_from_reference_bound(&monom_value, $unique_moment_id);
 
             match (try_rust_monom_key, try_rust_monom_value) {
-                (Ok(key), Ok(mut value)) => {
-                    // If the RHS term is the identity, it may have been converted from 1, in which
-                    // case the conversion couldn't know the moment_matrix index. We set it to the
-                    // same one as the monomial to replace
-                    if value.0.is_one() {
-                        warn!("Set the moment matrix index of the identity operator to the same one as {} in a substitution constraint.", key.0);
-                        value.0.data.moment_matrix_id = key.0.data.moment_matrix_id;
-                    }
+                (Ok(key), Ok(value)) => {
                     trace!("Adding substitution at index {} to the substitutions ({} -> {}).", index, key.0, value.0);
                     rust_substitutions.insert(key.0, value.0);
                 }
@@ -250,6 +244,7 @@ macro_rules! build_relaxation_arm {
                 $normalization_constraints_some,
                 variables,
                 rust_extra_monomials,
+                $unique_moment_id,
                 rust_substitutions,
                 $substitution_strategy,
                 $real_py_poly,
@@ -268,6 +263,7 @@ macro_rules! build_relaxation_arm {
                 $normalization_constraints_some,
                 variables,
                 rust_extra_monomials,
+                $unique_moment_id,
                 rust_substitutions,
                 $substitution_strategy,
                 $complex_py_poly,
@@ -301,19 +297,6 @@ macro_rules! build_relaxation_arm {
 ///   `I_k == 0.5`). For each moment-matrix index `k` not covered by a normalization constraint, the default `<I_k> = 1`
 ///   is auto-injected.
 /// * `substitution_strategy` – How to apply the substitution rules (default: `RewritingStrategy.Greedy`).
-/// * `assume_real` – If `True`, the function assumes that the problem is real-valued, instead of trying to infer
-///   whether it is the case by trying to convert every polynomial to a real-valued one. Set this argument to `True` to
-///   speed up the initial step of the relaxation if you know that your problem is real-valued.
-/// * `assume_complex` – If `True`, the function assumes that the problem is complex-valued, instead of trying to infer
-///   whether it is the case by trying to convert every polynomial to a real-valued one. Set this argument to `True` to
-///   speed up the initial step of the relaxation if you know that your problem is complex-valued.
-/// * `assume_commutative` – If `True`, the function assumes that the problem uses only commutative variables, instead
-///   of trying to infer whether it is the case by trying to convert every polynomial to a commutative one. Set this
-///   argument to `True` to speed up the initial step of the relaxation if your problem uses commutative variables only.
-/// * `assume_noncommutative` – If `True`, the function assumes that the problem uses only noncommutative variables,
-///   instead of trying to infer whether it is the case by trying to convert every polynomial to a noncommutative one.
-///   Set this argument to `True` to speed up the initial step of the relaxation if your problem uses commutative
-///   variables only.
 /// * `extra_monomials` – Extra monomials to be added to the generating set of the moment matrix. They're not taken into
 ///   account for the localizing matrices.
 /// * `verbosity` – The level of verbosity of the relaxation. Notably, it controls whether progress bars are printed.
@@ -338,10 +321,6 @@ macro_rules! build_relaxation_arm {
         moment_constraints=None,
         normalization_constraints=None,
         substitution_strategy=RewritingStrategy::Greedy,
-        assume_real=false,
-        assume_complex=false,
-        assume_commutative=false,
-        assume_noncommutative=false,
         extra_monomials=None,
         verbosity=0,
         check_uniqueness_with_length=true,
@@ -357,10 +336,6 @@ pub(crate) fn get_relaxation<'py>(
     moment_constraints: Option<&Bound<'py, PyList>>,
     normalization_constraints: Option<&Bound<'py, PyList>>,
     substitution_strategy: RewritingStrategy,
-    mut assume_real: bool,
-    mut assume_complex: bool,
-    assume_commutative: bool,
-    assume_noncommutative: bool,
     extra_monomials: Option<&Bound<'py, PyList>>,
     verbosity: u8,
     check_uniqueness_with_length: bool,
@@ -379,27 +354,11 @@ pub(crate) fn get_relaxation<'py>(
     let mut problem_contains_commutative: bool = false;
     let mut problem_contains_noncommutative: bool = false;
 
-    if assume_real && assume_complex {
-        return Err(PyValueError::new_err("assume_real and assume_complex can't both be true."));
-    }
-
-    if assume_commutative && assume_noncommutative {
-        return Err(PyValueError::new_err("assume_commutative and assume_noncommutative can't both be true."));
-    }
-
-    let (realness, commutativity) = get_realness_and_commutativity_of_polynomial_from_bound(
-        objective,
-        assume_real,
-        assume_complex,
-        assume_commutative,
-        assume_noncommutative,
-    )
-    .map_err(|_err| PyValueError::new_err("Couldn't convert the objective into a supported polynomial."))?;
+    let (realness, commutativity, mut unique_moment_ids) =
+        get_realness_and_commutativity_and_all_mm_id_of_polynomial_from_bound(objective)
+            .map_err(|_err| PyValueError::new_err("Couldn't convert the objective into a supported polynomial."))?;
 
     is_problem_real_valued &= realness;
-    // If the problem has been found to be real-valued, we can assume complex-valued objects for the rest.
-    assume_complex |= !is_problem_real_valued;
-    assume_real &= is_problem_real_valued;
 
     if let Some(commutativity_type) = commutativity {
         match commutativity_type {
@@ -412,23 +371,15 @@ pub(crate) fn get_relaxation<'py>(
         [("moment", moment_constraints_some), ("normalization", normalization_constraints_some)]
     {
         for (index, value) in constraints_list.into_iter().enumerate() {
-            let (realness, commutativity) = get_realness_and_commutativity_of_constraint_from_bound(
-                &value,
-                assume_real,
-                assume_complex,
-                assume_commutative,
-                assume_noncommutative,
-            )
-            .map_err(|_err| {
-                PyValueError::new_err(format!(
-                    "Couldn't convert the {} constraint at index {} to a supported constraint.",
-                    label, index
-                ))
-            })?;
+            let (realness, commutativity) =
+                get_realness_and_commutativity_of_constraint_from_bound(&value).map_err(|_err| {
+                    PyValueError::new_err(format!(
+                        "Couldn't convert the {} constraint at index {} to a supported constraint.",
+                        label, index
+                    ))
+                })?;
 
             is_problem_real_valued &= realness;
-            assume_complex |= !is_problem_real_valued;
-            assume_real &= is_problem_real_valued;
 
             if let Some(commutativity_type) = commutativity {
                 match commutativity_type {
@@ -448,14 +399,13 @@ pub(crate) fn get_relaxation<'py>(
 
         if let Some(generating_set) = &generating_set_some {
             for (index_variable, variable) in generating_set.iter().enumerate() {
-                let commutativity = get_commutativity_from_bound(&variable, assume_commutative, assume_noncommutative)
-                    .map_err(|_err| {
-                        PyValueError::new_err(format!(
-                            "Couldn't convert the variable at index {} in the operator constraint's generating set at
+                let (commutativity, mm_id) = get_commutativity_and_mm_index_from_bound(&variable).map_err(|_err| {
+                    PyValueError::new_err(format!(
+                        "Couldn't convert the variable at index {} in the operator constraint's generating set at
                                 index {} to a supported monomial.",
-                            index_variable, index
-                        ))
-                    })?;
+                        index_variable, index
+                    ))
+                })?;
 
                 if let Some(commutativity_type) = commutativity {
                     match commutativity_type {
@@ -463,26 +413,22 @@ pub(crate) fn get_relaxation<'py>(
                         MonomialCommutativity::NonCommutative => problem_contains_noncommutative = true,
                     }
                 }
+
+                if let Some(mm_id) = mm_id {
+                    unique_moment_ids.get_or_insert_default().insert(mm_id);
+                }
             }
         }
 
-        let (realness, commutativity) = get_realness_and_commutativity_of_constraint_from_bound(
-            &constraint,
-            assume_real,
-            assume_complex,
-            assume_commutative,
-            assume_noncommutative,
-        )
-        .map_err(|_err| {
-            PyValueError::new_err(format!(
-                "Couldn't convert the operator constraint at index {} to a supported constraint.",
-                index
-            ))
-        })?;
+        let (realness, commutativity) =
+            get_realness_and_commutativity_of_constraint_from_bound(&constraint).map_err(|_err| {
+                PyValueError::new_err(format!(
+                    "Couldn't convert the operator constraint at index {} to a supported constraint.",
+                    index
+                ))
+            })?;
 
         is_problem_real_valued &= realness;
-        assume_complex |= !is_problem_real_valued;
-        assume_real &= is_problem_real_valued;
 
         if let Some(commutativity_type) = commutativity {
             match commutativity_type {
@@ -496,13 +442,12 @@ pub(crate) fn get_relaxation<'py>(
 
     for (variables_set_label, variables_set) in [("variable", variables), ("extra monomial", extra_monomials_some)] {
         for (index_variable, variable) in variables_set.into_iter().enumerate() {
-            let commutativity = get_commutativity_from_bound(&variable, assume_commutative, assume_noncommutative)
-                .map_err(|_err| {
-                    PyValueError::new_err(format!(
-                        "Couldn't convert the {} at index {} to a supported monomial.",
-                        variables_set_label, index_variable
-                    ))
-                })?;
+            let (commutativity, mm_id) = get_commutativity_and_mm_index_from_bound(&variable).map_err(|_err| {
+                PyValueError::new_err(format!(
+                    "Couldn't convert the {} at index {} to a supported monomial.",
+                    variables_set_label, index_variable
+                ))
+            })?;
 
             if let Some(commutativity_type) = commutativity {
                 match commutativity_type {
@@ -510,19 +455,22 @@ pub(crate) fn get_relaxation<'py>(
                     MonomialCommutativity::NonCommutative => problem_contains_noncommutative = true,
                 }
             }
+
+            if let Some(mm_id) = mm_id {
+                unique_moment_ids.get_or_insert_default().insert(mm_id);
+            }
         }
     }
 
     for (index, (key, value)) in substitutions_some.into_iter().enumerate() {
         // TODO: this should be moved to using get_realness_and_commutativity_of_polynomial_from_bound when supporting
         // polynomials for substitutions
-        let commutativity =
-            get_commutativity_from_bound(&key, assume_commutative, assume_noncommutative).map_err(|_err| {
-                PyValueError::new_err(format!(
-                    "Couldn't convert the key at index {} of the substitutions to a supported monomial.",
-                    index
-                ))
-            })?;
+        let (commutativity, mm_id) = get_commutativity_and_mm_index_from_bound(&key).map_err(|_err| {
+            PyValueError::new_err(format!(
+                "Couldn't convert the key at index {} of the substitutions to a supported monomial.",
+                index
+            ))
+        })?;
 
         if let Some(commutativity_type) = commutativity {
             match commutativity_type {
@@ -531,21 +479,34 @@ pub(crate) fn get_relaxation<'py>(
             }
         }
 
-        let commutativity =
-            get_commutativity_from_bound(&value, assume_commutative, assume_noncommutative).map_err(|_err| {
-                PyValueError::new_err(format!(
-                    "Couldn't convert the substitute at index {} of the substitutions to a supported monomial.",
-                    index
-                ))
-            })?;
+        if let Some(mm_id) = mm_id {
+            unique_moment_ids.get_or_insert_default().insert(mm_id);
+        }
+
+        let (commutativity, mm_id) = get_commutativity_and_mm_index_from_bound(&value).map_err(|_err| {
+            PyValueError::new_err(format!(
+                "Couldn't convert the substitute at index {} of the substitutions to a supported monomial.",
+                index
+            ))
+        })?;
 
         if let Some(commutativity_type) = commutativity {
             match commutativity_type {
                 MonomialCommutativity::Commutative => problem_contains_commutative = true,
                 MonomialCommutativity::NonCommutative => problem_contains_noncommutative = true,
             }
+        }
+
+        if let Some(mm_id) = mm_id {
+            unique_moment_ids.get_or_insert_default().insert(mm_id);
         }
     }
+
+    let unique_moment_id = if let Some(unique_moment_ids_some) = unique_moment_ids {
+        if unique_moment_ids_some.len() == 1 { Some(*unique_moment_ids_some.first().unwrap()) } else { None }
+    } else {
+        None
+    };
 
     match (problem_contains_commutative, problem_contains_noncommutative) {
         (false, false) => Err(PyValueError::new_err("Variables must be provided.")),
@@ -557,6 +518,7 @@ pub(crate) fn get_relaxation<'py>(
                 extra_monomials_some, substitutions_some, substitution_strategy,
                 operators: PythonNonCommutativeOperator & RustNonCommutativeOperator,
                 monomials: PythonNonCommutativeMonomial & RustNonCommutativeMonomial,
+                unique_moment_id,
                 variables: variables,
                 real_poly_and_relaxation: PythonRealCoefficientsNonCommutativePolynomial &
                     PythonRealValuedNonCommutativeSdpRelaxation &
@@ -575,6 +537,7 @@ pub(crate) fn get_relaxation<'py>(
                 extra_monomials_some, substitutions_some, substitution_strategy,
                 operators: PythonCommutativeOperator & RustCommutativeOperator,
                 monomials: PythonCommutativeMonomial & RustCommutativeMonomial,
+                unique_moment_id,
                 variables: variables,
                 real_poly_and_relaxation: PythonRealCoefficientsCommutativePolynomial &
                     PythonRealValuedCommutativeSdpRelaxation &
@@ -592,220 +555,91 @@ pub(crate) fn get_relaxation<'py>(
     }
 }
 
-// Having an anum will be simpler than a bool when we'll introduce Hybrid monomials
+// Having an enum will be simpler than a bool when we'll introduce Hybrid monomials
 enum MonomialCommutativity {
     Commutative,
     NonCommutative,
 }
 
-/// Get the commutativeity of an operator or a monomial with the appropriate shortcuts to avoid costly `extract`s.
-fn get_commutativity_from_bound<'py>(
+/// Get the commutativity of an operator or a monomial
+fn get_commutativity_and_mm_index_from_bound<'py>(
     bound: &Bound<'py, PyAny>,
-    assume_commutative: bool,
-    assume_noncommutative: bool,
-) -> Result<Option<MonomialCommutativity>, ()> {
-    if assume_commutative {
-        Ok(Some(MonomialCommutativity::Commutative))
-    } else if assume_noncommutative {
-        Ok(Some(MonomialCommutativity::NonCommutative))
+) -> Result<(Option<MonomialCommutativity>, Option<u8>), ()> {
+    if bound.cast::<PyInt>().is_ok() || bound.cast::<PyFloat>().is_ok() || bound.cast::<PyComplex>().is_ok() {
+        Ok((None, None))
+    } else if let Ok(op_bound) = bound.cast::<PythonCommutativeOperator>() {
+        Ok((Some(MonomialCommutativity::Commutative), Some(op_bound.get().0.moment_matrix_id())))
+    } else if let Ok(monom_bound) = bound.cast::<PythonCommutativeMonomial>() {
+        Ok((Some(MonomialCommutativity::Commutative), Some(monom_bound.get().0.moment_matrix_id())))
+    } else if let Ok(op_bound) = bound.cast::<PythonNonCommutativeOperator>() {
+        Ok((Some(MonomialCommutativity::NonCommutative), Some(op_bound.get().0.moment_matrix_id())))
+    } else if let Ok(monom_bound) = bound.cast::<PythonNonCommutativeMonomial>() {
+        Ok((Some(MonomialCommutativity::NonCommutative), Some(monom_bound.get().0.moment_matrix_id())))
     } else {
-        if bound.cast::<PyInt>().is_ok() || bound.cast::<PyFloat>().is_ok() || bound.cast::<PyComplex>().is_ok() {
-            Ok(None)
-        } else if bound.cast::<PythonCommutativeOperator>().is_ok() || bound.cast::<PythonCommutativeMonomial>().is_ok()
-        {
-            Ok(Some(MonomialCommutativity::Commutative))
-        } else if bound.cast::<PythonNonCommutativeOperator>().is_ok()
-            || bound.cast::<PythonNonCommutativeMonomial>().is_ok()
-        {
-            Ok(Some(MonomialCommutativity::NonCommutative))
-        } else {
-            Err(())
-        }
+        Err(())
     }
 }
 
-/// Get whether a polynomial a real-valued and its type of variables with the appropriate shortcuts to avoid costly
-/// `extract`s.
-fn get_realness_and_commutativity_of_polynomial_from_bound<'py>(
+type SetOfMomentMatrixIds = BTreeSet<u8>;
+
+/// Get whether a polynomial a real-valued and its type of variables
+fn get_realness_and_commutativity_and_all_mm_id_of_polynomial_from_bound<'py>(
     bound: &Bound<'py, PyAny>,
-    assume_real: bool,
-    assume_complex: bool,
-    assume_commutative: bool,
-    assume_noncommutative: bool,
-) -> Result<(bool, Option<MonomialCommutativity>), ()> {
-    if assume_real {
-        if assume_commutative {
-            Ok((true, Some(MonomialCommutativity::Commutative)))
-        } else if assume_noncommutative {
-            Ok((true, Some(MonomialCommutativity::NonCommutative)))
-        } else {
-            // We don't use the TryFrom trait of the polynomials since they will also try to extract from a float,
-            // which is a check we already performed
-            if bound.cast::<PyInt>().is_ok() || bound.cast::<PyFloat>().is_ok() {
-                Ok((true, None))
-            } else if bound.cast::<PythonCommutativeOperator>().is_ok()
-                || bound.cast::<PythonCommutativeMonomial>().is_ok()
-                || bound.cast::<PythonRealCoefficientsCommutativePolynomial>().is_ok()
-            {
-                Ok((true, Some(MonomialCommutativity::Commutative)))
-            } else if bound.cast::<PythonNonCommutativeOperator>().is_ok()
-                || bound.cast::<PythonNonCommutativeMonomial>().is_ok()
-                || bound.cast::<PythonRealCoefficientsNonCommutativePolynomial>().is_ok()
-            {
-                Ok((true, Some(MonomialCommutativity::NonCommutative)))
-            } else {
-                Err(())
-            }
-        }
-    } else if assume_complex {
-        if assume_commutative {
-            Ok((false, Some(MonomialCommutativity::Commutative)))
-        } else if assume_noncommutative {
-            Ok((false, Some(MonomialCommutativity::NonCommutative)))
-        } else {
-            // We don't use the TryFrom trait of the polynomials since they will also try to extract into Complex<f64>,
-            // which is a check we already performed
-            if bound.cast::<PyInt>().is_ok() || bound.cast::<PyFloat>().is_ok() || bound.cast::<PyComplex>().is_ok() {
-                Ok((false, None))
-            } else if bound.cast::<PythonCommutativeOperator>().is_ok()
-                || bound.cast::<PythonCommutativeMonomial>().is_ok()
-                || bound.cast::<PythonRealCoefficientsCommutativePolynomial>().is_ok()
-                || bound.cast::<PythonComplexCoefficientsCommutativePolynomial>().is_ok()
-            {
-                Ok((false, Some(MonomialCommutativity::Commutative)))
-            } else if bound.cast::<PythonNonCommutativeOperator>().is_ok()
-                || bound.cast::<PythonNonCommutativeMonomial>().is_ok()
-                || bound.cast::<PythonRealCoefficientsNonCommutativePolynomial>().is_ok()
-                || bound.cast::<PythonComplexCoefficientsNonCommutativePolynomial>().is_ok()
-            {
-                Ok((false, Some(MonomialCommutativity::NonCommutative)))
-            } else {
-                Err(())
-            }
-        }
-    } else if assume_commutative {
-        if bound.cast::<PyInt>().is_ok() || bound.cast::<PyFloat>().is_ok() {
-            Ok((true, Some(MonomialCommutativity::Commutative)))
-        } else if bound.cast::<PyComplex>().is_ok() {
-            Ok((false, Some(MonomialCommutativity::Commutative)))
-        } else if bound.cast::<PythonCommutativeOperator>().is_ok()
-            || bound.cast::<PythonCommutativeMonomial>().is_ok()
-            || bound.cast::<PythonRealCoefficientsCommutativePolynomial>().is_ok()
-        {
-            Ok((true, Some(MonomialCommutativity::Commutative)))
-        } else if bound.cast::<PythonComplexCoefficientsCommutativePolynomial>().is_ok() {
-            Ok((false, Some(MonomialCommutativity::Commutative)))
-        } else {
-            Err(())
-        }
-    } else if assume_noncommutative {
-        if bound.cast::<PyInt>().is_ok() || bound.cast::<PyFloat>().is_ok() {
-            Ok((true, Some(MonomialCommutativity::NonCommutative)))
-        } else if bound.cast::<PyComplex>().is_ok() {
-            Ok((false, Some(MonomialCommutativity::NonCommutative)))
-        } else if bound.cast::<PythonNonCommutativeOperator>().is_ok()
-            || bound.cast::<PythonNonCommutativeMonomial>().is_ok()
-            || bound.cast::<PythonRealCoefficientsNonCommutativePolynomial>().is_ok()
-        {
-            Ok((true, Some(MonomialCommutativity::NonCommutative)))
-        } else if bound.cast::<PythonComplexCoefficientsNonCommutativePolynomial>().is_ok() {
-            Ok((false, Some(MonomialCommutativity::NonCommutative)))
-        } else {
-            Err(())
-        }
+) -> Result<(bool, Option<MonomialCommutativity>, Option<SetOfMomentMatrixIds>), ()> {
+    if bound.cast::<PyInt>().is_ok() || bound.cast::<PyFloat>().is_ok() {
+        Ok((true, None, None))
+    } else if bound.cast::<PyComplex>().is_ok() {
+        Ok((false, None, None))
+    } else if let Ok(op_bound) = bound.cast::<PythonCommutativeOperator>() {
+        Ok((
+            true,
+            Some(MonomialCommutativity::Commutative),
+            Some(BTreeSet::from([op_bound.get().0.moment_matrix_id()])),
+        ))
+    } else if let Ok(monom_bound) = bound.cast::<PythonCommutativeMonomial>() {
+        Ok((
+            true,
+            Some(MonomialCommutativity::Commutative),
+            Some(BTreeSet::from([monom_bound.get().0.moment_matrix_id()])),
+        ))
+    } else if let Ok(op_bound) = bound.cast::<PythonNonCommutativeOperator>() {
+        Ok((
+            true,
+            Some(MonomialCommutativity::NonCommutative),
+            Some(BTreeSet::from([op_bound.get().0.moment_matrix_id()])),
+        ))
+    } else if let Ok(monom_bound) = bound.cast::<PythonNonCommutativeMonomial>() {
+        Ok((
+            true,
+            Some(MonomialCommutativity::NonCommutative),
+            Some(BTreeSet::from([monom_bound.get().0.moment_matrix_id()])),
+        ))
+    } else if let Ok(poly_bound) = bound.cast::<PythonRealCoefficientsCommutativePolynomial>() {
+        Ok((true, Some(MonomialCommutativity::Commutative), Some(poly_bound.get().0.get_all_moment_matrix_id())))
+    } else if let Ok(poly_bound) = bound.cast::<PythonRealCoefficientsNonCommutativePolynomial>() {
+        Ok((true, Some(MonomialCommutativity::NonCommutative), Some(poly_bound.get().0.get_all_moment_matrix_id())))
+    } else if let Ok(poly_bound) = bound.cast::<PythonComplexCoefficientsCommutativePolynomial>() {
+        Ok((false, Some(MonomialCommutativity::Commutative), Some(poly_bound.get().0.get_all_moment_matrix_id())))
+    } else if let Ok(poly_bound) = bound.cast::<PythonComplexCoefficientsNonCommutativePolynomial>() {
+        Ok((false, Some(MonomialCommutativity::NonCommutative), Some(poly_bound.get().0.get_all_moment_matrix_id())))
     } else {
-        if bound.cast::<PyInt>().is_ok() || bound.cast::<PyFloat>().is_ok() {
-            Ok((true, None))
-        } else if bound.cast::<PyComplex>().is_ok() {
-            Ok((false, None))
-        } else if bound.cast::<PythonCommutativeOperator>().is_ok() || bound.cast::<PythonCommutativeMonomial>().is_ok()
-        {
-            Ok((true, Some(MonomialCommutativity::Commutative)))
-        } else if bound.cast::<PythonNonCommutativeOperator>().is_ok()
-            || bound.cast::<PythonNonCommutativeMonomial>().is_ok()
-        {
-            Ok((true, Some(MonomialCommutativity::NonCommutative)))
-        } else if bound.cast::<PythonRealCoefficientsCommutativePolynomial>().is_ok() {
-            Ok((true, Some(MonomialCommutativity::Commutative)))
-        } else if bound.cast::<PythonRealCoefficientsNonCommutativePolynomial>().is_ok() {
-            Ok((true, Some(MonomialCommutativity::NonCommutative)))
-        } else if bound.cast::<PythonComplexCoefficientsCommutativePolynomial>().is_ok() {
-            Ok((false, Some(MonomialCommutativity::Commutative)))
-        } else if bound.cast::<PythonComplexCoefficientsNonCommutativePolynomial>().is_ok() {
-            Ok((false, Some(MonomialCommutativity::NonCommutative)))
-        } else {
-            Err(())
-        }
+        Err(())
     }
 }
 
 fn get_realness_and_commutativity_of_constraint_from_bound<'py>(
     bound: &Bound<'py, PyAny>,
-    assume_real: bool,
-    assume_complex: bool,
-    assume_commutative: bool,
-    assume_noncommutative: bool,
 ) -> Result<(bool, Option<MonomialCommutativity>), ()> {
-    if assume_real {
-        if assume_commutative {
-            Ok((true, Some(MonomialCommutativity::Commutative)))
-        } else if assume_noncommutative {
-            Ok((true, Some(MonomialCommutativity::NonCommutative)))
-        } else {
-            if bound.cast::<PythonRealCoefficientsCommutativeConstraint>().is_ok() {
-                Ok((true, Some(MonomialCommutativity::Commutative)))
-            } else if bound.cast::<PythonRealCoefficientsNonCommutativeConstraint>().is_ok() {
-                Ok((true, Some(MonomialCommutativity::NonCommutative)))
-            } else {
-                Err(())
-            }
-        }
-    } else if assume_complex {
-        if assume_commutative {
-            Ok((false, Some(MonomialCommutativity::Commutative)))
-        } else if assume_noncommutative {
-            Ok((false, Some(MonomialCommutativity::NonCommutative)))
-        } else {
-            if bound.cast::<PythonRealCoefficientsCommutativeConstraint>().is_ok()
-                || bound.cast::<PythonComplexCoefficientsCommutativeConstraint>().is_ok()
-            {
-                Ok((false, Some(MonomialCommutativity::Commutative)))
-            } else if bound.cast::<PythonRealCoefficientsNonCommutativeConstraint>().is_ok()
-                || bound.cast::<PythonComplexCoefficientsNonCommutativeConstraint>().is_ok()
-            {
-                Ok((false, Some(MonomialCommutativity::NonCommutative)))
-            } else {
-                Err(())
-            }
-        }
-    } else if assume_commutative {
-        if bound.cast::<PythonRealCoefficientsCommutativeConstraint>().is_ok() {
-            Ok((true, Some(MonomialCommutativity::Commutative)))
-        } else if bound.cast::<PythonComplexCoefficientsCommutativeConstraint>().is_ok() {
-            Ok((false, Some(MonomialCommutativity::Commutative)))
-        } else {
-            Err(())
-        }
-    } else if assume_noncommutative {
-        if bound.cast::<PythonRealCoefficientsNonCommutativeConstraint>().is_ok() {
-            Ok((true, Some(MonomialCommutativity::NonCommutative)))
-        } else if bound.cast::<PythonComplexCoefficientsNonCommutativeConstraint>().is_ok() {
-            Ok((false, Some(MonomialCommutativity::NonCommutative)))
-        } else {
-            Err(())
-        }
+    if bound.cast::<PythonRealCoefficientsCommutativeConstraint>().is_ok() {
+        Ok((true, Some(MonomialCommutativity::Commutative)))
+    } else if bound.cast::<PythonComplexCoefficientsCommutativeConstraint>().is_ok() {
+        Ok((false, Some(MonomialCommutativity::Commutative)))
+    } else if bound.cast::<PythonRealCoefficientsNonCommutativeConstraint>().is_ok() {
+        Ok((true, Some(MonomialCommutativity::NonCommutative)))
+    } else if bound.cast::<PythonComplexCoefficientsNonCommutativeConstraint>().is_ok() {
+        Ok((false, Some(MonomialCommutativity::NonCommutative)))
     } else {
-        if bound.cast::<PythonRealCoefficientsCommutativeConstraint>().is_ok() {
-            Ok((true, Some(MonomialCommutativity::Commutative)))
-        } else if bound.cast::<PythonComplexCoefficientsCommutativeConstraint>().is_ok() {
-            Ok((false, Some(MonomialCommutativity::Commutative)))
-        } else if bound.cast::<PythonRealCoefficientsNonCommutativeConstraint>().is_ok() {
-            Ok((true, Some(MonomialCommutativity::NonCommutative)))
-        } else if bound.cast::<PythonComplexCoefficientsNonCommutativeConstraint>().is_ok() {
-            Ok((false, Some(MonomialCommutativity::NonCommutative)))
-        } else {
-            Err(())
-        }
+        Err(())
     }
 }
 
@@ -969,7 +803,12 @@ macro_rules! impl_sdp_relaxation_pymethods {
 
             fn rewrite<'py>(&self, mon_or_poly: &Bound<'py, PyAny>) -> PyResult<Py<PyAny>> {
                 let py = mon_or_poly.py();
-                if let Ok(mon) = TryInto::<$py_monomial>::try_into(mon_or_poly) {
+                let unique_moment_matrix_id = if self.0.moment_matrices.len() == 1 {
+                    self.0.moment_matrices.keys().next().copied()
+                } else {
+                    None
+                };
+                if let Ok(mon) = $py_monomial::try_from_reference_bound(mon_or_poly, unique_moment_matrix_id) {
                     $py_monomial(
                         mon.0
                         .rewrite(
@@ -979,7 +818,7 @@ macro_rules! impl_sdp_relaxation_pymethods {
                         .map_err(PyValueError::new_err)?
                     ).into_py_any(py)
                 } else {
-                    let poly: $py_poly = mon_or_poly.try_into()?;
+                    let poly = $py_poly::try_from_reference_bound(mon_or_poly, unique_moment_matrix_id)?;
                     $py_poly(
                         poly.0
                         .rewrite(
@@ -1500,6 +1339,7 @@ where
 
             let is_problem_real_valued = self.objective.is_real();
             let mut new_moment_matrix = RustMomentMatrix::new(
+                moment_matrix_id,
                 monomials_sets.iter().map(|set| set.len()).sum::<usize>() + extra_monomials.len(),
             );
 
@@ -1662,7 +1502,7 @@ where
     {
         let size = generating_set.len();
 
-        let mut new_localising_moment_matrix = RustMomentMatrix::new(size);
+        let mut new_localising_moment_matrix = RustMomentMatrix::new(moment_matrix.associated_id, size);
 
         let monomials_iterator_rows = if verbosity > 0 {
             itertools::Either::Left(tqdm!(

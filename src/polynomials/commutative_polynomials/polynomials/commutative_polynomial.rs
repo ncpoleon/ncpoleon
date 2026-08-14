@@ -32,7 +32,8 @@ pub(crate) type RustComplexCoefficientsCommutativePolynomial = RustCommutativePo
 #[pyclass(
     frozen,
     module = "ncpoleon.polynomials.commutative_polynomials",
-    name = "RealCoefficientsCommutativePolynomial"
+    name = "RealCoefficientsCommutativePolynomial",
+    skip_from_py_object
 )]
 #[derive(Clone)]
 // TODO: Seems like we can remove this, maybe it's because we add to the module manually? If yes,
@@ -47,7 +48,8 @@ pub(crate) struct PythonRealCoefficientsCommutativePolynomial(pub(crate) RustRea
 #[pyclass(
     frozen,
     module = "ncpoleon.polynomials.commutative_polynomials",
-    name = "ComplexCoefficientsCommutativePolynomial"
+    name = "ComplexCoefficientsCommutativePolynomial",
+    skip_from_py_object
 )]
 #[derive(Clone)]
 // TODO: Seems like we can remove this, maybe it's because we add to the module manually? If yes,
@@ -56,10 +58,11 @@ pub(crate) struct PythonComplexCoefficientsCommutativePolynomial(
     pub(crate) RustComplexCoefficientsCommutativePolynomial,
 );
 
-impl<'py> TryFrom<&Bound<'py, PyAny>> for PythonRealCoefficientsCommutativePolynomial {
-    type Error = PyErr;
-
-    fn try_from(value: &Bound<'py, PyAny>) -> Result<Self, Self::Error> {
+impl PythonRealCoefficientsCommutativePolynomial {
+    pub(crate) fn try_from_reference_bound<'py>(
+        value: &Bound<'py, PyAny>,
+        unique_moment_id: Option<u8>,
+    ) -> PyResult<Self> {
         if let Ok(poly) = value.cast::<PythonRealCoefficientsCommutativePolynomial>() {
             Ok(poly.get().clone())
         } else if let Ok(mon) = value.cast::<PythonCommutativeMonomial>() {
@@ -67,50 +70,71 @@ impl<'py> TryFrom<&Bound<'py, PyAny>> for PythonRealCoefficientsCommutativePolyn
         } else if let Ok(op) = value.cast::<PythonCommutativeOperator>() {
             Ok((*op.get()).into())
         } else if let Ok(f64_value) = value.extract::<f64>() {
-            // Caution! We can't know the moment matrix index when converting here, so we instead set it to zero, and
-            // it is then the responsability of the caller to sanitize the moment_matrix_id
-            Ok(Self(RustRealCoefficientsCommutativePolynomial {
-                data: BTreeMap::from([(RustCommutativeMonomial::one(0), f64_value)]),
-            }))
+            match unique_moment_id {
+                Some(mm_id) => Ok(Self(RustRealCoefficientsCommutativePolynomial {
+                    data: BTreeMap::from([(RustCommutativeMonomial::one(mm_id), f64_value)]),
+                })),
+                None => Err(PyTypeError::new_err(format!(
+                    "Couldn't assign the float {} a unique moment matrix identifier.",
+                    f64_value
+                ))),
+            }
         } else {
             Err(PyTypeError::new_err("Couldn't convert to PythonRealCoefficientsCommutativePolynomial"))
         }
     }
 }
 
-impl<'py> TryFrom<Bound<'py, PyAny>> for PythonRealCoefficientsCommutativePolynomial {
+impl<'py> FromPyObject<'_, 'py> for PythonRealCoefficientsCommutativePolynomial {
     type Error = PyErr;
 
-    fn try_from(value: Bound<'py, PyAny>) -> Result<Self, Self::Error> {
-        (&value).try_into()
-    }
-}
-
-impl<'py> TryFrom<&Bound<'py, PyAny>> for PythonComplexCoefficientsCommutativePolynomial {
-    type Error = PyErr;
-
-    fn try_from(value: &Bound<'py, PyAny>) -> Result<Self, Self::Error> {
-        if let Ok(poly) = value.cast::<PythonComplexCoefficientsCommutativePolynomial>() {
+    fn extract(obj: pyo3::Borrowed<'_, 'py, pyo3::PyAny>) -> Result<Self, Self::Error> {
+        if let Ok(poly) = obj.cast::<PythonRealCoefficientsCommutativePolynomial>() {
             Ok(poly.get().clone())
-        } else if let Ok(complex_value) = value.extract::<Complex<f64>>() {
-            // Caution! We can't know the moment matrix index when converting here, so we instead set it to zero, and
-            // it is then the responsability of the caller to sanitize the moment_matrix_id
-            Ok(Self(RustComplexCoefficientsCommutativePolynomial {
-                data: BTreeMap::from([(RustCommutativeMonomial::one(0), complex_value)]),
-            }))
-        } else if let Ok(real_poly) = PythonRealCoefficientsCommutativePolynomial::try_from(value) {
-            Ok(real_poly.into())
+        } else if let Ok(mon) = obj.cast::<PythonCommutativeMonomial>() {
+            Ok(mon.get().clone().into())
+        } else if let Ok(op) = obj.cast::<PythonCommutativeOperator>() {
+            Ok((*op.get()).into())
         } else {
-            Err(PyTypeError::new_err("Couldn't convert to PythonComplexCoefficientsCommutativePolynomial"))
+            Err(PyTypeError::new_err("Couldn't convert to PythonRealCoefficientsCommutativePolynomial"))
         }
     }
 }
 
-impl<'py> TryFrom<Bound<'py, PyAny>> for PythonComplexCoefficientsCommutativePolynomial {
+impl PythonComplexCoefficientsCommutativePolynomial {
+    pub(crate) fn try_from_reference_bound<'py>(
+        value: &Bound<'py, PyAny>,
+        unique_moment_id: Option<u8>,
+    ) -> PyResult<Self> {
+        if let Ok(poly) = value.cast::<PythonComplexCoefficientsCommutativePolynomial>() {
+            Ok(poly.get().clone())
+        } else if let Ok(complex_value) = value.extract::<Complex<f64>>() {
+            match unique_moment_id {
+                Some(mm_id) => Ok(Self(RustComplexCoefficientsCommutativePolynomial {
+                    data: BTreeMap::from([(RustCommutativeMonomial::one(mm_id), complex_value)]),
+                })),
+                None => Err(PyTypeError::new_err(format!(
+                    "Couldn't assign the complex {} a unique moment matrix identifier.",
+                    complex_value
+                ))),
+            }
+        } else {
+            Ok(PythonRealCoefficientsCommutativePolynomial::try_from_reference_bound(value, unique_moment_id)?.into())
+        }
+    }
+}
+
+impl<'py> FromPyObject<'_, 'py> for PythonComplexCoefficientsCommutativePolynomial {
     type Error = PyErr;
 
-    fn try_from(value: Bound<'py, PyAny>) -> Result<Self, Self::Error> {
-        (&value).try_into()
+    fn extract(obj: pyo3::Borrowed<'_, 'py, pyo3::PyAny>) -> Result<Self, Self::Error> {
+        if let Ok(poly) = obj.cast::<PythonComplexCoefficientsCommutativePolynomial>() {
+            Ok(poly.get().clone())
+        } else if let Ok(real_poly) = obj.cast::<PythonRealCoefficientsCommutativePolynomial>() {
+            Ok(real_poly.get().clone().into())
+        } else {
+            Err(PyTypeError::new_err("Couldn't convert to PythonComplexCoefficientsCommutativePolynomial"))
+        }
     }
 }
 

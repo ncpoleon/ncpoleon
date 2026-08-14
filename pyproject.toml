@@ -59,8 +59,6 @@ picos = ["picos>=2.6.2", "scipy>=1.17.1"]
 # the build fails at link time. The tests skip the picos solver when the import
 # is missing; drop the marker the day cvxopt ships that wheel
 dev = [
-    "mkdocs-material>=9.7.6",
-    "mkdocstrings[python]>=1.0.4",
     "picos>=2.6.2; sys_platform != 'win32' or platform_machine != 'ARM64'",
     "pytest>=9.0.3",
     "pytest-codspeed>=5.0.3",

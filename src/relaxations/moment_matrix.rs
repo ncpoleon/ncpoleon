@@ -47,6 +47,7 @@ fn position_matrix_to_row_col_data_format<Scalar: PolynomialDtype>(
 //  variable is complex could suffice, modulo some changes in the code.
 #[derive(Clone)]
 pub(super) struct RustMomentMatrix<Scalar: PolynomialDtype, MonomialType: AdjointTrait + Ord> {
+    pub(super) associated_id: u8,
     data: BTreeMap<MonomialType, PositionMatrixPair<Scalar>>,
     /// Maps the canonical form of each stored key's adjoint back to that key. Maintained by
     /// [`RustMomentMatrix::insert`], it lets [`RustMomentMatrix::get_mut`] resolve a monomial stored
@@ -61,8 +62,8 @@ where
     Scalar: PolynomialDtype,
     MonomialType: AdjointTrait + Ord + RewritingTrait<MonomialType> + Display + Clone,
 {
-    pub(super) fn new(size: usize) -> Self {
-        Self { data: BTreeMap::new(), adjoint_index: BTreeMap::new(), size }
+    pub(super) fn new(associated_id: u8, size: usize) -> Self {
+        Self { associated_id, data: BTreeMap::new(), adjoint_index: BTreeMap::new(), size }
     }
 
     pub(super) fn get(
@@ -176,25 +177,49 @@ where
 type RustRealValuedMomentMatrix<MonomialType> = RustMomentMatrix<f64, MonomialType>;
 type RustComplexValuedMomentMatrix<MonomialType> = RustMomentMatrix<Complex<f64>, MonomialType>;
 
-#[pyclass(frozen, module = "ncpoleon.relaxations", name = "RealValuedCommutativeMomentMatrix", mapping)]
+#[pyclass(
+    frozen,
+    module = "ncpoleon.relaxations",
+    name = "RealValuedCommutativeMomentMatrix",
+    mapping,
+    skip_from_py_object
+)]
 #[derive(Clone)]
 pub(super) struct PythonRealValuedCommutativeMomentMatrix(
     pub(super) RustRealValuedMomentMatrix<RustCommutativeMonomial>,
 );
 
-#[pyclass(frozen, module = "ncpoleon.relaxations", name = "ComplexValuedCommutativeMomentMatrix", mapping)]
+#[pyclass(
+    frozen,
+    module = "ncpoleon.relaxations",
+    name = "ComplexValuedCommutativeMomentMatrix",
+    mapping,
+    skip_from_py_object
+)]
 #[derive(Clone)]
 pub(super) struct PythonComplexValuedCommutativeMomentMatrix(
     pub(super) RustComplexValuedMomentMatrix<RustCommutativeMonomial>,
 );
 
-#[pyclass(frozen, module = "ncpoleon.relaxations", name = "RealValuedNonCommutativeMomentMatrix", mapping)]
+#[pyclass(
+    frozen,
+    module = "ncpoleon.relaxations",
+    name = "RealValuedNonCommutativeMomentMatrix",
+    mapping,
+    skip_from_py_object
+)]
 #[derive(Clone)]
 pub(super) struct PythonRealValuedNonCommutativeMomentMatrix(
     pub(super) RustRealValuedMomentMatrix<RustNonCommutativeMonomial>,
 );
 
-#[pyclass(frozen, module = "ncpoleon.relaxations", name = "ComplexValuedNonCommutativeMomentMatrix", mapping)]
+#[pyclass(
+    frozen,
+    module = "ncpoleon.relaxations",
+    name = "ComplexValuedNonCommutativeMomentMatrix",
+    mapping,
+    skip_from_py_object
+)]
 #[derive(Clone)]
 pub(super) struct PythonComplexValuedNonCommutativeMomentMatrix(
     pub(super) RustComplexValuedMomentMatrix<RustNonCommutativeMonomial>,
@@ -228,16 +253,16 @@ macro_rules! impl_moment_matrix_pymethods {
                 }))
             }
 
-            fn __contains__<'py>(&self, item: &Bound<'py, PyAny>) -> bool {
-                let rust_monomial: Result<$py_monomial, PyErr> = item.try_into();
-                rust_monomial.is_ok()
+            fn __contains__<'py>(&self, item: &Bound<'py, PyAny>) -> PyResult<bool> {
+                let rust_monomial = $py_monomial::try_from_reference_bound(item, Some(self.0.associated_id))?.0;
+                Ok(self.0.get_canonical(&rust_monomial, RewritingStrategy::None, &BTreeMap::new()).is_ok())
             }
 
             fn __getitem__<'py>(
                 &self,
                 key: &Bound<'py, PyAny>,
             ) -> PyResult<PositionMatrixRowColDataFormat<$scalar_type>> {
-                let python_monomial: $py_monomial = key.try_into()?;
+                let python_monomial = $py_monomial::try_from_reference_bound(key, Some(self.0.associated_id))?;
                 let res = self
                     .0
                     .get(&python_monomial.0, RewritingStrategy::None, &BTreeMap::new())
@@ -254,7 +279,7 @@ macro_rules! impl_moment_matrix_pymethods {
             }
 
             fn get_canonical<'py>(&self, monomial: &Bound<'py, PyAny>) -> PyResult<($py_monomial, bool, bool)> {
-                let python_monomial: $py_monomial = monomial.try_into()?;
+                let python_monomial = $py_monomial::try_from_reference_bound(monomial, Some(self.0.associated_id))?;
                 let (rust_monomial, is_adjoint, is_real_valued) = self
                     .0
                     .get_canonical(&python_monomial.0, RewritingStrategy::None, &BTreeMap::new())

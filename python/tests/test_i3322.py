@@ -8,6 +8,8 @@ from .utils import SOLVER_SKIPS, reduce_sos_decomposition
 
 
 def generate_i3322_parameters():
+    res = []
+
     for solver in ["mosek", "picos-cvxopt"]:
         for use_primal in [True, False]:
             marks = [SOLVER_SKIPS[solver]]
@@ -21,7 +23,9 @@ def generate_i3322_parameters():
                     )
                 )
 
-            yield pytest.param(solver, use_primal, marks=marks)
+            res.append(pytest.param(solver, use_primal, marks=marks))
+
+    return res
 
 
 def _i3322_params():
