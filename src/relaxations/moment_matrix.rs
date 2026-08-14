@@ -253,9 +253,9 @@ macro_rules! impl_moment_matrix_pymethods {
                 }))
             }
 
-            fn __contains__<'py>(&self, item: &Bound<'py, PyAny>) -> bool {
-                let rust_monomial = $py_monomial::try_from_reference_bound(item, Some(self.0.associated_id));
-                rust_monomial.is_ok()
+            fn __contains__<'py>(&self, item: &Bound<'py, PyAny>) -> PyResult<bool> {
+                let rust_monomial = $py_monomial::try_from_reference_bound(item, Some(self.0.associated_id))?.0;
+                Ok(self.0.get_canonical(&rust_monomial, RewritingStrategy::None, &BTreeMap::new()).is_ok())
             }
 
             fn __getitem__<'py>(

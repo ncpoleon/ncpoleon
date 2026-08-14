@@ -187,15 +187,9 @@ macro_rules! build_relaxation_arm {
         debug!("Converting extra monomials.");
         let mut rust_extra_monomials: BTreeMap<u8, Vec<$rust_monomial>> = BTreeMap::new();
 
-        for (index, monom) in $extra_monomials_some.into_iter().enumerate() {
-            if let Ok(rust_monom) = $py_monomial::try_from_reference_bound(&monom, $unique_moment_id) {
-                rust_extra_monomials.entry(rust_monom.0.moment_matrix_id()).or_default().push(rust_monom.0);
-            } else {
-                return Err(PyValueError::new_err(format!(
-                    "Couldn't convert extra monomial at index {} to a monomial.",
-                    index
-                )));
-            }
+        for monom in $extra_monomials_some {
+            let rust_monom = $py_monomial::try_from_reference_bound(&monom, $unique_moment_id)?;
+            rust_extra_monomials.entry(rust_monom.0.moment_matrix_id()).or_default().push(rust_monom.0);
         }
 
         let operator_constraints_with_generating_sets: Vec<(Bound<'_, PyAny>, Option<Vec<$rust_monomial>>)> =
@@ -303,19 +297,6 @@ macro_rules! build_relaxation_arm {
 ///   `I_k == 0.5`). For each moment-matrix index `k` not covered by a normalization constraint, the default `<I_k> = 1`
 ///   is auto-injected.
 /// * `substitution_strategy` – How to apply the substitution rules (default: `RewritingStrategy.Greedy`).
-/// * `assume_real` – If `True`, the function assumes that the problem is real-valued, instead of trying to infer
-///   whether it is the case by trying to convert every polynomial to a real-valued one. Set this argument to `True` to
-///   speed up the initial step of the relaxation if you know that your problem is real-valued.
-/// * `assume_complex` – If `True`, the function assumes that the problem is complex-valued, instead of trying to infer
-///   whether it is the case by trying to convert every polynomial to a real-valued one. Set this argument to `True` to
-///   speed up the initial step of the relaxation if you know that your problem is complex-valued.
-/// * `assume_commutative` – If `True`, the function assumes that the problem uses only commutative variables, instead
-///   of trying to infer whether it is the case by trying to convert every polynomial to a commutative one. Set this
-///   argument to `True` to speed up the initial step of the relaxation if your problem uses commutative variables only.
-/// * `assume_noncommutative` – If `True`, the function assumes that the problem uses only noncommutative variables,
-///   instead of trying to infer whether it is the case by trying to convert every polynomial to a noncommutative one.
-///   Set this argument to `True` to speed up the initial step of the relaxation if your problem uses commutative
-///   variables only.
 /// * `extra_monomials` – Extra monomials to be added to the generating set of the moment matrix. They're not taken into
 ///   account for the localizing matrices.
 /// * `verbosity` – The level of verbosity of the relaxation. Notably, it controls whether progress bars are printed.
@@ -433,15 +414,9 @@ pub(crate) fn get_relaxation<'py>(
                     }
                 }
 
-                unique_moment_ids = match (unique_moment_ids, mm_id) {
-                    (Some(mut unique_moment_ids_some), Some(mm_id)) => {
-                        unique_moment_ids_some.insert(mm_id);
-                        Some(unique_moment_ids_some)
-                    }
-                    (None, Some(mm_id)) => Some(BTreeSet::from([mm_id])),
-                    (Some(unique_moment_ids_some), None) => Some(unique_moment_ids_some),
-                    (None, None) => None,
-                };
+                if let Some(mm_id) = mm_id {
+                    unique_moment_ids.get_or_insert_default().insert(mm_id);
+                }
             }
         }
 
@@ -481,15 +456,9 @@ pub(crate) fn get_relaxation<'py>(
                 }
             }
 
-            unique_moment_ids = match (unique_moment_ids, mm_id) {
-                (Some(mut unique_moment_ids_some), Some(mm_id)) => {
-                    unique_moment_ids_some.insert(mm_id);
-                    Some(unique_moment_ids_some)
-                }
-                (None, Some(mm_id)) => Some(BTreeSet::from([mm_id])),
-                (Some(unique_moment_ids_some), None) => Some(unique_moment_ids_some),
-                (None, None) => None,
-            };
+            if let Some(mm_id) = mm_id {
+                unique_moment_ids.get_or_insert_default().insert(mm_id);
+            }
         }
     }
 
@@ -510,15 +479,9 @@ pub(crate) fn get_relaxation<'py>(
             }
         }
 
-        unique_moment_ids = match (unique_moment_ids, mm_id) {
-            (Some(mut unique_moment_ids_some), Some(mm_id)) => {
-                unique_moment_ids_some.insert(mm_id);
-                Some(unique_moment_ids_some)
-            }
-            (None, Some(mm_id)) => Some(BTreeSet::from([mm_id])),
-            (Some(unique_moment_ids_some), None) => Some(unique_moment_ids_some),
-            (None, None) => None,
-        };
+        if let Some(mm_id) = mm_id {
+            unique_moment_ids.get_or_insert_default().insert(mm_id);
+        }
 
         let (commutativity, mm_id) = get_commutativity_and_mm_index_from_bound(&value).map_err(|_err| {
             PyValueError::new_err(format!(
@@ -534,15 +497,9 @@ pub(crate) fn get_relaxation<'py>(
             }
         }
 
-        unique_moment_ids = match (unique_moment_ids, mm_id) {
-            (Some(mut unique_moment_ids_some), Some(mm_id)) => {
-                unique_moment_ids_some.insert(mm_id);
-                Some(unique_moment_ids_some)
-            }
-            (None, Some(mm_id)) => Some(BTreeSet::from([mm_id])),
-            (Some(unique_moment_ids_some), None) => Some(unique_moment_ids_some),
-            (None, None) => None,
-        };
+        if let Some(mm_id) = mm_id {
+            unique_moment_ids.get_or_insert_default().insert(mm_id);
+        }
     }
 
     let unique_moment_id = if let Some(unique_moment_ids_some) = unique_moment_ids {
@@ -846,8 +803,8 @@ macro_rules! impl_sdp_relaxation_pymethods {
 
             fn rewrite<'py>(&self, mon_or_poly: &Bound<'py, PyAny>) -> PyResult<Py<PyAny>> {
                 let py = mon_or_poly.py();
-                let unique_moment_matrix_id = if self.0.moment_matrices.keys().len() == 1 {
-                    Some(*self.0.moment_matrices.first_key_value().unwrap().0)
+                let unique_moment_matrix_id = if self.0.moment_matrices.len() == 1 {
+                    self.0.moment_matrices.keys().next().copied()
                 } else {
                     None
                 };

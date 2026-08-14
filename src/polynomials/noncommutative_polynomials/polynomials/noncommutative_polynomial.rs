@@ -127,12 +127,9 @@ impl PythonComplexCoefficientsNonCommutativePolynomial {
                     complex_value
                 ))),
             }
-        } else if let Ok(real_poly) =
-            PythonRealCoefficientsNonCommutativePolynomial::try_from_reference_bound(value, unique_moment_id)
-        {
-            Ok(real_poly.into())
         } else {
-            Err(PyTypeError::new_err("Couldn't convert to PythonComplexCoefficientsNonCommutativePolynomial"))
+            Ok(PythonRealCoefficientsNonCommutativePolynomial::try_from_reference_bound(value, unique_moment_id)?
+                .into())
         }
     }
 }
