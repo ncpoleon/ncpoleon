@@ -49,14 +49,14 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
       - name: Install uv
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@v10.0.0
       # Built here rather than inside the CodSpeed action's `run:` so that cargo
       # and rustc are not executed under the measurement harness.
       - name: Build the extension module
         run: uv sync --all-extras --dev --config-setting 'build-args=--profile=release'
       # No benchmark in this selection calls `solve`, so MOSEK is not needed here.
       - name: Run the benchmarks
-        uses: CodSpeedHQ/action@0ca9cbbf4623b599a6c3ed4fc8a922942705d9f1
+        uses: CodSpeedHQ/action@4296e51e7041e24dadb86d1d6e8b9320d223dbe8
         with:
           mode: simulation
           run: uv run --no-sync pytest -x --codspeed --splits 3 --group ${{ matrix.shard }} -m "not walltime" -v --durations=0
@@ -81,7 +81,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
       - name: Install uv
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@v10.0.0
       - name: Build the extension module
         run: uv sync --all-extras --dev --config-setting 'build-args=--profile=release'
       # A pull request from a fork gets no secrets, so `MSK_LICENSE` is empty
@@ -117,7 +117,7 @@ jobs:
           MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run --no-sync python -c \
             "from ncpoleon.utils import is_mosek_available; assert is_mosek_available(), 'MOSEK license checkout failed'"
       - name: Run the walltime benchmarks
-        uses: CodSpeedHQ/action@0ca9cbbf4623b599a6c3ed4fc8a922942705d9f1
+        uses: CodSpeedHQ/action@4296e51e7041e24dadb86d1d6e8b9320d223dbe8
         with:
           mode: walltime
           run: uv run --no-sync pytest -x --codspeed --splits 3 --group ${{ matrix.shard }} -m walltime -v --durations=0
