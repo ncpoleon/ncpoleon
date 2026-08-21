@@ -94,7 +94,7 @@ jobs:
           # Without this every combination shares one cache entry and they
           # overwrite each other's.
           key: ${{ matrix.os }}-${{ matrix.python-version }}
-      - uses: astral-sh/setup-uv@v9.0.0
+      - uses: astral-sh/setup-uv@v10.0.0
       # uv downloads an interpreter only when no installed one matches, and its
       # managed builds for this runner are x86_64. Taking one would make maturin
       # target `x86_64-pc-windows-msvc` against an aarch64 host toolchain, which
