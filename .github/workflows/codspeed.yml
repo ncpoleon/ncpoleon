@@ -49,7 +49,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
       - name: Install uv
-        uses: astral-sh/setup-uv@v10.0.0
+        uses: astral-sh/setup-uv@v10.0.1
       # Built here rather than inside the CodSpeed action's `run:` so that cargo
       # and rustc are not executed under the measurement harness.
       - name: Build the extension module
@@ -81,7 +81,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
       - name: Install uv
-        uses: astral-sh/setup-uv@v10.0.0
+        uses: astral-sh/setup-uv@v10.0.1
       - name: Build the extension module
         run: uv sync --all-extras --dev --config-setting 'build-args=--profile=release'
       # A pull request from a fork gets no secrets, so `MSK_LICENSE` is empty
