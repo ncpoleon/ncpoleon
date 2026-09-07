@@ -1,4 +1,4 @@
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from typing import Any, ClassVar, Generic, Literal, TypeAlias, final, overload
 
 __all__ = [
@@ -167,12 +167,12 @@ class BaseSdpRelaxation(Generic[MonomialType, Scalar]):
     @property
     def localising_moment_matrices_inequalities(
         self,
-    ) -> Mapping[int, Sequence[MomentMatrix[MonomialType, Scalar]]]: ...
+    ) -> Mapping[int, list[MomentMatrix[MonomialType, Scalar]]]: ...
     @property
     def localising_moment_matrices_equalities(
         self,
     ) -> Mapping[
-        int, Sequence[Sequence[Polynomial[MonomialType, Scalar]]]
+        int, list[tuple[Polynomial[MonomialType, Scalar], list[Polynomial[MonomialType, Scalar]]]]
     ]: ...
     @property
     def moment_equalities(self) -> list[tuple[Polynomial[MonomialType, Scalar], Scalar]]: ...
@@ -219,7 +219,7 @@ class RealValuedCommutativeSdpRelaxation(BaseSdpRelaxation[CommutativeMonomial, 
     def localising_moment_matrices_inequalities(self) -> dict[int, list[RealValuedCommutativeMomentMatrix]]: ...
     @property
     def localising_moment_matrices_equalities(self) -> Mapping[
-        int, Sequence[Sequence[Polynomial[CommutativeMonomial, float]]]
+        int, list[tuple[Polynomial[CommutativeMonomial, float], list[Polynomial[CommutativeMonomial, float]]]]
     ]: ...
     @overload
     def rewrite(self, mon_or_poly: CommutativePolynomialElement | float) -> CommutativeMonomial: ...
@@ -237,7 +237,7 @@ class ComplexValuedCommutativeSdpRelaxation(BaseSdpRelaxation[CommutativeMonomia
     def localising_moment_matrices_inequalities(self) -> dict[int, list[ComplexValuedCommutativeMomentMatrix]]: ...
     @property
     def localising_moment_matrices_equalities(self) -> Mapping[
-        int, Sequence[Sequence[Polynomial[CommutativeMonomial, complex]]]
+        int, list[list[Polynomial[CommutativeMonomial, complex]]]
     ]: ...
     @overload
     def rewrite(self, mon_or_poly: CommutativePolynomialElement | float) -> CommutativeMonomial: ...
@@ -257,7 +257,7 @@ class RealValuedNonCommutativeSdpRelaxation(BaseSdpRelaxation[NonCommutativeMono
     def localising_moment_matrices_inequalities(self) -> dict[int, list[RealValuedNonCommutativeMomentMatrix]]: ...
     @property
     def localising_moment_matrices_equalities(self) -> Mapping[
-        int, Sequence[Sequence[Polynomial[NonCommutativeMonomial, float]]]
+        int, list[tuple[Polynomial[NonCommutativeMonomial, float], list[Polynomial[NonCommutativeMonomial, float]]]]
     ]: ...
     @overload
     def rewrite(self, mon_or_poly: NonCommutativePolynomialElement | float) -> NonCommutativeMonomial: ...
@@ -277,7 +277,7 @@ class ComplexValuedNonCommutativeSdpRelaxation(BaseSdpRelaxation[NonCommutativeM
     def localising_moment_matrices_inequalities(self) -> dict[int, list[ComplexValuedNonCommutativeMomentMatrix]]: ...
     @property
     def localising_moment_matrices_equalities(self) -> Mapping[
-        int, Sequence[Sequence[Polynomial[NonCommutativeMonomial, complex]]]
+        int, list[tuple[Polynomial[NonCommutativeMonomial, complex], list[Polynomial[NonCommutativeMonomial, complex]]]]
     ]: ...
     @overload
     def rewrite(self, mon_or_poly: NonCommutativePolynomialElement | float) -> NonCommutativeMonomial: ...

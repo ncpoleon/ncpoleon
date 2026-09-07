@@ -1,10 +1,17 @@
+from __future__ import annotations
+
 from importlib.util import find_spec
-from typing import cast, overload
+from typing import TYPE_CHECKING, cast, overload
 
 import numpy as np
 
-from ncpoleon._typing import RealOrComplexMatrix
+from ncpoleon._typing import MonomialType, RealOrComplexMatrix, Scalar
 from ncpoleon.utils import is_mosek_available
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from ncpoleon.polynomials import Polynomial
 
 
 def automatic_solver_detection() -> str:

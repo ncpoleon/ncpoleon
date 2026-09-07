@@ -234,17 +234,17 @@ def fill_real_primal_model(
         logger.debug(f"Added moment matrix PSD constraint for moment matrix id {moment_matrix_id}.")
 
     for moment_matrix_id, equality_moment_matrices in sdp.localising_moment_matrices_equalities.items():
-        for equality_moment_matrix in equality_moment_matrices:
-            for index, poly in enumerate(equality_moment_matrix):
+        for equality_index, (_generator, equality_moment_matrix) in enumerate(equality_moment_matrices):
+            for poly_index, poly in enumerate(equality_moment_matrix):
                 changed = sdp.change_variables(poly, mapped_variables)
-                model.constraint(f"ME-{moment_matrix_id}-{index}", changed, Domain.equalsTo(0))
+                model.constraint(f"ME-{moment_matrix_id}-{equality_index}-{poly_index}", changed, Domain.equalsTo(0))
                 logger.debug(f"Added constraint {changed} == 0.")
 
     for moment_matrix_id, inequality_moment_matrices in sdp.localising_moment_matrices_inequalities.items():
-        for index, inequality_moment_matrix in enumerate(inequality_moment_matrices):
+        for inequality_index, inequality_moment_matrix in enumerate(inequality_moment_matrices):
             localising_matrix = real_moment_matrix_to_mosek(inequality_moment_matrix, mapped_variables)
             model.constraint(
-                f"LMMI-{moment_matrix_id}-{index}",
+                f"LMMI-{moment_matrix_id}-{inequality_index}",
                 localising_matrix,
                 Domain.inPSDCone(localising_matrix.getShape()[0]),
             )
@@ -296,14 +296,18 @@ def fill_complex_primal_model(
         logger.debug(f"Added moment matrix PSD constraint for moment matrix id {moment_matrix_id}.")
 
     for moment_matrix_id, equality_moment_matrices in sdp.localising_moment_matrices_equalities.items():
-        for index, equality_moment_matrix in enumerate(equality_moment_matrices):
-            for poly in equality_moment_matrix:
+        for equality_index, (_generator, equality_moment_matrix) in enumerate(equality_moment_matrices):
+            for poly_index, poly in enumerate(equality_moment_matrix):
                 changed = sdp.change_variables(poly, mapped_variables)
-                model.constraint(f"ME-{moment_matrix_id}-{index}_re", changed.real, Domain.equalsTo(0.0))
+                model.constraint(
+                    f"ME-{moment_matrix_id}-{equality_index}-{poly_index}_re", changed.real, Domain.equalsTo(0.0)
+                )
                 logger.debug(f"Added constraint {changed.real} == 0.0.")
 
                 if changed.imag is not None:
-                    model.constraint(f"ME-{moment_matrix_id}-{index}_im", changed.imag, Domain.equalsTo(0.0))
+                    model.constraint(
+                        f"ME-{moment_matrix_id}-{equality_index}-{poly_index}_im", changed.imag, Domain.equalsTo(0.0)
+                    )
                     logger.debug(f"Added constraint {changed.imag} == 0.0.")
 
     for moment_matrix_id, inequality_moment_matrices in sdp.localising_moment_matrices_inequalities.items():
@@ -396,12 +400,13 @@ def fill_real_dual_model(
 
         Qs = []
 
-        for equality_index in range(len(operator_equalities[moment_matrix_index])):
-            Qs.append(model.variable(f"nu_{(moment_matrix_index, equality_index)}"))
-            logger.debug(
-                f"Added dual variable nu_{(moment_matrix_index, equality_index)} for operator equality number "
-                f"{equality_index}."
-            )
+        for equality_index, (_generator, equality_as_moments) in enumerate(operator_equalities[moment_matrix_index]):
+            for moment_id in range(len(equality_as_moments)):
+                Qs.append(model.variable(f"nu_{(moment_matrix_index, equality_index, moment_id)}"))
+                logger.debug(
+                    f"Added dual variable nu_{(moment_matrix_index, equality_index, moment_id)} for operator equality "
+                    f"number {equality_index}."
+                )
 
         for monomial, (position_matrix, _realness) in moment_matrix.as_row_col_data_format().items():
             F = convert_row_col_data_to_mosek_symmetric_matrix(position_matrix, moment_matrix.size)
@@ -432,7 +437,7 @@ def fill_real_dual_model(
 
             operator_equalities_split = [
                 (sdp.get_coefficients_by_canonical(poly)[0], 0.0)
-                for polys in sdp.localising_moment_matrices_equalities[moment_matrix_index]
+                for (_generator, polys) in sdp.localising_moment_matrices_equalities[moment_matrix_index]
                 for poly in polys
             ]
 
@@ -548,17 +553,18 @@ def fill_complex_dual_model(
 
         Qs = []
 
-        for equality_index in range(len(operator_equalities[moment_matrix_index])):
-            Qs.append(
-                _ComplexExpr(
-                    model.variable(f"nu_{(moment_matrix_index, equality_index)}^re"),
-                    model.variable(f"nu_{(moment_matrix_index, equality_index)}^im"),
+        for equality_index, (_generator, equality_as_moments) in enumerate(operator_equalities[moment_matrix_index]):
+            for poly_index in range(len(equality_as_moments)):
+                Qs.append(
+                    _ComplexExpr(
+                        model.variable(f"nu_{(moment_matrix_index, equality_index, poly_index)}^re"),
+                        model.variable(f"nu_{(moment_matrix_index, equality_index, poly_index)}^im"),
+                    )
                 )
-            )
-            logger.debug(
-                f"Added dual variable nu_{(moment_matrix_index, equality_index)} for operator equality number "
-                f"{equality_index}."
-            )
+                logger.debug(
+                    f"Added dual variable nu_{(moment_matrix_index, equality_index)} for operator equality number "
+                    f"{equality_index}."
+                )
 
         for monomial, (position_matrix, realness) in moment_matrix.as_row_col_data_format().items():
             constraint_row = hermitian_dot_as_complex_expr(Y, position_matrix, moment_matrix.size, realness)
@@ -598,7 +604,7 @@ def fill_complex_dual_model(
 
             operator_equalities_split = [
                 (sdp.get_coefficients_by_canonical(poly), 0.0)
-                for polys in sdp.localising_moment_matrices_equalities[moment_matrix_index]
+                for (_generator, polys) in sdp.localising_moment_matrices_equalities[moment_matrix_index]
                 for poly in polys
             ]
 
@@ -643,7 +649,7 @@ def fill_complex_dual_model(
 
 
 # FIXME: this can probably be simplified by defining ComplexVariables and HermitianVariables just like PICOS
-#  More generally, we can probably provide a blanket implementation for the export, given that the user
+#  More generally, we could probably provide a blanket implementation for the export, given that the user
 #  provides the function with what's a real variable, a complex one, a symmetric one, a hermitian one, and such
 #  that the variables can be multiplied together, be taken the trace of, etc.
 def to_mosek(

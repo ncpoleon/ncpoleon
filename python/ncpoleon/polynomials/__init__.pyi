@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, ClassVar, Generic, Self, final
+from typing import Any, ClassVar, Generic, Self, final, overload
 
 from ncpoleon._typing import MonomialType, Scalar
 from ncpoleon.relaxations import Constraint
@@ -64,10 +64,22 @@ class Polynomial(Generic[MonomialType, Scalar]):
     # generically is only that the result is a polynomial (or a constraint) over the same
     # `MonomialType` with one of the two coefficient types, and that is what these declare. Each
     # concrete class narrows every one of them to the single class that actually comes back.
+    #
+    # Combining a polynomial with one of its own kind is the exception: adding or subtracting two
+    # polynomials of the same class, or dividing one by a coefficient of its own `Scalar`, cannot
+    # promote anything, so those come back as `Self`. Stating them as overloads ahead of the widened
+    # ones is what lets generic code over `Polynomial[MonomialType, Scalar]` stay inside `Scalar`
+    # instead of falling out into a union it has no way to narrow back.
+    @overload
+    def __add__(self, other: Self) -> Self: ...
+    @overload
     def __add__(
         self, other: MonomialType | complex | Polynomial[MonomialType, float] | Polynomial[MonomialType, complex]
     ) -> Polynomial[MonomialType, float] | Polynomial[MonomialType, complex]: ...
     def __radd__(self, other: complex) -> Polynomial[MonomialType, float] | Polynomial[MonomialType, complex]: ...
+    @overload
+    def __sub__(self, other: Self) -> Self: ...
+    @overload
     def __sub__(
         self, other: MonomialType | complex | Polynomial[MonomialType, float] | Polynomial[MonomialType, complex]
     ) -> Polynomial[MonomialType, float] | Polynomial[MonomialType, complex]: ...
@@ -76,6 +88,9 @@ class Polynomial(Generic[MonomialType, Scalar]):
         self, other: MonomialType | complex | Polynomial[MonomialType, float] | Polynomial[MonomialType, complex]
     ) -> Polynomial[MonomialType, float] | Polynomial[MonomialType, complex]: ...
     def __rmul__(self, other: complex) -> Polynomial[MonomialType, float] | Polynomial[MonomialType, complex]: ...
+    @overload
+    def __truediv__(self, other: Scalar) -> Self: ...
+    @overload
     def __truediv__(self, other: complex) -> Polynomial[MonomialType, float] | Polynomial[MonomialType, complex]: ...
     def __eq__(  # ty: ignore[invalid-method-override]
         self, other: MonomialType | complex | Polynomial[MonomialType, float] | Polynomial[MonomialType, complex]

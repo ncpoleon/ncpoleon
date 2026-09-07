@@ -826,7 +826,7 @@ macro_rules! impl_sdp_relaxation_pymethods {
 
             /// Localising moment matrices for the equality constraints.
             #[getter]
-            fn localising_moment_matrices_equalities(&self) -> BTreeMap<u8, Vec<Vec<$py_poly>>> {
+            fn localising_moment_matrices_equalities(&self) -> BTreeMap<u8, Vec<($py_poly, Vec<$py_poly>)>> {
                 self.0
                     .localising_moment_matrices_equalities
                     .iter()
@@ -835,8 +835,9 @@ macro_rules! impl_sdp_relaxation_pymethods {
                             mm_id,
                             equalities_id
                                 .iter()
-                                .map(|generating_set| {
+                                .map(|(generator, generating_set)| {
                                     (
+                                        $py_poly(generator.clone()),
                                         generating_set
                                             .iter()
                                             .cloned()
@@ -918,7 +919,7 @@ macro_rules! impl_sdp_relaxation_pymethods {
 }
 
 type PolynomialWithGeneratingSet<MonomialType, Scalar> = (Polynomial<MonomialType, Scalar>, Vec<MonomialType>);
-type OperatorEqualityAsMoments<MonomialType, Scalar> = Vec<Polynomial<MonomialType, Scalar>>;
+type OperatorEqualityAsMoments<MonomialType, Scalar> = (Polynomial<MonomialType, Scalar>, Vec<Polynomial<MonomialType, Scalar>>);
 
 pub(super) struct SdpRelaxation<MonomialType: AdjointTrait + Ord, Scalar: PolynomialDtype> {
     objective: Polynomial<MonomialType, Scalar>,
@@ -1776,6 +1777,6 @@ where
             }
         }
 
-        Ok(moment_equalities)
+        Ok((polynomial.clone(), moment_equalities))
     }
 }

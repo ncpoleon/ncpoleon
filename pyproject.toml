@@ -168,6 +168,7 @@ unsound-assignment = "error"
 unsound-yield = "error"
 missing-type-argument = "error"
 possibly-unresolved-reference = "error"
+blanket-ignore-comment = "error"
 
 [tool.pytest]
 console_output_style = "progress"

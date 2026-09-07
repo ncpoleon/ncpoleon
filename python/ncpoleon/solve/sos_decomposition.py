@@ -37,7 +37,7 @@ class LocalizingMomentMatrixEqualityDecomposition(Generic[MonomialType, Scalar])
     Docs TODO:
     """
 
-    terms: Polynomial[MonomialType, Scalar]
+    term: Polynomial[MonomialType, Scalar]
 
 
 @dataclass(eq=False, order=False, kw_only=True)

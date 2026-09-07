@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import warnings
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Generic
+from typing import TYPE_CHECKING, Generic, cast
 
 import numpy as np
 
@@ -19,6 +19,8 @@ from .sos_decomposition import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from ncpoleon.polynomials import Polynomial
     from ncpoleon.relaxations import BaseSdpRelaxation
 
@@ -66,13 +68,7 @@ class BaseSolution(ABC, Generic[MonomialType, Scalar]):
     @property
     def localizing_matrices_equality_multipliers(
         self,
-    ) -> list[
-        tuple[
-            Polynomial[MonomialType, Scalar],
-            RealOrComplexMatrix,
-            list[MonomialType],
-        ]
-    ]:
+    ) -> list[tuple[Polynomial[MonomialType, Scalar], Sequence[tuple[Polynomial[MonomialType, Scalar], Scalar]]]]:
         localizing_matrices_multipliers = self.localizing_matrices_equality_multipliers_by_mm_id
         if len(localizing_matrices_multipliers) > 1:
             warnings.warn(
@@ -88,13 +84,7 @@ class BaseSolution(ABC, Generic[MonomialType, Scalar]):
         self,
     ) -> dict[
         int,
-        list[
-            tuple[
-                Polynomial[MonomialType, Scalar],
-                RealOrComplexMatrix,
-                list[MonomialType],
-            ]
-        ],
+        list[tuple[Polynomial[MonomialType, Scalar], Sequence[tuple[Polynomial[MonomialType, Scalar], Scalar]]]],
     ]: ...
 
     @property
@@ -223,7 +213,7 @@ class BaseSolution(ABC, Generic[MonomialType, Scalar]):
             decomposition = (np.array(self.relaxation.generating_sets[mm_id][:n_monomials]) @ sos_vectors).tolist()
 
             if delta:
-                decomposition = [p.chop(delta) for p in decomposition]
+                decomposition = [self.relaxation.rewrite(p).chop(delta) for p in decomposition]
                 decomposition = [p for p in decomposition if not p.is_zero()]
 
             moment_matrix_term = MomentMatrixDecomposition(decomposition=decomposition)
@@ -237,7 +227,7 @@ class BaseSolution(ABC, Generic[MonomialType, Scalar]):
                 decompositions = (np.array(generating_set) @ sos_vectors).tolist()
 
                 if delta:
-                    decompositions = [p.chop(delta) for p in decompositions]
+                    decompositions = [self.relaxation.rewrite(p).chop(delta) for p in decompositions]
                     decompositions = [p for p in decompositions if not p.is_zero()]
 
                 if decompositions:
@@ -247,27 +237,18 @@ class BaseSolution(ABC, Generic[MonomialType, Scalar]):
 
             equalities_terms = []
 
-            for generator, coefficient, generating_set in localizing_moment_matrices_multipliers_equality.get(
-                mm_id, []
-            ):
-                sos_vectors_pos, sos_vectors_neg = sos_vectors_of_hermitian_psd_matrix(coefficient, cutoff)
-                decomposition_positive = (np.array(generating_set) @ sos_vectors_pos).tolist()
-                decomposition_negative = (np.array(generating_set) @ sos_vectors_neg).tolist()
+            for _generator, moments_with_multipliers in localizing_moment_matrices_multipliers_equality.get(mm_id, []):
+                to_hermitianize = [
+                    cast("Polynomial[MonomialType, Scalar]", multiplier * moment.adjoint())
+                    for moment, multiplier in moments_with_multipliers
+                ]
+                term = sum([(poly + poly.adjoint()) / 2 for poly in to_hermitianize])
 
-                if delta:
-                    decomposition_positive = [p.chop(delta) for p in decomposition_positive]
-                    decomposition_positive = [p for p in decomposition_positive if not p.is_zero()]
-                    decomposition_negative = [p.chop(delta) for p in decomposition_negative]
-                    decomposition_negative = [p for p in decomposition_negative if not p.is_zero()]
+                if not isinstance(term, int):  # sum returns 0 on empty lists
+                    term = self.relaxation.rewrite(term).chop(delta)
 
-                if decomposition_positive or decomposition_negative:
-                    equalities_terms.append(
-                        LocalizingMomentMatrixEqualityDecomposition(
-                            generator=generator,
-                            decomposition_positive=decomposition_positive,
-                            decomposition_negative=decomposition_negative,
-                        )
-                    )
+                    if not term.is_zero():
+                        equalities_terms.append(LocalizingMomentMatrixEqualityDecomposition(term=term))
 
             # Annotated because the branches below append differently-specialized instances, and a
             # bare `[]` would infer a union element type that the invariant `list` then rejects
@@ -275,7 +256,7 @@ class BaseSolution(ABC, Generic[MonomialType, Scalar]):
 
             for generator, coefficient in moment_equality_multipliers.get(mm_id, []):
                 to_hermitianize = coefficient * generator.adjoint()
-                to_add = ((to_hermitianize + to_hermitianize.adjoint()) / 2).chop(delta)
+                to_add = self.relaxation.rewrite((to_hermitianize + to_hermitianize.adjoint()) / 2).chop(delta)
 
                 if not to_add.is_zero():
                     moment_equalities_terms.append(
@@ -287,7 +268,7 @@ class BaseSolution(ABC, Generic[MonomialType, Scalar]):
             moment_inequalities_terms = []
 
             for generator, coefficient in moment_inequality_multipliers.get(mm_id, []):
-                to_add = (coefficient * generator).chop(delta)
+                to_add = self.relaxation.rewrite(coefficient * generator).chop(delta)
 
                 if not to_add.is_zero():
                     moment_inequalities_terms.append(SingleMomentInequalityDecomposition(term=to_add))

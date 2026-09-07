@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, cast
 
 import numpy as np
@@ -160,65 +161,84 @@ class MosekSolution(BaseSolution[MonomialType, Scalar]):
     def localizing_matrices_equality_multipliers_by_mm_id(
         self,
     ) -> dict[
-        int,
-        list[
-            tuple[
-                Polynomial[MonomialType, Scalar],
-                RealOrComplexMatrix,
-                list[MonomialType],
-            ]
-        ],
+        int, list[tuple[Polynomial[MonomialType, Scalar], Sequence[tuple[Polynomial[MonomialType, Scalar], Scalar]]]]
     ]:
         res = {}
 
-        for (
-            id,
-            localizing_moment_matrices_equalities_id,
-        ) in self._relaxation.localising_moment_matrices_equalities.items():
-            to_add: list[tuple[Polynomial[MonomialType, Scalar], RealOrComplexMatrix, list[MonomialType]]] = []
+        for moment_matrix_id, equalities_as_moments in self._relaxation.localising_moment_matrices_equalities.items():
+            list_of_equalities: list[
+                tuple[Polynomial[MonomialType, Scalar], Sequence[tuple[Polynomial[MonomialType, Scalar], Scalar]]]
+            ] = []
 
-            for index, (localizing_moment_matrix, (equality_constraint, generating_set)) in enumerate(
-                zip(localizing_moment_matrices_equalities_id, self._relaxation.equalities.get(id, []), strict=True)
-            ):
-                # The equality constraints on symmetric matrices are redundant, and thus Mosek only returns a
-                # lower-triangular matrix for the dual, which we have to hermitianize further down
-                if self._primal:
-                    sign = 1 if self._objective_sense == "min" else -1
-                    localizing_moment_matrix_dual = self._constraint(f"LMME-{id}-{index}").dual() * sign
-                else:
-                    localizing_moment_matrix_dual = (
-                        self._variable(f"Q_({id}, {index})^0").level() - self._variable(f"Q_({id}, {index})^1").level()
-                    )
+            for equality_index, (equality_as_polynomial, equality_as_moments) in enumerate(equalities_as_moments):
+                list_of_moments: list[tuple[Polynomial[MonomialType, Scalar], Scalar]] = []
 
-                if self._relaxation.is_real:
-                    to_hermitianize = localizing_moment_matrix_dual.reshape(
-                        localizing_moment_matrix.size, localizing_moment_matrix.size
-                    )
-
+                for moment_index, moment in enumerate(equality_as_moments):
                     if self._primal:
-                        to_hermitianize = (to_hermitianize + to_hermitianize.T.conj()) / 2
-                else:
-                    localizing_moment_matrix_dual = localizing_moment_matrix_dual.reshape(
-                        2 * localizing_moment_matrix.size, 2 * localizing_moment_matrix.size
-                    )
+                        sign = 1 if self._objective_sense == "min" else -1
+                        if self._relaxation.is_real:
+                            list_of_moments.append(
+                                (
+                                    moment,
+                                    self._constraint(f"ME-{moment_matrix_id}-{equality_index}-{moment_index}").dual()[0]
+                                    * sign,
+                                )
+                            )
+                        else:
+                            # A moment equality with a real coefficient has no imaginary
+                            # part to constrain, so the model may hold the real one alone
+                            im_constraint = self._model.getConstraint(
+                                f"ME-{moment_matrix_id}-{equality_index}-{moment_index}_im"
+                            )
 
-                    if self._primal:  # Needed because of the Hermitian into Symmetric embedding
-                        localizing_moment_matrix_dual *= 2
+                            if im_constraint is not None:
+                                list_of_moments.append(
+                                    (
+                                        moment,
+                                        (
+                                            self._constraint(
+                                                f"ME-{moment_matrix_id}-{equality_index}-{moment_index}_re"
+                                            ).dual()[0]
+                                            + im_constraint.dual()[0] * 1j
+                                        )
+                                        * sign,
+                                    )
+                                )
+                            else:
+                                list_of_moments.append(
+                                    (
+                                        moment,
+                                        self._constraint(
+                                            f"ME-{moment_matrix_id}-{equality_index}-{moment_index}_re"
+                                        ).dual()[0]
+                                        * sign,
+                                    )
+                                )
+                    else:
+                        if self._relaxation.is_real:
+                            list_of_moments.append(
+                                (
+                                    moment,
+                                    self._variable(f"nu_{(moment_matrix_id, equality_index, moment_index)}").level()[0],
+                                )
+                            )
+                        else:
+                            list_of_moments.append(
+                                (
+                                    moment,
+                                    self._variable(f"nu_{(moment_matrix_id, equality_index, moment_index)}^re").level()[
+                                        0
+                                    ]
+                                    + self._variable(
+                                        f"nu_{(moment_matrix_id, equality_index, moment_index)}^im"
+                                    ).level()[0]
+                                    * 1j,
+                                )
+                            )
 
-                    to_hermitianize = (
-                        localizing_moment_matrix_dual[: localizing_moment_matrix.size, : localizing_moment_matrix.size]
-                        + 1j
-                        * localizing_moment_matrix_dual[
-                            localizing_moment_matrix.size :, : localizing_moment_matrix.size
-                        ]
-                    )
+                list_of_equalities.append((equality_as_polynomial, list_of_moments))
 
-                    if self._primal:
-                        to_hermitianize = (to_hermitianize + to_hermitianize.T.conj()) / 2
-
-                to_add.append((equality_constraint, to_hermitianize, generating_set))
-
-            res[id] = to_add
+            res[moment_matrix_id] = list_of_equalities
 
         return res
 
