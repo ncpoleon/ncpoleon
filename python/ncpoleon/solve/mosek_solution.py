@@ -1,19 +1,33 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
 from typing import TYPE_CHECKING, cast
 
 import numpy as np
 
-from ncpoleon._typing import MonomialType, RealOrComplexMatrix, Scalar
-from ncpoleon.relaxations import Canonicality, Realness
+from ncpoleon._typing import ComplexMatrix, MonomialType, RealMatrix, RealOrComplexMatrix, Scalar
+from ncpoleon.relaxations import Canonicality, Hermiticity, Realness
 from ncpoleon.solve.solution import BaseSolution
+from ncpoleon.utils import is_vacuous_moment
 
 if TYPE_CHECKING:
     from mosek.fusion import Constraint, Model, Variable
 
     from ncpoleon.polynomials import Polynomial
     from ncpoleon.relaxations import BaseSdpRelaxation
+
+
+def _hermitian_from_embedding(embedded: RealMatrix, size: int) -> ComplexMatrix:
+    """Recover `R + iI` from the real symmetric embedding `[[R, -I], [I, R]]` that MOSEK optimises over.
+
+    Only a matrix built as that embedding carries its structure exactly, which is the case for the value of
+    an expression or variable we constructed. A cone multiplier is any member of the dual cone and carries
+    it only up to a member of the orthogonal complement, so it has to be projected onto the structured
+    subspace rather than read off two of its blocks. The projection is the identity on a structured matrix.
+    """
+    real = (embedded[:size, :size] + embedded[size:, size:]) / 2
+    imag = (embedded[size:, :size] - embedded[:size, size:]) / 2
+
+    return cast("ComplexMatrix", real + 1j * imag)
 
 
 class MosekSolution(BaseSolution[MonomialType, Scalar]):
@@ -126,7 +140,7 @@ class MosekSolution(BaseSolution[MonomialType, Scalar]):
                 if not self._primal:  # Needed because of the Hermitian into Symmetric embedding
                     moment_matrix_level *= 2
 
-                res[id] = moment_matrix_level[:size, :size] + 1j * moment_matrix_level[size:, :size]
+                res[id] = _hermitian_from_embedding(moment_matrix_level, size)
 
         return res
 
@@ -153,27 +167,50 @@ class MosekSolution(BaseSolution[MonomialType, Scalar]):
                 if self._primal:  # Needed because of the Hermitian into Symmetric embedding
                     moment_matrix_dual *= 2
 
-                res[id] = moment_matrix_dual[:size, :size] + 1j * moment_matrix_dual[size:, :size]
+                res[id] = _hermitian_from_embedding(moment_matrix_dual, size)
 
         return res
 
-    @property
-    def localizing_matrices_equality_multipliers_by_mm_id(
-        self,
+    def _localizing_matrices_equality_multipliers_by_mm_id(
+        self, hermiticity: Hermiticity
     ) -> dict[
-        int, list[tuple[Polynomial[MonomialType, Scalar], Sequence[tuple[Polynomial[MonomialType, Scalar], Scalar]]]]
+        int,
+        list[
+            tuple[
+                Polynomial[MonomialType, Scalar],
+                list[tuple[Polynomial[MonomialType, Scalar], Scalar]],
+                list[MonomialType],
+            ]
+        ],
     ]:
         res = {}
 
         for moment_matrix_id, equalities_as_moments in self._relaxation.localising_moment_matrices_equalities.items():
             list_of_equalities: list[
-                tuple[Polynomial[MonomialType, Scalar], Sequence[tuple[Polynomial[MonomialType, Scalar], Scalar]]]
+                tuple[
+                    Polynomial[MonomialType, Scalar],
+                    list[tuple[Polynomial[MonomialType, Scalar], Scalar]],
+                    list[MonomialType],
+                ]
             ] = []
 
-            for equality_index, (equality_as_polynomial, equality_as_moments) in enumerate(equalities_as_moments):
+            for equality_index, (
+                (equality_as_polynomial, equality_as_moments, equality_hermiticity),
+                (_generator, generating_set),
+            ) in enumerate(
+                zip(equalities_as_moments, self._relaxation.equalities.get(moment_matrix_id, []), strict=True)
+            ):
+                if equality_hermiticity != hermiticity:
+                    continue
+
                 list_of_moments: list[tuple[Polynomial[MonomialType, Scalar], Scalar]] = []
 
                 for moment_index, moment in enumerate(equality_as_moments):
+                    # A vacuous moment got neither a constraint nor a variable, and 0 satisfies it
+                    if is_vacuous_moment(self._relaxation, moment):
+                        list_of_moments.append((moment, cast("Scalar", 0.0)))
+                        continue
+
                     if self._primal:
                         sign = 1 if self._objective_sense == "min" else -1
                         if self._relaxation.is_real:
@@ -236,7 +273,7 @@ class MosekSolution(BaseSolution[MonomialType, Scalar]):
                                 )
                             )
 
-                list_of_equalities.append((equality_as_polynomial, list_of_moments))
+                list_of_equalities.append((equality_as_polynomial, list_of_moments, generating_set))
 
             res[moment_matrix_id] = list_of_equalities
 
@@ -293,13 +330,7 @@ class MosekSolution(BaseSolution[MonomialType, Scalar]):
                     to_add.append(
                         (
                             inequality_constraint,
-                            localizing_moment_matrix_level[
-                                : localizing_moment_matrix.size, : localizing_moment_matrix.size
-                            ]
-                            + 1j
-                            * localizing_moment_matrix_level[
-                                localizing_moment_matrix.size :, : localizing_moment_matrix.size
-                            ],
+                            _hermitian_from_embedding(localizing_moment_matrix_level, localizing_moment_matrix.size),
                             generating_set,
                         )
                     )
@@ -359,13 +390,7 @@ class MosekSolution(BaseSolution[MonomialType, Scalar]):
                     to_add.append(
                         (
                             inequality_constraint,
-                            localizing_moment_matrix_dual[
-                                : localizing_moment_matrix.size, : localizing_moment_matrix.size
-                            ]
-                            + 1j
-                            * localizing_moment_matrix_dual[
-                                localizing_moment_matrix.size :, : localizing_moment_matrix.size
-                            ],
+                            _hermitian_from_embedding(localizing_moment_matrix_dual, localizing_moment_matrix.size),
                             generating_set,
                         )
                     )

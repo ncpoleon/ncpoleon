@@ -37,7 +37,7 @@ def test_simple_real_commutative_problem(benchmark, solver: str, level: int, exp
     sdp = get_relaxation([x0, x1], level, obj, operator_constraints=operator_constraints)
     sol = benchmark(solve, sdp, "min", force_primal=force_primal, solver=solver)
     assert sol.value == pytest.approx(expected)
-    consistency_check(sdp, sol, objective_sense="min", sos_tol=1e-03 if solver == "mosek" else 1e-07)
+    consistency_check(sdp, sol, objective_sense="min", sos_tol=1e-07)
 
 
 @pytest.mark.parametrize("solver, level, expected", generate_simple_commutative_parameters())

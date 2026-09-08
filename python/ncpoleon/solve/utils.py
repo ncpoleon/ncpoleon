@@ -1,17 +1,15 @@
 from __future__ import annotations
 
 from importlib.util import find_spec
-from typing import TYPE_CHECKING, cast, overload
+from typing import TYPE_CHECKING, overload, cast
 
 import numpy as np
 
-from ncpoleon._typing import MonomialType, RealOrComplexMatrix, Scalar
+from ncpoleon._typing import RealOrComplexMatrix
 from ncpoleon.utils import is_mosek_available
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
-
-    from ncpoleon.polynomials import Polynomial
+    pass
 
 
 def automatic_solver_detection() -> str:
@@ -25,16 +23,20 @@ def automatic_solver_detection() -> str:
 
 
 @overload
-def sos_vectors_of_hermitian_psd_matrix(
+def sos_vectors_of_hermitian_matrix(
     matrix: np.ndarray[tuple[int, int], np.dtype[np.float64]], cutoff: float
-) -> np.ndarray[tuple[int, int], np.dtype[np.float64]]: ...
+) -> tuple[np.ndarray[tuple[int, int], np.dtype[np.float64]], np.ndarray[tuple[int, int], np.dtype[np.float64]]]: ...
 @overload
-def sos_vectors_of_hermitian_psd_matrix(
+def sos_vectors_of_hermitian_matrix(
     matrix: np.ndarray[tuple[int, int], np.dtype[np.complex128]], cutoff: float
-) -> np.ndarray[tuple[int, int], np.dtype[np.complex128]]: ...
+) -> tuple[
+    np.ndarray[tuple[int, int], np.dtype[np.complex128]], np.ndarray[tuple[int, int], np.dtype[np.complex128]]
+]: ...
 
 
-def sos_vectors_of_hermitian_psd_matrix(matrix: RealOrComplexMatrix, cutoff: float) -> RealOrComplexMatrix:
+def sos_vectors_of_hermitian_matrix(
+    matrix: RealOrComplexMatrix, cutoff: float
+) -> tuple[RealOrComplexMatrix, RealOrComplexMatrix]:
     eigvals, eigvecs = np.linalg.eigh(matrix)
 
     # Remove small eigvals
@@ -42,4 +44,12 @@ def sos_vectors_of_hermitian_psd_matrix(matrix: RealOrComplexMatrix, cutoff: flo
     eigvecs = eigvecs[:, cutoff_mask]
     eigvals = eigvals[cutoff_mask]
 
-    return cast(RealOrComplexMatrix, np.sqrt(eigvals) * eigvecs)
+    # Split positive and negative eigvals
+    mask = eigvals >= 0
+    positive_eigvecs = eigvecs[:, mask]
+    positive_eigvals = np.sqrt(eigvals[mask])
+    negative_eigvecs = eigvecs[:, ~mask]
+    negative_eigvals = np.sqrt(-eigvals[~mask])
+    result = (positive_eigvals * positive_eigvecs), (negative_eigvals * negative_eigvecs)
+
+    return cast(tuple[RealOrComplexMatrix, RealOrComplexMatrix], result)

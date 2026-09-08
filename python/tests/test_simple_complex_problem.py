@@ -101,7 +101,7 @@ def test_simple_complex_problem(benchmark, solver: str, level: int, expected: fl
     sdp = get_relaxation([x1, x2], level, obj, operator_constraints=operator_constraints)
     sol = benchmark(solve, sdp, "min", force_primal=force_primal, solver=solver)
     assert sol.value == pytest.approx(expected, abs=1e-6)
-    consistency_check(sdp, sol, objective_sense="min", sos_tol=1e-02 if solver == "mosek" else 1e-07)
+    consistency_check(sdp, sol, objective_sense="min", sos_tol=1e-07)
 
 
 @pytest.mark.parametrize(
@@ -125,7 +125,7 @@ def test_complex_problem_with_hermitian_moment_inequality(
     )
     sol = benchmark(solve, sdp, "min", force_primal=force_primal, solver=solver)
     assert sol.value == pytest.approx(expected, abs=1e-6)
-    consistency_check(sdp, sol, objective_sense="min", sos_tol=1e-03 if solver == "mosek" and force_primal else 1e-07)
+    consistency_check(sdp, sol, objective_sense="min", sos_tol=1e-07)
 
 
 @pytest.mark.parametrize(
@@ -147,7 +147,7 @@ def test_complex_problem_with_moment_equality(benchmark, solver: str, case: str,
     )
     sol = benchmark(solve, sdp, "min", force_primal=force_primal, solver=solver)
     assert sol.value == pytest.approx(expected, abs=1e-6)
-    consistency_check(sdp, sol, objective_sense="min", sos_tol=1e-03 if solver == "mosek" else 1e-07)
+    consistency_check(sdp, sol, objective_sense="min", sos_tol=1e-07)
 
 
 def test_non_hermitian_moment_inequality_is_rejected():
@@ -219,6 +219,4 @@ def test_satisfiable_counterparts_still_build(solver: str, force_primal: bool):
         )
         sol = solve(sdp, "min", force_primal=force_primal, solver=solver)
         assert sol.value == pytest.approx(expected, abs=1e-6)
-        consistency_check(
-            sdp, sol, objective_sense="min", sos_tol=1e-03 if solver == "mosek" and force_primal else 1e-07
-        )
+        consistency_check(sdp, sol, objective_sense="min", sos_tol=1e-07)

@@ -113,6 +113,16 @@ class Canonicality:
     def __str__(self) -> str: ...
     def __repr__(self) -> str: ...
 
+@final
+class Hermiticity:
+    Hermitian: ClassVar[Hermiticity]
+    NonHermitian: ClassVar[Hermiticity]
+    def __int__(self) -> int: ...
+    def __eq__(self, other: object) -> bool: ...
+    def __hash__(self) -> int: ...
+    def __str__(self) -> str: ...
+    def __repr__(self) -> str: ...
+
 class MomentMatrix(Generic[MonomialType, Scalar]):
     @property
     def size(self) -> int: ...
@@ -172,7 +182,7 @@ class BaseSdpRelaxation(Generic[MonomialType, Scalar]):
     def localising_moment_matrices_equalities(
         self,
     ) -> Mapping[
-        int, list[tuple[Polynomial[MonomialType, Scalar], list[Polynomial[MonomialType, Scalar]]]]
+        int, list[tuple[Polynomial[MonomialType, Scalar], list[Polynomial[MonomialType, Scalar]], Hermiticity]]
     ]: ...
     @property
     def moment_equalities(self) -> list[tuple[Polynomial[MonomialType, Scalar], Scalar]]: ...
@@ -218,8 +228,11 @@ class RealValuedCommutativeSdpRelaxation(BaseSdpRelaxation[CommutativeMonomial, 
     @property
     def localising_moment_matrices_inequalities(self) -> dict[int, list[RealValuedCommutativeMomentMatrix]]: ...
     @property
-    def localising_moment_matrices_equalities(self) -> Mapping[
-        int, list[tuple[Polynomial[CommutativeMonomial, float], list[Polynomial[CommutativeMonomial, float]]]]
+    def localising_moment_matrices_equalities(
+        self,
+    ) -> Mapping[
+        int,
+        list[tuple[Polynomial[CommutativeMonomial, float], list[Polynomial[CommutativeMonomial, float]], Hermiticity]],
     ]: ...
     @overload
     def rewrite(self, mon_or_poly: CommutativePolynomialElement | float) -> CommutativeMonomial: ...
@@ -236,8 +249,13 @@ class ComplexValuedCommutativeSdpRelaxation(BaseSdpRelaxation[CommutativeMonomia
     @property
     def localising_moment_matrices_inequalities(self) -> dict[int, list[ComplexValuedCommutativeMomentMatrix]]: ...
     @property
-    def localising_moment_matrices_equalities(self) -> Mapping[
-        int, list[list[Polynomial[CommutativeMonomial, complex]]]
+    def localising_moment_matrices_equalities(
+        self,
+    ) -> Mapping[
+        int,
+        list[
+            tuple[Polynomial[CommutativeMonomial, complex], list[Polynomial[CommutativeMonomial, complex]], Hermiticity]
+        ],
     ]: ...
     @overload
     def rewrite(self, mon_or_poly: CommutativePolynomialElement | float) -> CommutativeMonomial: ...
@@ -256,8 +274,15 @@ class RealValuedNonCommutativeSdpRelaxation(BaseSdpRelaxation[NonCommutativeMono
     @property
     def localising_moment_matrices_inequalities(self) -> dict[int, list[RealValuedNonCommutativeMomentMatrix]]: ...
     @property
-    def localising_moment_matrices_equalities(self) -> Mapping[
-        int, list[tuple[Polynomial[NonCommutativeMonomial, float], list[Polynomial[NonCommutativeMonomial, float]]]]
+    def localising_moment_matrices_equalities(
+        self,
+    ) -> Mapping[
+        int,
+        list[
+            tuple[
+                Polynomial[NonCommutativeMonomial, float], list[Polynomial[NonCommutativeMonomial, float]], Hermiticity
+            ]
+        ],
     ]: ...
     @overload
     def rewrite(self, mon_or_poly: NonCommutativePolynomialElement | float) -> NonCommutativeMonomial: ...
@@ -276,8 +301,17 @@ class ComplexValuedNonCommutativeSdpRelaxation(BaseSdpRelaxation[NonCommutativeM
     @property
     def localising_moment_matrices_inequalities(self) -> dict[int, list[ComplexValuedNonCommutativeMomentMatrix]]: ...
     @property
-    def localising_moment_matrices_equalities(self) -> Mapping[
-        int, list[tuple[Polynomial[NonCommutativeMonomial, complex], list[Polynomial[NonCommutativeMonomial, complex]]]]
+    def localising_moment_matrices_equalities(
+        self,
+    ) -> Mapping[
+        int,
+        list[
+            tuple[
+                Polynomial[NonCommutativeMonomial, complex],
+                list[Polynomial[NonCommutativeMonomial, complex]],
+                Hermiticity,
+            ]
+        ],
     ]: ...
     @overload
     def rewrite(self, mon_or_poly: NonCommutativePolynomialElement | float) -> NonCommutativeMonomial: ...

@@ -31,7 +31,19 @@ class LocalizingMomentMatrixInequalityDecomposition(Generic[MonomialType, Scalar
 
 
 @dataclass(eq=False, order=False, kw_only=True)
-class LocalizingMomentMatrixEqualityDecomposition(Generic[MonomialType, Scalar]):
+class LocalizingMomentMatrixHermitianEqualityDecomposition(Generic[MonomialType, Scalar]):
+    """A single localizing moment matrix equality contribution to a SoS decomposition.
+
+    Docs TODO:
+    """
+
+    generator: Polynomial[MonomialType, Scalar]
+    decomposition_positive: list[Polynomial[MonomialType, Scalar]]
+    decomposition_negative: list[Polynomial[MonomialType, Scalar]]
+
+
+@dataclass(eq=False, order=False, kw_only=True)
+class LocalizingMomentMatrixNonHermitianEqualityDecomposition(Generic[MonomialType, Scalar]):
     """A single localizing moment matrix equality contribution to a SoS decomposition.
 
     Docs TODO:
@@ -63,7 +75,8 @@ class SingleMomentInequalityDecomposition(Generic[MonomialType, Scalar]):
 @dataclass(eq=False, order=False, kw_only=True)
 class SoSDecomposition(Generic[MonomialType, Scalar]):
     moment_matrix_term: MomentMatrixDecomposition[MonomialType, Scalar]
-    equalities_terms: list[LocalizingMomentMatrixEqualityDecomposition[MonomialType, Scalar]]
+    hermitian_equalities_terms: list[LocalizingMomentMatrixHermitianEqualityDecomposition[MonomialType, Scalar]]
+    nonhermitian_equalities_terms: list[LocalizingMomentMatrixNonHermitianEqualityDecomposition[MonomialType, Scalar]]
     inequalities_terms: list[LocalizingMomentMatrixInequalityDecomposition[MonomialType, Scalar]]
     moment_equalities_terms: list[SingleMomentEqualityDecomposition[MonomialType, Scalar]]
     moment_inequalities_terms: list[SingleMomentInequalityDecomposition[MonomialType, Scalar]]

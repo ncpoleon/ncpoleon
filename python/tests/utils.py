@@ -44,7 +44,7 @@ def _reduce_sos_decomposition(
 ) -> Polynomial[MonomialType, Scalar]:
     res = sum([poly.adjoint() * poly for poly in sos.moment_matrix_term.decomposition])
 
-    for localizing_term in sos.equalities_terms:
+    for localizing_term in sos.hermitian_equalities_terms:
         res -= sum(
             [poly.adjoint() * localizing_term.generator * poly for poly in localizing_term.decomposition_negative]
         )
@@ -55,7 +55,9 @@ def _reduce_sos_decomposition(
     for localizing_term in sos.inequalities_terms:
         res += sum([poly.adjoint() * localizing_term.generator * poly for poly in localizing_term.decomposition])
 
-    for moment_decomposition in sos.moment_inequalities_terms + sos.moment_equalities_terms:
+    for moment_decomposition in (
+        sos.moment_inequalities_terms + sos.moment_equalities_terms + sos.nonhermitian_equalities_terms
+    ):
         res += moment_decomposition.term
 
     return res

@@ -10,6 +10,7 @@ pub fn relaxations(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<constraint::PythonComplexCoefficientsCommutativeConstraint>()?;
     m.add_class::<constraint::PythonRealCoefficientsNonCommutativeConstraint>()?;
     m.add_class::<constraint::PythonComplexCoefficientsNonCommutativeConstraint>()?;
+    m.add_class::<constraint::Hermiticity>()?;
     m.add_class::<moment_matrix::Realness>()?;
     m.add_class::<moment_matrix::Canonicality>()?;
     m.add_class::<moment_matrix::PythonRealValuedCommutativeMomentMatrix>()?;

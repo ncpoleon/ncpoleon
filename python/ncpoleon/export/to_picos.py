@@ -7,6 +7,7 @@ import numpy as np
 from scipy.sparse import coo_matrix
 
 from ncpoleon.relaxations import Realness
+from ncpoleon.utils import is_vacuous_moment
 
 try:
     import picos as pc
@@ -115,18 +116,20 @@ def to_picos(
             constraints[f"MM-{moment_matrix_id}"] = problem.add_constraint(G >> 0)
             logger.debug(f"Added moment matrix PSD constraint for moment matrix id {moment_matrix_id}.")
 
+        # An operator equality is expanded into one moment equality per entry of its localising matrix, so that a
+        # non-hermitian generator is not forced through a hermitian multiplier in the dual
         for moment_matrix_id, equality_moment_matrices in sdp.localising_moment_matrices_equalities.items():
-            for index, equality_moment_matrix in enumerate(equality_moment_matrices):
-                new_localising_matrix = pc.sum(
-                    [
-                        moment_matrix_entry_to_picos(
-                            mapped_variables[mon], pos_matrix, realness, equality_moment_matrix.size
-                        )
-                        for mon, (pos_matrix, realness) in equality_moment_matrix.as_row_col_data_format().items()
-                    ]
-                )
-                constraints[f"LMME-{moment_matrix_id}-{index}"] = problem.add_constraint(new_localising_matrix == 0)
-                logger.debug(f"Added constraint {new_localising_matrix} == 0 for moment matrix id {moment_matrix_id}.")
+            for equality_index, (_generator, equality_as_moments, _hermiticity) in enumerate(equality_moment_matrices):
+                for poly_index, poly in enumerate(equality_as_moments):
+                    # A vacuous moment would only add 0 == 0; the solution skips the same indices when reading back
+                    if is_vacuous_moment(sdp, poly):
+                        continue
+
+                    changed = sdp.change_variables(poly, mapped_variables)
+                    constraints[f"ME-{moment_matrix_id}-{equality_index}-{poly_index}"] = problem.add_constraint(
+                        changed == 0
+                    )
+                    logger.debug(f"Added constraint {changed} == 0.")
 
         for moment_matrix_id, inequality_moment_matrices in sdp.localising_moment_matrices_inequalities.items():
             for index, inequality_moment_matrix in enumerate(inequality_moment_matrices):
@@ -221,51 +224,48 @@ def to_picos(
                 constraints[f"P_{(moment_matrix_index, inequality_index)}"] = problem.add_constraint(Ps[-1] >> 0)
                 logger.debug(f"Added PSD variable(s) P_{(moment_matrix_index, inequality_index)}.")
 
+            # An operator equality is exported as one moment equality per entry of its localising matrix, so its
+            # multiplier is a scalar per entry rather than a single hermitian matrix
             Qs = []
+            split_operator_equalities = []
 
-            for equality_index, equality_localizing_matrix in enumerate(operator_equalities[moment_matrix_index]):
-                Qs.append(
-                    variable_builder(
-                        f"Q_{(moment_matrix_index, equality_index)}",
-                        equality_localizing_matrix.size,
-                    )
-                )
+            for equality_index, (_generator, equality_as_moments, _hermiticity) in enumerate(
+                operator_equalities[moment_matrix_index]
+            ):
+                for poly_index, poly in enumerate(equality_as_moments):
+                    # A vacuous moment appears in no constraint row, so PICOS would prune its
+                    # variable and `get_variable` would then fail. Skipping it here and in the coefficients
+                    # below keeps the two lists aligned, names keeping their index
+                    if is_vacuous_moment(sdp, poly):
+                        continue
 
-                logger.debug(f"Added Hermitian variable Q_{(moment_matrix_index, equality_index)}.")
+                    name = f"nu_{(moment_matrix_index, equality_index, poly_index)}"
+                    Qs.append(pc.RealVariable(name) if is_problem_real_valued else pc.ComplexVariable(name))
+                    split_operator_equalities.append((sdp.get_coefficients_by_canonical(poly), 0.0))
+                    logger.debug(f"Added dual variable {name} for operator equality number {equality_index}.")
 
             # Precompute localizing matrix row-col formats outside the monomial loop.
-            localizing_row_cols = [
-                [
-                    localizing_matrix.as_row_col_data_format()
-                    for localizing_matrix in operator_inequalities[moment_matrix_index]
-                ],
-                [
-                    localizing_matrix.as_row_col_data_format()
-                    for localizing_matrix in operator_equalities[moment_matrix_index]
-                ],
+            inequality_row_cols = [
+                localizing_matrix.as_row_col_data_format()
+                for localizing_matrix in operator_inequalities[moment_matrix_index]
             ]
 
             for monomial, (pos_matrix, realness) in moment_matrix.as_row_col_data_format().items():
                 F = convert_row_col_data_to_coo_matrix(pos_matrix, moment_matrix.size)
                 new_constraint = pc.trace(Y * F)
 
-                for lagrange_mutlipliers, localizing_matrices, precomputed_row_cols in zip(
-                    [Ps, Qs],
-                    [operator_inequalities[moment_matrix_index], operator_equalities[moment_matrix_index]],
-                    localizing_row_cols,
+                for multiplier, localizing_matrix, localizing_matrix_as_row_col in zip(
+                    Ps, operator_inequalities[moment_matrix_index], inequality_row_cols
                 ):
-                    for multiplier, localizing_matrix, localizing_matrix_as_row_col in zip(
-                        lagrange_mutlipliers, localizing_matrices, precomputed_row_cols
-                    ):
-                        # The realness of the localising entry is not needed here: PICOS handles the Hermitian
-                        # multipliers natively, so the same expression covers both cases
-                        pos_matrix_localizing, _localizing_realness = localizing_matrix_as_row_col.get(
-                            monomial, (None, Realness.Real)
-                        )
+                    # The realness of the localising entry is not needed here: PICOS handles the Hermitian
+                    # multipliers natively, so the same expression covers both cases
+                    pos_matrix_localizing, _localizing_realness = localizing_matrix_as_row_col.get(
+                        monomial, (None, Realness.Real)
+                    )
 
-                        if pos_matrix_localizing is not None:
-                            G = convert_row_col_data_to_coo_matrix(pos_matrix_localizing, localizing_matrix.size)
-                            new_constraint += pc.trace(multiplier * G)
+                    if pos_matrix_localizing is not None:
+                        G = convert_row_col_data_to_coo_matrix(pos_matrix_localizing, localizing_matrix.size)
+                        new_constraint += pc.trace(multiplier * G)
 
                 for lambda_m, (
                     (poly_moment_ineq_real_monomials_coefficients, poly_moment_ineq_complex_monomials_coefficients),
@@ -285,7 +285,7 @@ def to_picos(
                 for nu_n, (
                     (poly_moment_eq_real_monomials_coefficients, poly_moment_eq_complex_monomials_coefficients),
                     _scalar,
-                ) in zip(nus, split_moment_equalities):
+                ) in zip(nus + Qs, split_moment_equalities + split_operator_equalities, strict=True):
                     if is_problem_real_valued:
                         zeta = poly_moment_eq_real_monomials_coefficients.get(monomial, 0.0)
                         new_constraint += nu_n * zeta

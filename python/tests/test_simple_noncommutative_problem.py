@@ -21,15 +21,6 @@ def generate_simple_noncommutative_with_equality_constraints_parameters():
         for level, expected in [(1, 1 / 8), (2, 1 / 8)]:
             for force_primal in [True, False]:
                 marks = [SOLVER_SKIPS[solver]]
-
-                if solver == "picos-cvxopt" and level == 2 and force_primal:
-                    marks.append(
-                        pytest.mark.xfail(
-                            reason="Solving the primal at level 2 using the CVXOPT Solver results in an error",
-                            raises=ArithmeticError,
-                        )
-                    )
-
                 res.append(pytest.param(solver, level, expected, force_primal, marks=marks))
 
     return res
@@ -41,6 +32,33 @@ def generate_simple_noncommutative_with_substitution_parameters():
     for solver in ["picos-cvxopt", "mosek"]:
         for level, expected in [(1, 1 / 8), (2, 2.15e-05)]:
             res.append(pytest.param(solver, level, expected, marks=[SOLVER_SKIPS[solver]]))
+
+    return res
+
+
+def generate_simple_noncommutative_as_operator_equalities_parameters(*, xfail_cvxopt_level_2_primal: bool):
+    """Parameters for imposing commutativity as an operator equality rather than as a substitution.
+
+    A substitution rewrites every monomial, whereas an operator equality only constrains the moments its
+    localising set reaches. The relaxation is therefore weaker, and its level 2 maximum correspondingly
+    larger than the 2.15e-05 of the substitution formulation.
+    """
+    res = []
+
+    for solver in ["picos-cvxopt", "mosek"]:
+        for level, expected in [(1, 1 / 8), (2, 5.52e-05)]:
+            for force_primal in [True, False]:
+                marks = [SOLVER_SKIPS[solver]]
+
+                if xfail_cvxopt_level_2_primal and solver == "picos-cvxopt" and level == 2 and force_primal:
+                    marks.append(
+                        pytest.mark.xfail(
+                            reason="Solving the primal at level 2 using the CVXOPT Solver results in an error",
+                            raises=ArithmeticError,
+                        )
+                    )
+
+                res.append(pytest.param(solver, level, expected, force_primal, marks=marks))
 
     return res
 
@@ -124,8 +142,11 @@ def test_simple_real_noncommutative_problem_with_commutative_substitution(
     assert sol.value == pytest.approx(expected, abs=1e-6)
     consistency_check(sdp, sol, objective_sense="max", sos_tol=1e-07)
 
-@pytest.mark.parametrize("solver, level, expected", generate_simple_noncommutative_with_substitution_parameters())
-@pytest.mark.parametrize("force_primal", [True, False])
+
+@pytest.mark.parametrize(
+    "solver, level, expected, force_primal",
+    generate_simple_noncommutative_as_operator_equalities_parameters(xfail_cvxopt_level_2_primal=True),
+)
 def test_simple_real_noncommutative_problem_with_commutative_substitution_as_nonhermitian_operator_equalities(
     benchmark, solver: str, level: int, expected: float, force_primal: bool
 ):
@@ -136,13 +157,16 @@ def test_simple_real_noncommutative_problem_with_commutative_substitution_as_non
     assert sol.value == pytest.approx(expected, abs=1e-6)
     consistency_check(sdp, sol, objective_sense="max", sos_tol=1e-07)
 
-@pytest.mark.parametrize("solver, level, expected", generate_simple_noncommutative_with_substitution_parameters())
-@pytest.mark.parametrize("force_primal", [True, False])
+
+@pytest.mark.parametrize(
+    "solver, level, expected, force_primal",
+    generate_simple_noncommutative_as_operator_equalities_parameters(xfail_cvxopt_level_2_primal=False),
+)
 def test_simple_real_noncommutative_problem_with_commutative_substitution_as_hermitian_operator_equalities(
     benchmark, solver: str, level: int, expected: float, force_primal: bool
 ):
     x1, x2, obj = _simple_noncommutative_vars()
-    operator_constraints = [x1 - x1**2 >= 0, x2 - x2**2 >= 0, 1j*(x2 * x1 - x1 * x2) == 0]
+    operator_constraints = [x1 - x1**2 >= 0, x2 - x2**2 >= 0, 1j * (x2 * x1 - x1 * x2) == 0]
     sdp = get_relaxation([x1, x2], level, obj, operator_constraints=operator_constraints)
     sol = benchmark(solve, sdp, "max", force_primal=force_primal, solver=solver)
     assert sol.value == pytest.approx(expected, abs=1e-6)

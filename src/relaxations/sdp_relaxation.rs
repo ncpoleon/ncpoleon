@@ -36,8 +36,9 @@ use crate::polynomials::noncommutative_polynomials::polynomials::noncommutative_
 };
 use crate::polynomials::polynomial::{Polynomial, PolynomialDtype, PolynomialTrait, TryIntoReal};
 use crate::relaxations::constraint::{
-    ConstraintKind, PythonComplexCoefficientsCommutativeConstraint, PythonComplexCoefficientsNonCommutativeConstraint,
-    PythonRealCoefficientsCommutativeConstraint, PythonRealCoefficientsNonCommutativeConstraint,
+    ConstraintKind, Hermiticity, PythonComplexCoefficientsCommutativeConstraint,
+    PythonComplexCoefficientsNonCommutativeConstraint, PythonRealCoefficientsCommutativeConstraint,
+    PythonRealCoefficientsNonCommutativeConstraint,
 };
 use crate::relaxations::moment_matrix::{
     Canonicality, PythonComplexValuedCommutativeMomentMatrix, PythonComplexValuedNonCommutativeMomentMatrix,
@@ -826,7 +827,7 @@ macro_rules! impl_sdp_relaxation_pymethods {
 
             /// Localising moment matrices for the equality constraints.
             #[getter]
-            fn localising_moment_matrices_equalities(&self) -> BTreeMap<u8, Vec<($py_poly, Vec<$py_poly>)>> {
+            fn localising_moment_matrices_equalities(&self) -> BTreeMap<u8, Vec<($py_poly, Vec<$py_poly>, Hermiticity)>> {
                 self.0
                     .localising_moment_matrices_equalities
                     .iter()
@@ -835,14 +836,15 @@ macro_rules! impl_sdp_relaxation_pymethods {
                             mm_id,
                             equalities_id
                                 .iter()
-                                .map(|(generator, generating_set)| {
+                                .map(|(generator, generating_set, hermiticity)| {
                                     (
                                         $py_poly(generator.clone()),
                                         generating_set
                                             .iter()
                                             .cloned()
                                             .map($py_poly)
-                                            .collect()
+                                            .collect(),
+                                        *hermiticity
                                     )
                                 })
                                 .collect()
@@ -919,7 +921,8 @@ macro_rules! impl_sdp_relaxation_pymethods {
 }
 
 type PolynomialWithGeneratingSet<MonomialType, Scalar> = (Polynomial<MonomialType, Scalar>, Vec<MonomialType>);
-type OperatorEqualityAsMoments<MonomialType, Scalar> = (Polynomial<MonomialType, Scalar>, Vec<Polynomial<MonomialType, Scalar>>);
+type OperatorEqualityAsMoments<MonomialType, Scalar> =
+    (Polynomial<MonomialType, Scalar>, Vec<Polynomial<MonomialType, Scalar>>, Hermiticity);
 
 pub(super) struct SdpRelaxation<MonomialType: AdjointTrait + Ord, Scalar: PolynomialDtype> {
     objective: Polynomial<MonomialType, Scalar>,
@@ -1729,12 +1732,17 @@ where
         let size = generating_set.len();
 
         // If the polynomial is Hermitian, we only need to consider the upper triangular part of the matrix
-        let is_hermitian = (polynomial - polynomial.adjoint())
+        let hermiticity = if (polynomial - polynomial.adjoint())
             .rewrite(self.substitution_strategy, &self.substitutions)
             .map_err(PyValueError::new_err)?
-            .is_zero();
+            .is_zero()
+        {
+            Hermiticity::Hermitian
+        } else {
+            Hermiticity::NonHermitian
+        };
 
-        let mut moment_equalities = Vec::with_capacity(if is_hermitian {
+        let mut moment_equalities = Vec::with_capacity(if hermiticity == Hermiticity::Hermitian {
             (generating_set.len() * (generating_set.len() + 1)) / 2
         } else {
             generating_set.len().pow(2)
@@ -1754,7 +1762,7 @@ where
 
         for (index_row, operator_row) in monomials_iterator_rows {
             // Slicing rather than `skip` keeps this at n*(n+1)/2 instead of n^2.
-            let monomials_iterator_cols = if is_hermitian {
+            let monomials_iterator_cols = if hermiticity == Hermiticity::Hermitian {
                 itertools::Either::Left(generating_set[index_row..].iter())
             } else {
                 itertools::Either::Right(generating_set.iter())
@@ -1777,6 +1785,6 @@ where
             }
         }
 
-        Ok((polynomial.clone(), moment_equalities))
+        Ok((polynomial.clone(), moment_equalities, hermiticity))
     }
 }

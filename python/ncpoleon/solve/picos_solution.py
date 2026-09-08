@@ -5,8 +5,9 @@ from typing import TYPE_CHECKING, cast
 import numpy as np
 
 from ncpoleon._typing import MonomialType, RealOrComplexMatrix, Scalar
-from ncpoleon.relaxations import Canonicality, Realness
+from ncpoleon.relaxations import Canonicality, Hermiticity, Realness
 from ncpoleon.solve.solution import BaseSolution
+from ncpoleon.utils import is_vacuous_moment
 
 if TYPE_CHECKING:
     import picos as pc
@@ -93,39 +94,58 @@ class PicosSolution(BaseSolution[MonomialType, Scalar]):
 
         return res
 
-    @property
-    def localizing_matrices_equality_multipliers_by_mm_id(
-        self,
+    def _localizing_matrices_equality_multipliers_by_mm_id(
+        self, hermiticity: Hermiticity
     ) -> dict[
         int,
         list[
             tuple[
                 Polynomial[MonomialType, Scalar],
-                RealOrComplexMatrix,
+                list[tuple[Polynomial[MonomialType, Scalar], Scalar]],
                 list[MonomialType],
             ]
         ],
     ]:
         res = {}
 
-        for id in self._relaxation.localising_moment_matrices_equalities:
-            to_add: list[tuple[Polynomial[MonomialType, Scalar], RealOrComplexMatrix, list[MonomialType]]] = []
+        for moment_matrix_id, equalities_as_moments in self._relaxation.localising_moment_matrices_equalities.items():
+            list_of_equalities: list[
+                tuple[
+                    Polynomial[MonomialType, Scalar],
+                    list[tuple[Polynomial[MonomialType, Scalar], Scalar]],
+                    list[MonomialType],
+                ]
+            ] = []
 
-            for index, (equality_constraint, generating_set) in enumerate(self._relaxation.equalities.get(id, [])):
-                # The equality constraints on symmetric matrices are redundant, and thus Picos doesn't return a
-                # Hermitian matrix for the dual, so we have to hermitianize it
-                if self._primal:
-                    to_hermitianize = np.array(self._constraints[f"LMME-{id}-{index}"].dual).conj()
-                    to_append = (to_hermitianize + to_hermitianize.T.conj()) / 2
-                else:
-                    to_append = np.array(self._problem.get_variable(f"Q_{(id, index)}").value)
+            for equality_index, (
+                (equality_as_polynomial, equality_as_moments, equality_hermiticity),
+                (_generator, generating_set),
+            ) in enumerate(
+                zip(equalities_as_moments, self._relaxation.equalities.get(moment_matrix_id, []), strict=True)
+            ):
+                if equality_hermiticity != hermiticity:
+                    continue
 
-                if not to_append.shape:  # For 1x1 constraints or variables, Picos returns a 0D array
-                    to_append = to_append.reshape((1, 1))
+                list_of_moments: list[tuple[Polynomial[MonomialType, Scalar], Scalar]] = []
 
-                to_add.append((equality_constraint, to_append, generating_set))
+                for moment_index, moment in enumerate(equality_as_moments):
+                    # A vacuous moment got neither a constraint nor a variable, and 0 satisfies it
+                    if is_vacuous_moment(self._relaxation, moment):
+                        list_of_moments.append((moment, cast("Scalar", 0.0)))
+                        continue
 
-            res[id] = to_add
+                    if self._primal:
+                        multiplier = self._constraints[f"ME-{moment_matrix_id}-{equality_index}-{moment_index}"].dual
+                    else:
+                        multiplier = self._problem.get_variable(
+                            f"nu_{(moment_matrix_id, equality_index, moment_index)}"
+                        ).value
+
+                    list_of_moments.append((moment, cast("Scalar", multiplier)))
+
+                list_of_equalities.append((equality_as_polynomial, list_of_moments, generating_set))
+
+            res[moment_matrix_id] = list_of_equalities
 
         return res
 

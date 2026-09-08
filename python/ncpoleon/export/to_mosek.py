@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from ncpoleon.relaxations import Realness
+from ncpoleon.utils import is_vacuous_moment
 
 try:
     # The following import allows to use dunder methods on MOSEK expressions
@@ -234,8 +235,12 @@ def fill_real_primal_model(
         logger.debug(f"Added moment matrix PSD constraint for moment matrix id {moment_matrix_id}.")
 
     for moment_matrix_id, equality_moment_matrices in sdp.localising_moment_matrices_equalities.items():
-        for equality_index, (_generator, equality_moment_matrix) in enumerate(equality_moment_matrices):
+        for equality_index, (_generator, equality_moment_matrix, _hermiticity) in enumerate(equality_moment_matrices):
             for poly_index, poly in enumerate(equality_moment_matrix):
+                # A vacuous moment would only add 0 == 0; the solution skips the same indices when reading back
+                if is_vacuous_moment(sdp, poly):
+                    continue
+
                 changed = sdp.change_variables(poly, mapped_variables)
                 model.constraint(f"ME-{moment_matrix_id}-{equality_index}-{poly_index}", changed, Domain.equalsTo(0))
                 logger.debug(f"Added constraint {changed} == 0.")
@@ -296,8 +301,12 @@ def fill_complex_primal_model(
         logger.debug(f"Added moment matrix PSD constraint for moment matrix id {moment_matrix_id}.")
 
     for moment_matrix_id, equality_moment_matrices in sdp.localising_moment_matrices_equalities.items():
-        for equality_index, (_generator, equality_moment_matrix) in enumerate(equality_moment_matrices):
+        for equality_index, (_generator, equality_moment_matrix, _hermiticity) in enumerate(equality_moment_matrices):
             for poly_index, poly in enumerate(equality_moment_matrix):
+                # A vacuous moment would only add 0 == 0; the solution skips the same indices when reading back
+                if is_vacuous_moment(sdp, poly):
+                    continue
+
                 changed = sdp.change_variables(poly, mapped_variables)
                 model.constraint(
                     f"ME-{moment_matrix_id}-{equality_index}-{poly_index}_re", changed.real, Domain.equalsTo(0.0)
@@ -399,10 +408,19 @@ def fill_real_dual_model(
         logger.debug(f"Added {len(Ps)} PSD variable(s) P_* for moment matrix {moment_matrix_index}.")
 
         Qs = []
+        operator_equalities_split = []
 
-        for equality_index, (_generator, equality_as_moments) in enumerate(operator_equalities[moment_matrix_index]):
-            for moment_id in range(len(equality_as_moments)):
+        for equality_index, (_generator, equality_as_moments, _hermiticity) in enumerate(
+            operator_equalities[moment_matrix_index]
+        ):
+            for moment_id, poly in enumerate(equality_as_moments):
+                # A vacuous moment appears in no constraint row, so it gets no multiplier. Skipping it
+                # here and in the coefficients below keeps the two lists aligned, names keeping their index
+                if is_vacuous_moment(sdp, poly):
+                    continue
+
                 Qs.append(model.variable(f"nu_{(moment_matrix_index, equality_index, moment_id)}"))
+                operator_equalities_split.append((sdp.get_coefficients_by_canonical(poly)[0], 0.0))
                 logger.debug(
                     f"Added dual variable nu_{(moment_matrix_index, equality_index, moment_id)} for operator equality "
                     f"number {equality_index}."
@@ -434,12 +452,6 @@ def fill_real_dual_model(
             for lambda_m, (coefficients, _scalar) in zip(lambdas, moment_inequalities_coefficients, strict=True):
                 beta = coefficients.get(monomial, 0.0)
                 constraint_row = Expr.add(constraint_row, Expr.mul(lambda_m, beta))
-
-            operator_equalities_split = [
-                (sdp.get_coefficients_by_canonical(poly)[0], 0.0)
-                for (_generator, polys) in sdp.localising_moment_matrices_equalities[moment_matrix_index]
-                for poly in polys
-            ]
 
             for nu_n, (coefficients, _scalar) in zip(
                 nus + Qs, moment_equalities_coefficients + operator_equalities_split, strict=True
@@ -552,15 +564,24 @@ def fill_complex_dual_model(
         logger.debug(f"Added {len(Ps)} PSD variable(s) P_* for moment matrix {moment_matrix_index}.")
 
         Qs = []
+        operator_equalities_split = []
 
-        for equality_index, (_generator, equality_as_moments) in enumerate(operator_equalities[moment_matrix_index]):
-            for poly_index in range(len(equality_as_moments)):
+        for equality_index, (_generator, equality_as_moments, _hermiticity) in enumerate(
+            operator_equalities[moment_matrix_index]
+        ):
+            for poly_index, poly in enumerate(equality_as_moments):
+                # A vacuous moment appears in no constraint row, so it gets no multiplier. Skipping it
+                # here and in the coefficients below keeps the two lists aligned, names keeping their index
+                if is_vacuous_moment(sdp, poly):
+                    continue
+
                 Qs.append(
                     _ComplexExpr(
                         model.variable(f"nu_{(moment_matrix_index, equality_index, poly_index)}^re"),
                         model.variable(f"nu_{(moment_matrix_index, equality_index, poly_index)}^im"),
                     )
                 )
+                operator_equalities_split.append((sdp.get_coefficients_by_canonical(poly), 0.0))
                 logger.debug(
                     f"Added dual variable nu_{(moment_matrix_index, equality_index)} for operator equality number "
                     f"{equality_index}."
@@ -601,12 +622,6 @@ def fill_complex_dual_model(
                         Expr.mul(Expr.mul(lambda_m, beta_complex.real), 2.0),
                         Expr.mul(Expr.mul(lambda_m, beta_complex.imag), 2.0),
                     )
-
-            operator_equalities_split = [
-                (sdp.get_coefficients_by_canonical(poly), 0.0)
-                for (_generator, polys) in sdp.localising_moment_matrices_equalities[moment_matrix_index]
-                for poly in polys
-            ]
 
             for nu_n, ((real_coefficients, complex_coefficients), _scalar) in zip(
                 nus + Qs, split_moment_equalities + operator_equalities_split, strict=True

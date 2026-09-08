@@ -21,6 +21,6 @@ MonomialType = TypeVar("MonomialType", CommutativeMonomial, NonCommutativeMonomi
 
 Scalar = TypeVar("Scalar", float, complex)
 
-RealOrComplexMatrix: TypeAlias = (
-    np.ndarray[tuple[int, int], np.dtype[np.float64]] | np.ndarray[tuple[int, int], np.dtype[np.complex128]]
-)
+RealMatrix: TypeAlias = np.ndarray[tuple[int, int], np.dtype[np.float64]]
+ComplexMatrix: TypeAlias = np.ndarray[tuple[int, int], np.dtype[np.complex128]]
+RealOrComplexMatrix: TypeAlias = RealMatrix | ComplexMatrix
