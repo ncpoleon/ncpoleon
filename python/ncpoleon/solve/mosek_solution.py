@@ -76,7 +76,7 @@ class MosekSolution(BaseSolution[MonomialType, Scalar]):
 
     def __getitem__(self, monomial: MonomialType) -> Scalar:
         rewritten_monomial = self._relaxation.rewrite(monomial)
-        canonical_monomial, canonicality, realness = self._relaxation.moment_matrices[
+        canonical_monomial, canonicality, realness = self._moment_matrices[
             rewritten_monomial.moment_matrix_id
         ].get_canonical(rewritten_monomial)
 
@@ -123,7 +123,7 @@ class MosekSolution(BaseSolution[MonomialType, Scalar]):
     ) -> dict[int, RealOrComplexMatrix]:
         res: dict[int, RealOrComplexMatrix] = {}
 
-        for id, moment_matrix in self._relaxation.moment_matrices.items():
+        for id, moment_matrix in self._moment_matrices.items():
             size = moment_matrix.size
 
             if self._primal:
@@ -150,7 +150,7 @@ class MosekSolution(BaseSolution[MonomialType, Scalar]):
     ) -> dict[int, RealOrComplexMatrix]:
         res: dict[int, RealOrComplexMatrix] = {}
 
-        for id, moment_matrix in self._relaxation.moment_matrices.items():
+        for id, moment_matrix in self._moment_matrices.items():
             size = moment_matrix.size
 
             if self._primal:
@@ -184,6 +184,9 @@ class MosekSolution(BaseSolution[MonomialType, Scalar]):
         ],
     ]:
         res = {}
+        # Each of these getters rebuilds its whole map on access, cloning every polynomial and monomial, so they are
+        # read once here rather than once per moment matrix
+        equalities = self._relaxation.equalities
 
         for moment_matrix_id, equalities_as_moments in self._relaxation.localising_moment_matrices_equalities.items():
             list_of_equalities: list[
@@ -197,9 +200,7 @@ class MosekSolution(BaseSolution[MonomialType, Scalar]):
             for equality_index, (
                 (equality_as_polynomial, equality_as_moments, equality_hermiticity),
                 (_generator, generating_set),
-            ) in enumerate(
-                zip(equalities_as_moments, self._relaxation.equalities.get(moment_matrix_id, []), strict=True)
-            ):
+            ) in enumerate(zip(equalities_as_moments, equalities.get(moment_matrix_id, []), strict=True)):
                 if equality_hermiticity != hermiticity:
                     continue
 
@@ -207,7 +208,7 @@ class MosekSolution(BaseSolution[MonomialType, Scalar]):
 
                 for moment_index, moment in enumerate(equality_as_moments):
                     # A vacuous moment got neither a constraint nor a variable, and 0 satisfies it
-                    if is_vacuous_moment(self._relaxation, moment):
+                    if is_vacuous_moment(self._relaxation.get_coefficients_by_canonical(moment)):
                         list_of_moments.append((moment, cast("Scalar", 0.0)))
                         continue
 
@@ -293,6 +294,9 @@ class MosekSolution(BaseSolution[MonomialType, Scalar]):
         ],
     ]:
         res = {}
+        # `inequalities` rebuilds its whole map on access, cloning every polynomial and monomial, so it is
+        # read once here rather than once per moment matrix
+        inequalities = self._relaxation.inequalities
 
         for (
             id,
@@ -301,7 +305,7 @@ class MosekSolution(BaseSolution[MonomialType, Scalar]):
             to_add: list[tuple[Polynomial[MonomialType, Scalar], RealOrComplexMatrix, list[MonomialType]]] = []
 
             for index, (localizing_moment_matrix, (inequality_constraint, generating_set)) in enumerate(
-                zip(localizing_moment_matrices_inequalities_id, self._relaxation.inequalities.get(id, []), strict=True)
+                zip(localizing_moment_matrices_inequalities_id, inequalities.get(id, []), strict=True)
             ):
                 if self._primal:
                     localizing_moment_matrix_level = self._constraint(f"LMMI-{id}-{index}").level()
@@ -353,6 +357,9 @@ class MosekSolution(BaseSolution[MonomialType, Scalar]):
         ],
     ]:
         res = {}
+        # `inequalities` rebuilds its whole map on access, cloning every polynomial and monomial, so it is
+        # read once here rather than once per moment matrix
+        inequalities = self._relaxation.inequalities
 
         for (
             id,
@@ -361,7 +368,7 @@ class MosekSolution(BaseSolution[MonomialType, Scalar]):
             to_add: list[tuple[Polynomial[MonomialType, Scalar], RealOrComplexMatrix, list[MonomialType]]] = []
 
             for index, (localizing_moment_matrix, (inequality_constraint, generating_set)) in enumerate(
-                zip(localizing_moment_matrices_inequalities_id, self._relaxation.inequalities.get(id, []), strict=True)
+                zip(localizing_moment_matrices_inequalities_id, inequalities.get(id, []), strict=True)
             ):
                 if self._primal:
                     sign = 1 if self._objective_sense == "min" else -1

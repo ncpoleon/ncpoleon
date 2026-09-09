@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import warnings
 from abc import ABC, abstractmethod
+from functools import cached_property
 from itertools import combinations_with_replacement
 from typing import TYPE_CHECKING, Generic, cast
 
@@ -22,16 +23,25 @@ from .sos_decomposition import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
 
     from ncpoleon.polynomials import Polynomial
-    from ncpoleon.relaxations import BaseSdpRelaxation
+    from ncpoleon.relaxations import BaseSdpRelaxation, MomentMatrix
 
 
 class BaseSolution(ABC, Generic[MonomialType, Scalar]):
     @property
     @abstractmethod
     def value(self) -> float: ...
+
+    @cached_property
+    def _moment_matrices(self) -> Mapping[int, MomentMatrix[MonomialType, Scalar]]:
+        """The relaxation's moment matrices, resolved once.
+
+        The getter clones every matrix it hands back, and `__getitem__` needs the one a monomial belongs to on every
+        single lookup. The relaxation is frozen, so holding on to the result is safe.
+        """
+        return self.relaxation.moment_matrices
 
     @abstractmethod
     def __getitem__(self, monomial: MonomialType) -> Scalar: ...
@@ -263,6 +273,9 @@ class BaseSolution(ABC, Generic[MonomialType, Scalar]):
             self.localizing_matrices_hermitian_equality_multipliers_by_mm_id
         )
         localizing_moment_matrices_multipliers_inequality = self.localizing_matrices_inequality_multipliers_by_mm_id
+        # `generating_sets` merges and clones both of its Rust maps on every access, so it is read once here rather
+        # than once per moment matrix
+        generating_sets = self.relaxation.generating_sets
         moment_equality_multipliers = {}
 
         for polynomial, scalar in self.moment_equalities_multipliers:
@@ -281,10 +294,10 @@ class BaseSolution(ABC, Generic[MonomialType, Scalar]):
                 else:
                     moment_inequality_multipliers[mm_id] = [(poly_id, scalar)]
 
-        for mm_id in self.relaxation.moment_matrices:
+        for mm_id in generating_sets:
             sos_vectors = sos_vectors_of_hermitian_matrix(moment_matrix_multipliers[mm_id], cutoff)[0]
             n_monomials = sos_vectors.shape[0]
-            decomposition = (np.array(self.relaxation.generating_sets[mm_id][:n_monomials]) @ sos_vectors).tolist()
+            decomposition = (np.array(generating_sets[mm_id][:n_monomials]) @ sos_vectors).tolist()
 
             if delta:
                 decomposition = [self.relaxation.rewrite(p).chop(delta) for p in decomposition]
@@ -335,8 +348,8 @@ class BaseSolution(ABC, Generic[MonomialType, Scalar]):
                 mm_id, []
             ):
                 sos_vectors_pos, sos_vectors_neg = sos_vectors_of_hermitian_matrix(coefficient, cutoff)
-                decomposition_positive = (np.array(generating_set) @ sos_vectors_pos).reshape(-1).tolist()
-                decomposition_negative = (np.array(generating_set) @ sos_vectors_neg).reshape(-1).tolist()
+                decomposition_positive = (np.array(generating_set) @ sos_vectors_pos).tolist()
+                decomposition_negative = (np.array(generating_set) @ sos_vectors_neg).tolist()
                 hermitian_equalities_terms.append(
                     LocalizingMomentMatrixHermitianEqualityDecomposition(
                         generator=generator,

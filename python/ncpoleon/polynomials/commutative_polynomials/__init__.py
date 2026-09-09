@@ -6,10 +6,17 @@ from ncpoleon._accelerate.polynomials.commutative_polynomials._operators import 
     generate_commutative_variables,
 )
 from ncpoleon._accelerate.polynomials.commutative_polynomials._polynomials import (
-    ComplexCoefficientsCommutativePolynomial as ComplexCoefficientsCommutativePolynomial,
-    RealCoefficientsCommutativePolynomial as RealCoefficientsCommutativePolynomial,
+    ComplexCoefficientsCommutativePolynomial,
+    RealCoefficientsCommutativePolynomial,
 )
 
 CommutativePolynomialElement: TypeAlias = CommutativeMonomial | CommutativeOperator
 
-__all__ = ["generate_commutative_variables"]
+__all__ = [
+    "CommutativeMonomial",
+    "CommutativeOperator",
+    "CommutativePolynomialElement",
+    "ComplexCoefficientsCommutativePolynomial",
+    "RealCoefficientsCommutativePolynomial",
+    "generate_commutative_variables",
+]

@@ -283,4 +283,11 @@ def generate_noncommutative_variables(
     return_identity: Literal[True],
 ) -> tuple[list[NonCommutativeOperator], NonCommutativeMonomial]: ...
 
-__all__ = ["generate_noncommutative_variables"]
+__all__ = [
+    "ComplexCoefficientsNonCommutativePolynomial",
+    "NonCommutativeMonomial",
+    "NonCommutativeOperator",
+    "NonCommutativePolynomialElement",
+    "RealCoefficientsNonCommutativePolynomial",
+    "generate_noncommutative_variables",
+]

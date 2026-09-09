@@ -6,10 +6,17 @@ from ncpoleon._accelerate.polynomials.noncommutative_polynomials._operators impo
     generate_noncommutative_variables,
 )
 from ncpoleon._accelerate.polynomials.noncommutative_polynomials._polynomials import (
-    ComplexCoefficientsNonCommutativePolynomial as ComplexCoefficientsNonCommutativePolynomial,
-    RealCoefficientsNonCommutativePolynomial as RealCoefficientsNonCommutativePolynomial,
+    ComplexCoefficientsNonCommutativePolynomial,
+    RealCoefficientsNonCommutativePolynomial,
 )
 
 NonCommutativePolynomialElement: TypeAlias = NonCommutativeMonomial | NonCommutativeOperator
 
-__all__ = ["generate_noncommutative_variables"]
+__all__ = [
+    "ComplexCoefficientsNonCommutativePolynomial",
+    "NonCommutativeMonomial",
+    "NonCommutativeOperator",
+    "NonCommutativePolynomialElement",
+    "RealCoefficientsNonCommutativePolynomial",
+    "generate_noncommutative_variables",
+]

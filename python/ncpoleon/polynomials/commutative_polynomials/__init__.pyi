@@ -271,4 +271,11 @@ def generate_commutative_variables(
     return_identity: Literal[True],
 ) -> tuple[list[CommutativeOperator], CommutativeMonomial]: ...
 
-__all__ = ["generate_commutative_variables"]
+__all__ = [
+    "CommutativeMonomial",
+    "CommutativeOperator",
+    "CommutativePolynomialElement",
+    "ComplexCoefficientsCommutativePolynomial",
+    "RealCoefficientsCommutativePolynomial",
+    "generate_commutative_variables",
+]

@@ -6,8 +6,6 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ncpoleon._typing import MonomialType, Scalar
-    from ncpoleon.polynomials import Polynomial
-    from ncpoleon.relaxations import BaseSdpRelaxation
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +28,7 @@ def is_mosek_available():
 
 
 def is_vacuous_moment(
-    sdp: BaseSdpRelaxation[MonomialType, Scalar], polynomial: Polynomial[MonomialType, Scalar]
+    coefficients: tuple[dict[MonomialType, Scalar], dict[MonomialType, tuple[complex, complex]]],
 ) -> bool:
     """Whether a polynomial constrains nothing once its monomials become moment variables.
 
@@ -39,8 +37,12 @@ def is_vacuous_moment(
     canonical coefficient cancels and the equality reduces to ``0 == 0``. Such a moment gets neither a
     constraint nor a multiplier -- PICOS drops a variable that appears in no constraint row, and MOSEK
     would otherwise carry a free variable whose value is arbitrary.
+
+    It takes the polynomial already split by ``BaseSdpRelaxation.get_coefficients_by_canonical`` rather than the
+    polynomial itself, because that split crosses into Rust and the callers that keep a vacuous moment out of the
+    dual go on to need the very same coefficients.
     """
-    real_coefficients, complex_coefficients = sdp.get_coefficients_by_canonical(polynomial)
+    real_coefficients, complex_coefficients = coefficients
 
     return not any(real_coefficients.values()) and not any(
         canonical or adjoint for canonical, adjoint in complex_coefficients.values()

@@ -1,15 +1,12 @@
 from __future__ import annotations
 
 from importlib.util import find_spec
-from typing import TYPE_CHECKING, overload, cast
+from typing import overload, cast
 
 import numpy as np
 
 from ncpoleon._typing import RealOrComplexMatrix
 from ncpoleon.utils import is_mosek_available
-
-if TYPE_CHECKING:
-    pass
 
 
 def automatic_solver_detection() -> str:

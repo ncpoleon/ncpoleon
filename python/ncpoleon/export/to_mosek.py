@@ -26,7 +26,7 @@ except ImportError:
 from ncpoleon._typing import MonomialType, Scalar
 
 if TYPE_CHECKING:
-    from ncpoleon.relaxations import BaseSdpRelaxation, MomentMatrix
+    from ncpoleon.relaxations import BaseSdpRelaxation
 
 
 logger = logging.getLogger(__name__)
@@ -86,72 +86,89 @@ def convert_row_col_data_to_mosek_symmetric_matrix(
 # TODO: add the docstring
 def convert_row_col_data_to_mosek_hermitian_matrix(
     position_matrix: tuple[list[int], list[int], Sequence[complex]], size: int
-) -> tuple[Matrix, Matrix, Matrix]:
+) -> tuple[Matrix, Matrix]:
     rows, cols, data = position_matrix
 
     return (
         Matrix.sparse(size, size, rows, cols, [x.real for x in data]),
         Matrix.sparse(size, size, rows, cols, [x.imag for x in data]),
-        Matrix.sparse(size, size, rows, cols, [-x.imag for x in data]),
     )
 
 
-# TODO: add the docstring, say that in the real_antihermitianizing=False case, we consider the matrix multiplied by -i
-# instead of i, so that we can add each constraint
-def convert_row_col_data_to_mosek_hermitianized_matrix(
-    position_matrix: tuple[list[int], list[int], Sequence[complex]], size: int, *, real_hermitianizing: bool
-) -> SparseMatrix:
+# TODO: add the docstring, say that the second returned matrix is the one we get by considering the position matrix
+# multiplied by -i instead of i, so that we can add each constraint
+def convert_row_col_data_to_mosek_hermitianized_matrices(
+    position_matrix: tuple[list[int], list[int], Sequence[complex]], size: int
+) -> tuple[SparseMatrix, SparseMatrix]:
+    # Both embeddings are built here rather than one per call, so that the row, column and coefficient lists they
+    # share are derived once
     rows, cols, data = position_matrix
+    rows_cols = rows + cols
+    cols_rows = cols + rows
     data_re = [x.real for x in data]
     data_im = [x.imag for x in data]
+    neg_data_re = [-x for x in data_re]
+    neg_data_im = [-x for x in data_im]
 
-    if real_hermitianizing:
-        neg_data_im = [-x.imag for x in data]
-        real_part: SparseMatrix = Matrix.sparse(size, size, rows + cols, cols + rows, data_re + data_re)
-        imag_part = Matrix.sparse(size, size, rows + cols, cols + rows, data_im + neg_data_im)
-        neg_imag_part = Matrix.sparse(size, size, rows + cols, cols + rows, neg_data_im + data_im)
-    else:
-        neg_data_re = [-x.real for x in data]
-        real_part = Matrix.sparse(size, size, rows + cols, cols + rows, data_im + data_im)
-        imag_part = Matrix.sparse(size, size, rows + cols, cols + rows, neg_data_re + data_re)
-        neg_imag_part = Matrix.sparse(size, size, rows + cols, cols + rows, data_re + neg_data_re)
+    real_part: SparseMatrix = Matrix.sparse(size, size, rows_cols, cols_rows, data_re + data_re)
+    imag_part = Matrix.sparse(size, size, rows_cols, cols_rows, data_im + neg_data_im)
+    neg_imag_part = Matrix.sparse(size, size, rows_cols, cols_rows, neg_data_im + data_im)
 
-    return Matrix.sparse([[real_part, neg_imag_part], [imag_part, real_part]])
+    antihermitianized_real_part = Matrix.sparse(size, size, rows_cols, cols_rows, data_im + data_im)
+    antihermitianized_imag_part = Matrix.sparse(size, size, rows_cols, cols_rows, neg_data_re + data_re)
+    antihermitianized_neg_imag_part = Matrix.sparse(size, size, rows_cols, cols_rows, data_re + neg_data_re)
+
+    return (
+        Matrix.sparse([[real_part, neg_imag_part], [imag_part, real_part]]),
+        Matrix.sparse(
+            [
+                [antihermitianized_real_part, antihermitianized_neg_imag_part],
+                [antihermitianized_imag_part, antihermitianized_real_part],
+            ]
+        ),
+    )
 
 
 def real_moment_matrix_to_mosek(
-    moment_matrix: MomentMatrix[MonomialType, float],
+    row_col_data: dict[MonomialType, tuple[tuple[list[int], list[int], list[float]], Realness]],
+    size: int,
     mapped_variables: dict[MonomialType, Expression],
 ) -> Expression:
-    """Build a (localising) moment matrix of a real-valued problem as a symmetric MOSEK expression."""
+    """Build a (localising) moment matrix of a real-valued problem as a symmetric MOSEK expression.
+
+    `row_col_data` is the matrix as `as_row_col_data_format()` hands it back; the caller passes it in rather than
+    letting this function ask for it again, since building it crosses into Rust and clones every position matrix.
+    """
     # The accumulator starts as `0` and is folded with `Expr.add`, which promotes the seed on the first iteration. It
     # is therefore still an `int` only for a moment matrix with no entry at all, which `get_relaxation` never builds,
     # hence the cast on the return path
     mosek_moment_matrix = 0
 
-    for monomial, (position_matrix, _realness) in moment_matrix.as_row_col_data_format().items():
-        matrix = convert_row_col_data_to_mosek_symmetric_matrix(position_matrix, moment_matrix.size)
+    for monomial, (position_matrix, _realness) in row_col_data.items():
+        matrix = convert_row_col_data_to_mosek_symmetric_matrix(position_matrix, size)
         mosek_moment_matrix = Expr.add(mosek_moment_matrix, Expr.mul(mapped_variables[monomial], matrix))
 
     return cast("Expression", mosek_moment_matrix)
 
 
 def complex_moment_matrix_to_mosek(
-    moment_matrix: MomentMatrix[MonomialType, complex],
+    row_col_data: dict[MonomialType, tuple[tuple[list[int], list[int], list[complex]], Realness]],
+    size: int,
     mapped_variables: dict[MonomialType, _ComplexExpr],
 ) -> Expression:
     """Build a (localising) moment matrix of a complex-valued problem as its real symmetric embedding.
 
     A hermitian matrix `R + iI` is PSD if and only if the real symmetric matrix `[[R, -I], [I, R]]` is, so the real
     and the imaginary parts are accumulated separately and stacked at the end.
+
+    `row_col_data` is the matrix as `as_row_col_data_format()` hands it back; the caller passes it in rather than
+    letting this function ask for it again, since building it crosses into Rust and clones every position matrix.
     """
     mosek_moment_matrix_re = 0
     mosek_moment_matrix_im = 0
 
-    for monomial, (position_matrix, realness) in moment_matrix.as_row_col_data_format().items():
-        matrix_re, matrix_im, _matrix_im_neg = convert_row_col_data_to_mosek_hermitian_matrix(
-            position_matrix, moment_matrix.size
-        )
+    for monomial, (position_matrix, realness) in row_col_data.items():
+        matrix_re, matrix_im = convert_row_col_data_to_mosek_hermitian_matrix(position_matrix, size)
         variable = mapped_variables[monomial]
 
         if realness == Realness.Real:
@@ -225,10 +242,12 @@ def fill_real_primal_model(
     mapped_variables: dict[MonomialType, Expression] = {}
 
     for moment_matrix_id, moment_matrix in sdp.moment_matrices.items():
-        for monomial in moment_matrix.as_row_col_data_format():
+        row_col_data = moment_matrix.as_row_col_data_format()
+
+        for monomial in row_col_data:
             mapped_variables[monomial] = model.variable(str(monomial), Domain.unbounded())
 
-        mosek_moment_matrix = real_moment_matrix_to_mosek(moment_matrix, mapped_variables)
+        mosek_moment_matrix = real_moment_matrix_to_mosek(row_col_data, moment_matrix.size, mapped_variables)
         model.constraint(
             f"MM-{moment_matrix_id}", mosek_moment_matrix, Domain.inPSDCone(mosek_moment_matrix.getShape()[0])
         )
@@ -238,7 +257,7 @@ def fill_real_primal_model(
         for equality_index, (_generator, equality_moment_matrix, _hermiticity) in enumerate(equality_moment_matrices):
             for poly_index, poly in enumerate(equality_moment_matrix):
                 # A vacuous moment would only add 0 == 0; the solution skips the same indices when reading back
-                if is_vacuous_moment(sdp, poly):
+                if is_vacuous_moment(sdp.get_coefficients_by_canonical(poly)):
                     continue
 
                 changed = sdp.change_variables(poly, mapped_variables)
@@ -247,7 +266,9 @@ def fill_real_primal_model(
 
     for moment_matrix_id, inequality_moment_matrices in sdp.localising_moment_matrices_inequalities.items():
         for inequality_index, inequality_moment_matrix in enumerate(inequality_moment_matrices):
-            localising_matrix = real_moment_matrix_to_mosek(inequality_moment_matrix, mapped_variables)
+            localising_matrix = real_moment_matrix_to_mosek(
+                inequality_moment_matrix.as_row_col_data_format(), inequality_moment_matrix.size, mapped_variables
+            )
             model.constraint(
                 f"LMMI-{moment_matrix_id}-{inequality_index}",
                 localising_matrix,
@@ -285,7 +306,9 @@ def fill_complex_primal_model(
     mapped_variables: dict[MonomialType, _ComplexExpr] = {}
 
     for moment_matrix_id, moment_matrix in sdp.moment_matrices.items():
-        for monomial, (_position_matrix, realness) in moment_matrix.as_row_col_data_format().items():
+        row_col_data = moment_matrix.as_row_col_data_format()
+
+        for monomial, (_position_matrix, realness) in row_col_data.items():
             if realness == Realness.Real:
                 mapped_variables[monomial] = _ComplexExpr(model.variable(str(monomial), Domain.unbounded()), None)
             else:
@@ -294,7 +317,7 @@ def fill_complex_primal_model(
                     model.variable(f"{monomial}_im", Domain.unbounded()),
                 )
 
-        mosek_moment_matrix = complex_moment_matrix_to_mosek(moment_matrix, mapped_variables)
+        mosek_moment_matrix = complex_moment_matrix_to_mosek(row_col_data, moment_matrix.size, mapped_variables)
         model.constraint(
             f"MM-{moment_matrix_id}", mosek_moment_matrix, Domain.inPSDCone(mosek_moment_matrix.getShape()[0])
         )
@@ -304,7 +327,7 @@ def fill_complex_primal_model(
         for equality_index, (_generator, equality_moment_matrix, _hermiticity) in enumerate(equality_moment_matrices):
             for poly_index, poly in enumerate(equality_moment_matrix):
                 # A vacuous moment would only add 0 == 0; the solution skips the same indices when reading back
-                if is_vacuous_moment(sdp, poly):
+                if is_vacuous_moment(sdp.get_coefficients_by_canonical(poly)):
                     continue
 
                 changed = sdp.change_variables(poly, mapped_variables)
@@ -321,7 +344,9 @@ def fill_complex_primal_model(
 
     for moment_matrix_id, inequality_moment_matrices in sdp.localising_moment_matrices_inequalities.items():
         for index, inequality_moment_matrix in enumerate(inequality_moment_matrices):
-            localising_matrix = complex_moment_matrix_to_mosek(inequality_moment_matrix, mapped_variables)
+            localising_matrix = complex_moment_matrix_to_mosek(
+                inequality_moment_matrix.as_row_col_data_format(), inequality_moment_matrix.size, mapped_variables
+            )
             model.constraint(
                 f"LMMI-{moment_matrix_id}-{index}",
                 localising_matrix,
@@ -414,29 +439,31 @@ def fill_real_dual_model(
             operator_equalities[moment_matrix_index]
         ):
             for moment_id, poly in enumerate(equality_as_moments):
+                coefficients = sdp.get_coefficients_by_canonical(poly)
+
                 # A vacuous moment appears in no constraint row, so it gets no multiplier. Skipping it
                 # here and in the coefficients below keeps the two lists aligned, names keeping their index
-                if is_vacuous_moment(sdp, poly):
+                if is_vacuous_moment(coefficients):
                     continue
 
                 Qs.append(model.variable(f"nu_{(moment_matrix_index, equality_index, moment_id)}"))
-                operator_equalities_split.append((sdp.get_coefficients_by_canonical(poly)[0], 0.0))
+                operator_equalities_split.append((coefficients[0], 0.0))
                 logger.debug(
                     f"Added dual variable nu_{(moment_matrix_index, equality_index, moment_id)} for operator equality "
                     f"number {equality_index}."
                 )
+
+        inequalities_row_cols = [
+            localizing_matrix.as_row_col_data_format()
+            for localizing_matrix in operator_inequalities[moment_matrix_index]
+        ]
 
         for monomial, (position_matrix, _realness) in moment_matrix.as_row_col_data_format().items():
             F = convert_row_col_data_to_mosek_symmetric_matrix(position_matrix, moment_matrix.size)
             constraint_row = Expr.dot(Y, F)
 
             for multiplier, localizing_matrix, localizing_matrix_as_row_col in zip(
-                Ps,
-                operator_inequalities[moment_matrix_index],
-                [
-                    localizing_matrix.as_row_col_data_format()
-                    for localizing_matrix in operator_inequalities[moment_matrix_index]
-                ],
+                Ps, operator_inequalities[moment_matrix_index], inequalities_row_cols, strict=True
             ):
                 position_matrix_localizing, localizing_realness = localizing_matrix_as_row_col.get(
                     monomial, (None, Realness.Real)
@@ -480,7 +507,9 @@ def hermitian_dot_as_complex_expr(
     if realness == Realness.Real:
         # The position matrix is hermitian but the moment is real, so there is nothing to constrain on the imaginary
         # part
-        matrix_re, matrix_im, matrix_im_neg = convert_row_col_data_to_mosek_hermitian_matrix(position_matrix, size)
+        rows, cols, data = position_matrix
+        matrix_re, matrix_im = convert_row_col_data_to_mosek_hermitian_matrix(position_matrix, size)
+        matrix_im_neg = Matrix.sparse(size, size, rows, cols, [-x.imag for x in data])
 
         return _ComplexExpr(
             Expr.mul(Expr.dot(multiplier, Matrix.sparse([[matrix_re, matrix_im_neg], [matrix_im, matrix_re]])), 1 / 2),
@@ -488,21 +517,11 @@ def hermitian_dot_as_complex_expr(
         )
 
     # The position matrix holds the canonical orientation only, so it is hermitianized first, once for each part
+    hermitianized, antihermitianized = convert_row_col_data_to_mosek_hermitianized_matrices(position_matrix, size)
+
     return _ComplexExpr(
-        Expr.mul(
-            Expr.dot(
-                multiplier,
-                convert_row_col_data_to_mosek_hermitianized_matrix(position_matrix, size, real_hermitianizing=True),
-            ),
-            1 / 2,
-        ),
-        Expr.mul(
-            Expr.dot(
-                multiplier,
-                convert_row_col_data_to_mosek_hermitianized_matrix(position_matrix, size, real_hermitianizing=False),
-            ),
-            1 / 2,
-        ),
+        Expr.mul(Expr.dot(multiplier, hermitianized), 1 / 2),
+        Expr.mul(Expr.dot(multiplier, antihermitianized), 1 / 2),
     )
 
 
@@ -570,9 +589,11 @@ def fill_complex_dual_model(
             operator_equalities[moment_matrix_index]
         ):
             for poly_index, poly in enumerate(equality_as_moments):
+                coefficients = sdp.get_coefficients_by_canonical(poly)
+
                 # A vacuous moment appears in no constraint row, so it gets no multiplier. Skipping it
                 # here and in the coefficients below keeps the two lists aligned, names keeping their index
-                if is_vacuous_moment(sdp, poly):
+                if is_vacuous_moment(coefficients):
                     continue
 
                 Qs.append(
@@ -581,11 +602,16 @@ def fill_complex_dual_model(
                         model.variable(f"nu_{(moment_matrix_index, equality_index, poly_index)}^im"),
                     )
                 )
-                operator_equalities_split.append((sdp.get_coefficients_by_canonical(poly), 0.0))
+                operator_equalities_split.append((coefficients, 0.0))
                 logger.debug(
                     f"Added dual variable nu_{(moment_matrix_index, equality_index)} for operator equality number "
                     f"{equality_index}."
                 )
+
+        inequalities_row_cols = [
+            localizing_matrix.as_row_col_data_format()
+            for localizing_matrix in operator_inequalities[moment_matrix_index]
+        ]
 
         for monomial, (position_matrix, realness) in moment_matrix.as_row_col_data_format().items():
             constraint_row = hermitian_dot_as_complex_expr(Y, position_matrix, moment_matrix.size, realness)
@@ -593,10 +619,7 @@ def fill_complex_dual_model(
             for multiplier, localizing_matrix, localizing_matrix_as_row_col in zip(
                 Ps,
                 operator_inequalities[moment_matrix_index],
-                [
-                    localizing_matrix.as_row_col_data_format()
-                    for localizing_matrix in operator_inequalities[moment_matrix_index]
-                ],
+                inequalities_row_cols,
             ):
                 position_matrix_localizing, localizing_realness = localizing_matrix_as_row_col.get(
                     monomial, (None, Realness.Real)

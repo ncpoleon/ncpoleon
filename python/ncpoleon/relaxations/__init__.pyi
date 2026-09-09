@@ -5,6 +5,7 @@ __all__ = [
     "get_relaxation",
     "Realness",
     "Canonicality",
+    "Hermiticity",
     "RealCoefficientsCommutativeConstraint",
     "ComplexCoefficientsCommutativeConstraint",
     "RealCoefficientsNonCommutativeConstraint",

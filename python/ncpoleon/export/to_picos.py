@@ -122,7 +122,7 @@ def to_picos(
             for equality_index, (_generator, equality_as_moments, _hermiticity) in enumerate(equality_moment_matrices):
                 for poly_index, poly in enumerate(equality_as_moments):
                     # A vacuous moment would only add 0 == 0; the solution skips the same indices when reading back
-                    if is_vacuous_moment(sdp, poly):
+                    if is_vacuous_moment(sdp.get_coefficients_by_canonical(poly)):
                         continue
 
                     changed = sdp.change_variables(poly, mapped_variables)
@@ -233,15 +233,17 @@ def to_picos(
                 operator_equalities[moment_matrix_index]
             ):
                 for poly_index, poly in enumerate(equality_as_moments):
+                    coefficients = sdp.get_coefficients_by_canonical(poly)
+
                     # A vacuous moment appears in no constraint row, so PICOS would prune its
                     # variable and `get_variable` would then fail. Skipping it here and in the coefficients
                     # below keeps the two lists aligned, names keeping their index
-                    if is_vacuous_moment(sdp, poly):
+                    if is_vacuous_moment(coefficients):
                         continue
 
                     name = f"nu_{(moment_matrix_index, equality_index, poly_index)}"
                     Qs.append(pc.RealVariable(name) if is_problem_real_valued else pc.ComplexVariable(name))
-                    split_operator_equalities.append((sdp.get_coefficients_by_canonical(poly), 0.0))
+                    split_operator_equalities.append((coefficients, 0.0))
                     logger.debug(f"Added dual variable {name} for operator equality number {equality_index}.")
 
             # Precompute localizing matrix row-col formats outside the monomial loop.
@@ -270,7 +272,7 @@ def to_picos(
                 for lambda_m, (
                     (poly_moment_ineq_real_monomials_coefficients, poly_moment_ineq_complex_monomials_coefficients),
                     _scalar,
-                ) in zip(lambdas, split_moment_inequalities):
+                ) in zip(lambdas, split_moment_inequalities, strict=True):
                     if realness == Realness.Real:
                         beta = poly_moment_ineq_real_monomials_coefficients.get(monomial, 0.0)
                     else:

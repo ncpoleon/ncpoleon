@@ -1214,7 +1214,7 @@ where
             .collect::<Result<_, _>>()
             .map_err(PyValueError::new_err)?;
 
-        if !self.objective.is_real() {
+        if !objective.is_real() {
             debug!("Checking the Hermiticity of moment inequalities.");
             for (moment_inequality, scalar) in self.moment_inequalities.iter() {
                 if !(moment_inequality - moment_inequality.adjoint())
@@ -1321,24 +1321,22 @@ where
                             // assumes that rewriting a monomial can't increase its length. Though this is
                             // reasonable, we allow the user to disable this simpler check if one of this
                             // assumptions isn't verified
-                            if check_uniqueness_with_length {
-                                if (rewritten.len() == monomial_length) && !level_set.contains(&rewritten) {
-                                    trace!(
-                                        "Adding the rewritten monomial to the indexing set at level {}.",
-                                        monomial_length
-                                    );
-                                    level_set.insert(rewritten.clone());
-                                }
+                            // `insert` is idempotent and reports whether the monomial was new, so it
+                            // subsumes the membership test on `level_set` itself. Only the scan over the
+                            // previous levels has to be spelled out, and `&&` keeps it out of the way
+                            // whenever the length check has already ruled the monomial out
+                            let is_new = if check_uniqueness_with_length {
+                                rewritten.len() == monomial_length && level_set.insert(rewritten)
                             } else {
-                                if !level_set.contains(&rewritten)
-                                    & !monomials_sets.iter().any(|monomial_set| monomial_set.contains(&rewritten))
-                                {
-                                    trace!(
-                                        "Adding the rewritten monomial to the indexing set at level {}.",
-                                        monomial_length
-                                    );
-                                    level_set.insert(rewritten.clone());
-                                }
+                                !monomials_sets.iter().any(|monomial_set| monomial_set.contains(&rewritten))
+                                    && level_set.insert(rewritten)
+                            };
+
+                            if is_new {
+                                trace!(
+                                    "Added the rewritten monomial to the indexing set at level {}.",
+                                    monomial_length
+                                );
                             }
                             Ok(())
                         })
@@ -1376,7 +1374,7 @@ where
                     monomials_sets.iter().flatten().chain(extra_monomials.iter()).enumerate().skip(index_row);
 
                 for (index_column, monomial_column) in monomials_sets_iterator_cols {
-                    let new_monomial = if index_row == 0 {
+                    let new_monomial = if monomial_row.is_one() {
                         monomial_column.clone()
                     } else {
                         (&monomial_row_adjoint * monomial_column)
@@ -1593,9 +1591,12 @@ where
             let monomials_iterator_cols =
                 generating_set[index_row..].iter().enumerate().map(|(offset, operator)| (index_row + offset, operator));
 
+            // Computed once per row instead of once per cell. The multiplication below consumes it, so
+            // each cell clones it, which is cheaper than taking the adjoint again
+            let operator_row_adjoint = operator_row.adjoint();
+
             for (index_col, operator_col) in monomials_iterator_cols {
-                // FIXME: performance: no need to recompute the adjoint each time
-                let operator_row_adjoint = operator_row.adjoint();
+                let operator_row_adjoint = operator_row_adjoint.clone();
                 trace!(
                     "Rewriting {} * {} * {}, before inserting it to the localizing matrix.",
                     operator_row_adjoint, polynomial, operator_col
@@ -1768,9 +1769,12 @@ where
                 itertools::Either::Right(generating_set.iter())
             };
 
+            // Computed once per row instead of once per cell. The multiplication below consumes it, so
+            // each cell clones it, which is cheaper than taking the adjoint again
+            let operator_row_adjoint = operator_row.adjoint();
+
             for operator_col in monomials_iterator_cols {
-                // FIXME: no need to recompute the adjoint each time
-                let operator_row_adjoint = operator_row.adjoint();
+                let operator_row_adjoint = operator_row_adjoint.clone();
                 trace!(
                     "Rewriting {} * {} * {}, before adding it as a moment equality.",
                     operator_row_adjoint, polynomial, operator_col

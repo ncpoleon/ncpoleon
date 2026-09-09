@@ -41,7 +41,7 @@ class PicosSolution(BaseSolution[MonomialType, Scalar]):
 
     def __getitem__(self, monomial: MonomialType) -> Scalar:
         rewritten_monomial = self._relaxation.rewrite(monomial)
-        canonical_monomial, canonicality, realness = self._relaxation.moment_matrices[
+        canonical_monomial, canonicality, realness = self._moment_matrices[
             rewritten_monomial.moment_matrix_id
         ].get_canonical(rewritten_monomial)
 
@@ -66,7 +66,7 @@ class PicosSolution(BaseSolution[MonomialType, Scalar]):
     ) -> dict[int, RealOrComplexMatrix]:
         res: dict[int, RealOrComplexMatrix] = {}
 
-        for id in self._relaxation.moment_matrices:
+        for id in self._moment_matrices:
             if self._primal:
                 res[id] = np.array(self._psd_matrices[f"MM-{id}"].value)
             else:
@@ -83,7 +83,7 @@ class PicosSolution(BaseSolution[MonomialType, Scalar]):
     ) -> dict[int, RealOrComplexMatrix]:
         res: dict[int, RealOrComplexMatrix] = {}
 
-        for id in self._relaxation.moment_matrices:
+        for id in self._moment_matrices:
             if self._primal:
                 res[id] = np.array(self._constraints[f"MM-{id}"].dual).conj()
             else:
@@ -107,6 +107,9 @@ class PicosSolution(BaseSolution[MonomialType, Scalar]):
         ],
     ]:
         res = {}
+        # Each of these getters rebuilds its whole map on access, cloning every polynomial and monomial, so they are
+        # read once here rather than once per moment matrix
+        equalities = self._relaxation.equalities
 
         for moment_matrix_id, equalities_as_moments in self._relaxation.localising_moment_matrices_equalities.items():
             list_of_equalities: list[
@@ -120,9 +123,7 @@ class PicosSolution(BaseSolution[MonomialType, Scalar]):
             for equality_index, (
                 (equality_as_polynomial, equality_as_moments, equality_hermiticity),
                 (_generator, generating_set),
-            ) in enumerate(
-                zip(equalities_as_moments, self._relaxation.equalities.get(moment_matrix_id, []), strict=True)
-            ):
+            ) in enumerate(zip(equalities_as_moments, equalities.get(moment_matrix_id, []), strict=True)):
                 if equality_hermiticity != hermiticity:
                     continue
 
@@ -130,7 +131,7 @@ class PicosSolution(BaseSolution[MonomialType, Scalar]):
 
                 for moment_index, moment in enumerate(equality_as_moments):
                     # A vacuous moment got neither a constraint nor a variable, and 0 satisfies it
-                    if is_vacuous_moment(self._relaxation, moment):
+                    if is_vacuous_moment(self._relaxation.get_coefficients_by_canonical(moment)):
                         list_of_moments.append((moment, cast("Scalar", 0.0)))
                         continue
 
@@ -163,11 +164,14 @@ class PicosSolution(BaseSolution[MonomialType, Scalar]):
         ],
     ]:
         res = {}
+        # `inequalities` rebuilds its whole map on access, cloning every polynomial and monomial, so it is
+        # read once here rather than once per moment matrix
+        inequalities = self._relaxation.inequalities
 
         for id in self._relaxation.localising_moment_matrices_inequalities:
             to_add: list[tuple[Polynomial[MonomialType, Scalar], RealOrComplexMatrix, list[MonomialType]]] = []
 
-            for index, (inequality_constraint, generating_set) in enumerate(self._relaxation.inequalities.get(id, [])):
+            for index, (inequality_constraint, generating_set) in enumerate(inequalities.get(id, [])):
                 if self._primal:
                     to_append = np.array(self._psd_matrices[f"LMMI-{id}-{index}"].value)
                 else:
@@ -196,11 +200,14 @@ class PicosSolution(BaseSolution[MonomialType, Scalar]):
         ],
     ]:
         res = {}
+        # `inequalities` rebuilds its whole map on access, cloning every polynomial and monomial, so it is
+        # read once here rather than once per moment matrix
+        inequalities = self._relaxation.inequalities
 
         for id in self._relaxation.localising_moment_matrices_inequalities:
             to_add: list[tuple[Polynomial[MonomialType, Scalar], RealOrComplexMatrix, list[MonomialType]]] = []
 
-            for index, (inequality_constraint, generating_set) in enumerate(self._relaxation.inequalities.get(id, [])):
+            for index, (inequality_constraint, generating_set) in enumerate(inequalities.get(id, [])):
                 if self._primal:
                     to_append = np.array(self._constraints[f"LMMI-{id}-{index}"].dual).conj()
                 else:

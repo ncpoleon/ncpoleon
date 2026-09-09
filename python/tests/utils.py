@@ -85,7 +85,7 @@ def consistency_check(
     objective_sense: str,
     rtol: float = 1e-5,
     atol: float = 1e-07,
-    sos_tol: float = 1e-04,
+    sos_tol: float = 1e-07,
 ):
     sos_decomposition = 0
     mapping = {
@@ -141,4 +141,5 @@ def consistency_check(
     for polynomial, scalar in relaxation.moment_inequalities:
         actual = complex(polynomial.change_variables(mapping))
         np.testing.assert_allclose(actual.imag, 0, rtol=rtol, atol=atol)
-        assert actual.real >= scalar or np.testing.assert_allclose(actual.real, scalar, rtol=rtol, atol=atol) is None
+        if actual.real < scalar:
+            np.testing.assert_allclose(actual.real, scalar, rtol=rtol, atol=atol)

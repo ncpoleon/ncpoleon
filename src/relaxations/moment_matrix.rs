@@ -36,11 +36,12 @@ pub(super) enum Canonicality {
 
 fn position_matrix_to_row_col_data_format<Scalar: PolynomialDtype>(
     position_matrix: &PositionMatrix<Scalar>,
-    size: usize,
 ) -> PositionMatrixRowColDataFormat<Scalar> {
-    let mut rows = Vec::with_capacity(size);
-    let mut cols = Vec::with_capacity(size);
-    let mut data = Vec::with_capacity(size);
+    // The capacity is the number of stored entries, not the side of the matrix: a position matrix
+    // holds up to `size * size` of them
+    let mut rows = Vec::with_capacity(position_matrix.len());
+    let mut cols = Vec::with_capacity(position_matrix.len());
+    let mut data = Vec::with_capacity(position_matrix.len());
 
     for (index, &value) in position_matrix.iter() {
         rows.push(index.0);
@@ -132,8 +133,7 @@ where
     /// performed here, so the query must already be in canonical form. Entries must be added through
     /// [`insert`](Self::insert) for `adjoint_index` to stay consistent.
     pub(super) fn get(&self, monomial: &MonomialType) -> Result<Option<PositionMatrixRefTriple<'_, Scalar>>, String> {
-        if self.data.contains_key(monomial) {
-            let (position_matrix, realness) = self.data.get(monomial).unwrap();
+        if let Some((position_matrix, realness)) = self.data.get(monomial) {
             return Ok(Some((position_matrix, *realness, Canonicality::Canonical)));
         }
         match self.adjoint_index.get(monomial) {
@@ -265,7 +265,7 @@ macro_rules! impl_moment_matrix_pymethods {
                 BTreeMap::from_iter(self.0.data.iter().map(|(monomial, (position_matrix, realness))| {
                     (
                         $py_monomial(monomial.clone()),
-                        (position_matrix_to_row_col_data_format(position_matrix, self.0.size), *realness),
+                        (position_matrix_to_row_col_data_format(position_matrix), *realness),
                     )
                 }))
             }

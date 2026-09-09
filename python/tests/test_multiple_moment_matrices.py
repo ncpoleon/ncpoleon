@@ -178,7 +178,7 @@ def test_multiple_moment_matrices_with_extra_monomials(benchmark, solver, use_pr
         monomial
         for operators, identity in moment_matrices_operators
         for monomial in _generating_set(level, operators, identity)
-    ]
+    ][::-1]  # revert so that we check that we don't assume that the identity is the first monomial
 
     # The operator constraints all are of degree 1, so that their localising moment matrices are
     # indexed by the generating set of the previous level. The first four constraints belong to the
