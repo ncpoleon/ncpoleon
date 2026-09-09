@@ -14,11 +14,6 @@ MOMENT_EQUALITY_CASES = [
     ("antihermitian_imaginary_bound", -sqrt(15) / 2),
 ]
 
-# Every case above, plus the unconstrained problem at both levels, crossed with both solvers and both forms.
-SOS_DECOMPOSITION_CASES = [("no_moment_constraint", 1), ("no_moment_constraint", 2)] + [
-    (case, 1) for case, _expected in MOMENT_INEQUALITY_CASES + MOMENT_EQUALITY_CASES
-]
-
 
 def generate_simple_complex_parameters():
     res = []
@@ -38,18 +33,6 @@ def generate_moment_constraint_parameters(cases: list[tuple[str, float]]):
         for case, expected in cases:
             for force_primal in [True, False]:
                 res.append(pytest.param(solver, case, expected, force_primal, marks=[SOLVER_SKIPS[solver]]))
-
-    return res
-
-
-def generate_sos_decomposition_parameters():
-    """Same cases as the value tests, but asserting the sum-of-squares certificate rather than the optimum."""
-    res = []
-
-    for solver in ["picos-cvxopt", "mosek"]:
-        for case, level in SOS_DECOMPOSITION_CASES:
-            for force_primal in [True, False]:
-                res.append(pytest.param(solver, case, level, force_primal, marks=[SOLVER_SKIPS[solver]]))
 
     return res
 
@@ -85,6 +68,9 @@ def _moment_constraints(case: str, x1, x2):
         # The same constraint written two ways, one hermitian and one antihermitian
         "hermitian_real_bound": [1j * (x1 * x2 - x2 * x1) == 0.5],
         "antihermitian_imaginary_bound": [x1 * x2 - x2 * x1 == -0.5j],
+        # Satisfiable counterparts of the rejected shapes
+        "antihermitian_monomial": [1j * x1**2 == 1j],
+        "vanishing_commutator": [x1 * x2 - x2 * x1 == 0j],
     }[case]
 
 
@@ -205,18 +191,20 @@ def test_unsatisfiable_moment_equality_is_rejected_on_a_real_problem():
 
 @pytest.mark.parametrize("solver", SOLVERS)
 @pytest.mark.parametrize("force_primal", [True, False])
-def test_satisfiable_counterparts_still_build(solver: str, force_primal: bool):
+@pytest.mark.parametrize(
+    "case, expected",
+    [("self_adjoint_monomial", -sqrt(2)), ("antihermitian_monomial", -2.0), ("vanishing_commutator", -2.0)],
+)
+def test_satisfiable_counterparts_still_build(solver: str, force_primal: bool, case: str, expected: float):
     """The mirror of the rejection cases: the same shapes with a compatible bound must still solve."""
     x1, x2, obj, operator_constraints = _simple_complex_params()
-
-    for moment_constraints, expected in [
-        ([x1**2 == 0.5], -sqrt(2)),
-        ([1j * x1**2 == 1j], -2.0),
-        ([x1 * x2 - x2 * x1 == 0j], -2.0),
-    ]:
-        sdp = get_relaxation(
-            [x1, x2], 1, obj, operator_constraints=operator_constraints, moment_constraints=moment_constraints
-        )
-        sol = solve(sdp, "min", force_primal=force_primal, solver=solver)
-        assert sol.value == pytest.approx(expected, abs=1e-6)
-        consistency_check(sdp, sol, objective_sense="min", sos_tol=1e-07)
+    sdp = get_relaxation(
+        [x1, x2],
+        1,
+        obj,
+        operator_constraints=operator_constraints,
+        moment_constraints=_moment_constraints(case, x1, x2),
+    )
+    sol = solve(sdp, "min", force_primal=force_primal, solver=solver)
+    assert sol.value == pytest.approx(expected, abs=1e-6)
+    consistency_check(sdp, sol, objective_sense="min", sos_tol=1e-07)
