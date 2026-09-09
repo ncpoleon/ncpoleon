@@ -180,17 +180,17 @@ wheels = [
 
 [[package]]
 name = "mosek"
-version = "11.2.2"
+version = "11.2.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/15/fa/cafd7af72c090e4c13d35124264803ad4bf5cf80d24de470846f3bfc8d9b/mosek-11.2.2-cp39-abi3-macosx_11_0_arm64.whl", hash = "sha256:15a6fd2be996e4dd01d5130f876937db4137dcb660e5128944c9363fd51cf119", size = 8794686, upload-time = "2026-06-10T05:59:50.712Z" },
-    { url = "https://files.pythonhosted.org/packages/2b/06/25814cec5fbc4dc93190c0f37afcdd24b83efe570d598ca3c21c610cb543/mosek-11.2.2-cp39-abi3-manylinux2014_x86_64.whl", hash = "sha256:77c9f2c86e9adc0a8da9a44c9cf2e0e7dc4eecae850e5295855abb628b7755be", size = 15364494, upload-time = "2026-06-10T05:59:55.452Z" },
-    { url = "https://files.pythonhosted.org/packages/f8/7c/fd1f85cd13a4bcf84aa620c74aa28ad7872d319d6645a53018f8560bf52e/mosek-11.2.2-cp39-abi3-manylinux_2_27_aarch64.whl", hash = "sha256:f3debca608fcaac8b7129975e0ad5083d89844ba4658f48ed18fec420e0ddaf0", size = 9909410, upload-time = "2026-06-10T05:59:58.623Z" },
-    { url = "https://files.pythonhosted.org/packages/6d/19/cceda5079e8416b8353dd0d1ef71c70004d5bbd43fcdf34f797a87c315f0/mosek-11.2.2-cp39-abi3-win_amd64.whl", hash = "sha256:0ffe2125658f83110771caf0d8b83b40f1c4b0d1b18c2083b37757b719aa070c", size = 11201973, upload-time = "2026-06-10T06:00:01.89Z" },
+    { url = "https://files.pythonhosted.org/packages/47/b2/4913c988207cde092b0611b8c08c8110caf81c25139efa2a5a9e7de8088c/mosek-11.2.3-cp39-abi3-macosx_11_0_arm64.whl", hash = "sha256:504843653b56cbaf71b167730f6df619f8a3d2dc5892d2b0a8e2221222aa0344", size = 8794426, upload-time = "2026-08-19T02:35:35.453Z" },
+    { url = "https://files.pythonhosted.org/packages/ee/22/a1d0924ca17cc28f7296a907bfaaedf2b6543dc800379c938e8c3ca768c0/mosek-11.2.3-cp39-abi3-manylinux2014_x86_64.whl", hash = "sha256:3da44d2065f8be155ac41bcc921a60e837972694505f4c890e92a756c417fb4d", size = 15362248, upload-time = "2026-08-19T02:35:38.837Z" },
+    { url = "https://files.pythonhosted.org/packages/92/b9/5d830de8d78c79e1faeb9304b0076418c7454c9a64b5ded0332a7d976e0c/mosek-11.2.3-cp39-abi3-manylinux_2_27_aarch64.whl", hash = "sha256:b7418e6d2ae42307436b46fe4f73c3bec2ce3c6c4f2d2a2762280aef4f976180", size = 9908768, upload-time = "2026-08-19T02:35:41.569Z" },
+    { url = "https://files.pythonhosted.org/packages/55/dc/50e1042ca54781a6c73cc1019dd8c741fcc4016851240578528286e767b4/mosek-11.2.3-cp39-abi3-win_amd64.whl", hash = "sha256:7dc1a77a867f4e06993e89d807bab4c6128fae2f11fae7e6f3088e3a4c3b7ad4", size = 11200075, upload-time = "2026-08-19T02:35:43.997Z" },
 ]
 
 [[package]]
@@ -410,7 +410,7 @@ resolution-markers = [
     "python_full_version < '3.12'",
 ]
 dependencies = [
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" } },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/42/5f/29fd5f29b0a5d96e2def96ecba3112fc330ecd16e8c97c2b332563c5e201/numpy_typing_compat-20251206.2.4.tar.gz", hash = "sha256:59882d23aaff054a2536da80564012cdce33487657be4d79c5925bb8705fcabc", size = 5011, upload-time = "2025-12-06T20:02:04.942Z" }
 wheels = [
@@ -425,7 +425,7 @@ resolution-markers = [
     "python_full_version >= '3.12'",
 ]
 dependencies = [
-    { name = "numpy", version = "2.5.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "numpy", version = "2.5.2", source = { registry = "https://pypi.org/simple" } },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/08/db/5cd1d99caea4bf39fd477686ded4b9b70dff3c7673b5d84ef2d96a4f5aab/numpy_typing_compat-20260602.2.5.tar.gz", hash = "sha256:1885a678e9a24564839ed5d1711c0031735fb7de7f0b5ed88d550e5d45a8d4f9", size = 4593, upload-time = "2026-06-02T15:52:39.331Z" }
 wheels = [
@@ -440,7 +440,7 @@ resolution-markers = [
     "python_full_version < '3.12'",
 ]
 dependencies = [
-    { name = "typing-extensions", marker = "python_full_version < '3.12'" },
+    { name = "typing-extensions" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/9b/86/e6f1f6f3487492dfcf3b7a2d4e2534d27af6ac05b364b276706906c34865/optype-0.17.1.tar.gz", hash = "sha256:07bfa32b795dea28fba8605a6288d36370d072f25183fb9c29b5a90f4b6f5638", size = 53572, upload-time = "2026-05-17T22:13:28.725Z" }
 wheels = [
@@ -449,8 +449,8 @@ wheels = [
 
 [package.optional-dependencies]
 numpy = [
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
-    { name = "numpy-typing-compat", version = "20251206.2.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" } },
+    { name = "numpy-typing-compat", version = "20251206.2.4", source = { registry = "https://pypi.org/simple" } },
 ]
 
 [[package]]
@@ -461,7 +461,7 @@ resolution-markers = [
     "python_full_version >= '3.12'",
 ]
 dependencies = [
-    { name = "typing-extensions", marker = "python_full_version == '3.12.*'" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/99/51/51dc9b1009e020f44703933d4d1ee3429c647c026ce7806b37ee2b257998/optype-0.18.0.tar.gz", hash = "sha256:ea10dee61b15ca299ed0d97025d362585c4dfc5481159bb999a1d0d414bbcb04", size = 59967, upload-time = "2026-06-07T22:13:17.534Z" }
 wheels = [
@@ -470,8 +470,8 @@ wheels = [
 
 [package.optional-dependencies]
 numpy = [
-    { name = "numpy", version = "2.5.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
-    { name = "numpy-typing-compat", version = "20260602.2.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "numpy", version = "2.5.2", source = { registry = "https://pypi.org/simple" } },
+    { name = "numpy-typing-compat", version = "20260602.2.5", source = { registry = "https://pypi.org/simple" } },
 ]
 
 [[package]]
@@ -681,7 +681,7 @@ resolution-markers = [
     "python_full_version < '3.12'",
 ]
 dependencies = [
-    { name = "optype", version = "0.17.1", source = { registry = "https://pypi.org/simple" }, extra = ["numpy"], marker = "python_full_version < '3.12'" },
+    { name = "optype", version = "0.17.1", source = { registry = "https://pypi.org/simple" }, extra = ["numpy"] },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/02/30/7a2e621918d1317ab972f797161131f2635648ad5d92baf0695dd009e4f9/scipy_stubs-1.17.1.5.tar.gz", hash = "sha256:284b1dd1dd46107a614971d170030d310cd88b2ac6b483f85285ee0ff87720bd", size = 399933, upload-time = "2026-05-25T21:34:33.6Z" }
 wheels = [
@@ -696,7 +696,7 @@ resolution-markers = [
     "python_full_version >= '3.12'",
 ]
 dependencies = [
-    { name = "optype", version = "0.18.0", source = { registry = "https://pypi.org/simple" }, extra = ["numpy"], marker = "python_full_version >= '3.12'" },
+    { name = "optype", version = "0.18.0", source = { registry = "https://pypi.org/simple" }, extra = ["numpy"] },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/fc/99/02c608a58cf99774c577f22e457427f87c8e608652c5de95178daa003e1f/scipy_stubs-1.18.1.0.tar.gz", hash = "sha256:87bec0df883cd9cd6b7dc4c74a33362cf550e9cad679643a29a886ab2b438ddc", size = 448822, upload-time = "2026-08-22T09:22:52.944Z" }
 wheels = [
