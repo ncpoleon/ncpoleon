@@ -146,6 +146,14 @@ def test_non_hermitian_moment_inequality_is_rejected():
         )
 
 
+def test_non_hermitian_operator_inequality_is_rejected():
+    """Check that non-Hermitian operator inequalities are rejected."""
+    x1, x2, obj, operator_constraints = _simple_complex_params()
+
+    with pytest.raises(ValueError, match="isn't Hermitian"):
+        get_relaxation([x1, x2], 1, obj, operator_constraints=operator_constraints + [x1 * x2 >= 0])
+
+
 @pytest.mark.parametrize(
     "case, message",
     [
