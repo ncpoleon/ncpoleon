@@ -300,7 +300,9 @@ class ComplexValuedNonCommutativeSdpRelaxation(BaseSdpRelaxation[NonCommutativeM
     @property
     def moment_matrices(self) -> dict[int, ComplexValuedNonCommutativeMomentMatrix]: ...
     @property
-    def localising_moment_matrices_inequalities(self) -> dict[int, Sequence[ComplexValuedNonCommutativeMomentMatrix]]: ...
+    def localising_moment_matrices_inequalities(
+        self,
+    ) -> dict[int, Sequence[ComplexValuedNonCommutativeMomentMatrix]]: ...
     @property
     def localising_moment_matrices_equalities(
         self,
