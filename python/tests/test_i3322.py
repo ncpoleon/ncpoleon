@@ -1,10 +1,7 @@
 import pytest
 from ncpoleon import generate_noncommutative_variables, get_relaxation, solve
 
-from .utils import SOLVER_SKIPS, reduce_sos_decomposition
-
-# TODO: Add complex-valued tests, tests for the attributes of the relaxations such that the equality constraints or the
-# monomial index
+from .utils import SOLVER_SKIPS, consistency_check
 
 
 def generate_i3322_parameters():
@@ -64,4 +61,4 @@ def test_i3322(benchmark, solver, use_primal: bool):
     kwargs = {} if solver != "picos-cvxopt" or use_primal else {"cvxopt_kktsolver": "qr"}
     sol = benchmark(solve, sdp, "max", force_primal=use_primal, solver=solver, **kwargs)
     assert sol.value == pytest.approx(1.2508756)
-    assert (sdp.rewrite(reduce_sos_decomposition(sol.get_sos_decomposition()) + obj)).is_zero(1e-7)
+    consistency_check(sdp, sol, objective_sense="max", sos_tol=1e-07)

@@ -35,10 +35,7 @@ classifiers = [
 ]
 requires-python = ">=3.11"
 dynamic = ["version"]
-dependencies = [
-    "numpy>=2.3.0",
-    "scipy>=1.17.1",
-]
+dependencies = ["numpy>=2.3.0", "scipy>=1.17.1"]
 
 [project.urls]
 Homepage = "https://github.com/ncpoleon/ncpoleon/"
@@ -65,7 +62,7 @@ dev = [
     "pytest-cov>=7.1.0",
     "pytest-split>=0.11.0",
     "scipy-stubs>=1.17.1.5",
-    "ty>=0.0.40",
+    "ty>=0.0.77",
 ]
 
 [tool.maturin]
@@ -164,6 +161,14 @@ extra-paths = ["stubs"]
 [tool.ty.src]
 include = ["python"]
 exclude = ["python/tests"]
+
+[tool.ty.rules]
+unsound-return-statement = "error"
+unsound-assignment = "error"
+unsound-yield = "error"
+missing-type-argument = "error"
+possibly-unresolved-reference = "error"
+blanket-ignore-comment = "error"
 
 [tool.pytest]
 console_output_style = "progress"

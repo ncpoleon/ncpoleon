@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 
 use num_complex::Complex;
-use pyo3::exceptions::{PyKeyError, PyValueError};
+use pyo3::exceptions::PyKeyError;
 use pyo3::prelude::*;
 
 use crate::polynomials::commutative_polynomials::monomials::commutative_monomial::{
@@ -15,19 +15,33 @@ use crate::polynomials::noncommutative_polynomials::monomials::noncommutative_mo
 use crate::polynomials::polynomial::PolynomialDtype;
 
 type PositionMatrix<Scalar> = BTreeMap<(usize, usize), Scalar>;
-type PositionMatrixPair<Scalar> = (PositionMatrix<Scalar>, Option<PositionMatrix<Scalar>>);
-type PositionMatrixRefPair<'a, Scalar> = (&'a PositionMatrix<Scalar>, Option<&'a PositionMatrix<Scalar>>);
-type PositionMatrixMutPair<'a, Scalar> = (&'a mut PositionMatrix<Scalar>, Option<&'a mut PositionMatrix<Scalar>>);
+type PositionMatrixRefTriple<'a, Scalar> = (&'a PositionMatrix<Scalar>, Realness, Canonicality);
+type PositionMatrixMutTriple<'a, Scalar> = (&'a mut PositionMatrix<Scalar>, Realness, Canonicality);
 
 type PositionMatrixRowColDataFormat<Scalar> = (Vec<usize>, Vec<usize>, Vec<Scalar>);
 
+#[pyclass(frozen, module = "ncpoleon.relaxations", eq, eq_int, skip_from_py_object)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Realness {
+    Real,
+    Complex,
+}
+
+#[pyclass(frozen, module = "ncpoleon.relaxations", eq, eq_int, skip_from_py_object)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Canonicality {
+    Canonical,
+    Adjoint,
+}
+
 fn position_matrix_to_row_col_data_format<Scalar: PolynomialDtype>(
     position_matrix: &PositionMatrix<Scalar>,
-    size: usize,
 ) -> PositionMatrixRowColDataFormat<Scalar> {
-    let mut rows = Vec::with_capacity(size);
-    let mut cols = Vec::with_capacity(size);
-    let mut data = Vec::with_capacity(size);
+    // The capacity is the number of stored entries, not the side of the matrix: a position matrix
+    // holds up to `size * size` of them
+    let mut rows = Vec::with_capacity(position_matrix.len());
+    let mut cols = Vec::with_capacity(position_matrix.len());
+    let mut data = Vec::with_capacity(position_matrix.len());
 
     for (index, &value) in position_matrix.iter() {
         rows.push(index.0);
@@ -38,21 +52,20 @@ fn position_matrix_to_row_col_data_format<Scalar: PolynomialDtype>(
     (rows, cols, data)
 }
 
-// The second position matrix is that of the conjugate if the problem is complex-valued. For instance, if the
-// problem is complex-valued, but X_1 and X_2 are Hermitian, then the entries for X_1X_2 and X_2X_1 are conjugate
-// of each other, so we shouldn't create a new variable for X_2X_1, but instead reuse the one used for X_1X_2 and
-// conjugate it. For real-valued problems, the conjugate is equal to the base value, so there's no need to store it.
-// FIXME: we don't really have to store the adjoint positions in case of a complex-valued problem, since this will
-//  always correspond to the symmetry of the canonical w.r.t. the diagonal. A simple flag to indicate whether the
-//  variable is complex could suffice, modulo some changes in the code.
 #[derive(Clone)]
 pub(super) struct RustMomentMatrix<Scalar: PolynomialDtype, MonomialType: AdjointTrait + Ord> {
     pub(super) associated_id: u8,
-    data: BTreeMap<MonomialType, PositionMatrixPair<Scalar>>,
+    /// The realness is needed to interpret the adjoints. For instance, if the problem is
+    /// complex-valued, but X_1 and X_2 are Hermitian, then the entries for X_1X_2 and X_2X_1 are
+    /// conjugate of each other, so we shouldn't create a new variable for X_2X_1, but instead reuse
+    /// the one used for X_1X_2 and conjugate it. For real-valued problems, the conjugate is equal
+    /// to the base value, so there's no need to store it. In both cases, we only need to know the
+    /// positions of the canonical monomial to know that of its adjoint.
+    data: BTreeMap<MonomialType, (PositionMatrix<Scalar>, Realness)>,
     /// Maps the canonical form of each stored key's adjoint back to that key. Maintained by
     /// [`RustMomentMatrix::insert`], it lets [`RustMomentMatrix::get_mut`] resolve a monomial stored
     /// under the opposite (adjoint) orientation without recomputing `adjoint().rewrite()` on every
-    /// lookup
+    /// lookup.
     adjoint_index: BTreeMap<MonomialType, MonomialType>,
     pub(super) size: usize,
 }
@@ -66,27 +79,6 @@ where
         Self { associated_id, data: BTreeMap::new(), adjoint_index: BTreeMap::new(), size }
     }
 
-    pub(super) fn get(
-        &self,
-        monomial: &MonomialType,
-        strategy: RewritingStrategy,
-        substitutions: &BTreeMap<MonomialType, MonomialType>,
-    ) -> Result<Option<PositionMatrixRefPair<'_, Scalar>>, String> {
-        if self.data.contains_key(monomial) {
-            let (position_matrix, position_matrix_conj) = self.data.get(monomial).unwrap();
-            return Ok(Some((position_matrix, position_matrix_conj.as_ref())));
-        }
-        let adjoint = monomial.adjoint().rewrite(strategy, substitutions)?;
-        if self.data.contains_key(&adjoint) {
-            let (position_matrix_conj, position_matrix) = self.data.get(&adjoint).unwrap();
-            return Ok(Some(match position_matrix {
-                Some(position_matrix) => (position_matrix, Some(position_matrix_conj)),
-                None => (position_matrix_conj, None),
-            }));
-        }
-        Ok(None)
-    }
-
     /// Insert a fresh entry for `monomial`, registering its adjoint's canonical form in
     /// `adjoint_index` so that later [`get_mut`](Self::get_mut) lookups for the opposite orientation
     /// resolve without recomputing `adjoint().rewrite()`. This is the only place the adjoint of a
@@ -95,7 +87,8 @@ where
     pub(super) fn insert(
         &mut self,
         monomial: MonomialType,
-        entry: PositionMatrixPair<Scalar>,
+        position_matrix: PositionMatrix<Scalar>,
+        realness: Realness,
         strategy: RewritingStrategy,
         substitutions: &BTreeMap<MonomialType, MonomialType>,
     ) -> Result<(), String> {
@@ -105,12 +98,10 @@ where
         // `get`/`get_canonical` (they rewrite the adjoint of the *query*) only if `rewrite ∘ adjoint`
         // is an involution on canonical monomials. That holds when the rewriting system is confluent
         // *and* its rule set is closed under adjoint; the substitutions come straight from the user,
-        // so neither is currently guaranteed. Checked here in every profile rather than under
-        // `debug_assertions`: a violation makes the two lookups disagree and silently splits one
-        // moment class over two entries, which yields a wrong relaxation with no other symptom.
+        // so neither is currently guaranteed.
         // TODO: once rewriting goes through a completed (confluent, adjoint-closed) rule set, this
-        //  invariant holds by construction and the check -- along with the extra rewrite it costs per
-        //  stored monomial -- can be dropped.
+        //  invariant holds by construction and the check (along with the extra rewrite it costs per
+        //  stored monomial) can be dropped.
         let roundtrip = adjoint.adjoint().rewrite(strategy, substitutions)?;
         if roundtrip != monomial {
             return Err(format!(
@@ -121,15 +112,19 @@ where
             ));
         }
 
-        if adjoint != monomial {
-            self.adjoint_index.insert(adjoint, monomial.clone());
-        }
-
         if self.data.contains_key(&monomial) {
             return Err(format!("Trying to insert the already present {} in a moment matrix.", monomial));
         }
 
-        self.data.insert(monomial, entry);
+        if self.adjoint_index.contains_key(&monomial) {
+            return Err(format!(
+                "Trying to insert {} in a moment matrix when its adjoint has already been inserted.",
+                monomial
+            ));
+        }
+
+        self.adjoint_index.insert(adjoint, monomial.clone());
+        self.data.insert(monomial, (position_matrix, realness));
         Ok(())
     }
 
@@ -137,40 +132,70 @@ where
     /// orientation) or the adjoint-canonical of a stored key (via `adjoint_index`); no rewriting is
     /// performed here, so the query must already be in canonical form. Entries must be added through
     /// [`insert`](Self::insert) for `adjoint_index` to stay consistent.
-    ///
-    /// This resolves the same queries as [`get`](Self::get) as long as `rewrite ∘ adjoint` is an
-    /// involution on canonical monomials, which [`insert`](Self::insert) rejects violations of.
-    pub(super) fn get_mut(&mut self, monomial: &MonomialType) -> Option<PositionMatrixMutPair<'_, Scalar>> {
-        if self.data.contains_key(monomial) {
-            let (position_matrix, position_matrix_conj) = self.data.get_mut(monomial).unwrap();
-            return Some((position_matrix, position_matrix_conj.as_mut()));
+    pub(super) fn get(&self, monomial: &MonomialType) -> Result<Option<PositionMatrixRefTriple<'_, Scalar>>, String> {
+        if let Some((position_matrix, realness)) = self.data.get(monomial) {
+            return Ok(Some((position_matrix, *realness, Canonicality::Canonical)));
         }
-        let key = self.adjoint_index.get(monomial).cloned()?;
-        let (position_matrix_conj, position_matrix) = self.data.get_mut(&key).unwrap();
-        Some(match position_matrix {
-            Some(position_matrix) => (position_matrix, Some(position_matrix_conj)),
-            None => (position_matrix_conj, None),
-        })
+        match self.adjoint_index.get(monomial) {
+            Some(canonical) => {
+                let (position_matrix, realness) = self.data.get(canonical).ok_or_else(|| {
+                    format!(
+                        "The adjoint {} of the canonical monomial {} is present within the adjoint \
+                        index of this moment matrix, but no entry is associated to this canonical \
+                        monomial. This is likely a mistake on our side, so feel free to open an \
+                        issue about this!",
+                        monomial, canonical
+                    )
+                })?;
+                Ok(Some((position_matrix, *realness, Canonicality::Adjoint)))
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Look up the entry a monomial belongs to. A query resolves iff it is a stored key (direct
+    /// orientation) or the adjoint-canonical of a stored key (via `adjoint_index`); no rewriting is
+    /// performed here, so the query must already be in canonical form. Entries must be added through
+    /// [`insert`](Self::insert) for `adjoint_index` to stay consistent.
+    pub(super) fn get_mut(
+        &mut self,
+        monomial: &MonomialType,
+    ) -> Result<Option<PositionMatrixMutTriple<'_, Scalar>>, String> {
+        if self.data.contains_key(monomial) {
+            let (position_matrix, realness) = self.data.get_mut(monomial).unwrap();
+            return Ok(Some((position_matrix, *realness, Canonicality::Canonical)));
+        }
+        match self.adjoint_index.get(monomial) {
+            Some(canonical) => {
+                let (position_matrix, realness) = self.data.get_mut(canonical).ok_or_else(|| {
+                    format!(
+                        "The adjoint {} of the canonical monomial {} is present within the adjoint \
+                        index of this moment matrix, but no entry is associated to this canonical \
+                        monomial. This is likely a mistake on our side, so feel free to open an \
+                        issue about this!",
+                        monomial, canonical
+                    )
+                })?;
+                Ok(Some((position_matrix, *realness, Canonicality::Adjoint)))
+            }
+            None => Ok(None),
+        }
     }
 
     /// get_canonical is used to verify that a monomial or its adjoint are stored. If neither are stored, it raises
-    /// an Error. Otherwise, the first return parameter is the canonical form that is stored, the second is whether
-    /// we had to take the adjoint, and the third is whether the corresponding moment is real-valued (i.e. the entry
-    /// is stored as a single position matrix without a separate conjugate matrix).
+    /// an Error.
     pub(super) fn get_canonical(
         &self,
         monomial: &MonomialType,
-        strategy: RewritingStrategy,
-        substitutions: &BTreeMap<MonomialType, MonomialType>,
-    ) -> Result<(MonomialType, bool, bool), String> {
-        if let Some((_, position_matrix_conj)) = self.data.get(monomial) {
-            return Ok((monomial.clone(), false, position_matrix_conj.is_none()));
+    ) -> Result<(MonomialType, Canonicality, Realness), String> {
+        let (_, realness, canonicality) = self
+            .get(monomial)?
+            .ok_or_else(|| format!("Couldn't find monomial {} or its adjoint in the moment matrix.", monomial))?;
+        match canonicality {
+            Canonicality::Canonical => Ok((monomial.clone(), canonicality, realness)),
+            // We can afford to use unwrap here `get` already performs this check
+            Canonicality::Adjoint => Ok((self.adjoint_index.get(monomial).unwrap().clone(), canonicality, realness)),
         }
-        let adjoint = monomial.adjoint().rewrite(strategy, substitutions)?;
-        if let Some((_, position_matrix_conj)) = self.data.get(&adjoint) {
-            return Ok((adjoint, true, position_matrix_conj.is_none()));
-        }
-        Err(format!("Couldn't find monomial {} or its adjoint in the moment matrix.", monomial))
     }
 }
 
@@ -236,55 +261,28 @@ macro_rules! impl_moment_matrix_pymethods {
 
             pub(super) fn as_row_col_data_format(
                 &self,
-            ) -> BTreeMap<
-                $py_monomial,
-                (PositionMatrixRowColDataFormat<$scalar_type>, Option<PositionMatrixRowColDataFormat<$scalar_type>>),
-            > {
-                BTreeMap::from_iter(self.0.data.iter().map(|(monomial, (position_matrix, position_matrix_conj))| {
+            ) -> BTreeMap<$py_monomial, (PositionMatrixRowColDataFormat<$scalar_type>, Realness)> {
+                BTreeMap::from_iter(self.0.data.iter().map(|(monomial, (position_matrix, realness))| {
                     (
                         $py_monomial(monomial.clone()),
-                        (
-                            position_matrix_to_row_col_data_format(position_matrix, self.0.size),
-                            position_matrix_conj
-                                .as_ref()
-                                .map(|pos_matrix| position_matrix_to_row_col_data_format(pos_matrix, self.0.size)),
-                        ),
+                        (position_matrix_to_row_col_data_format(position_matrix), *realness),
                     )
                 }))
             }
 
             fn __contains__<'py>(&self, item: &Bound<'py, PyAny>) -> PyResult<bool> {
                 let rust_monomial = $py_monomial::try_from_reference_bound(item, Some(self.0.associated_id))?.0;
-                Ok(self.0.get_canonical(&rust_monomial, RewritingStrategy::None, &BTreeMap::new()).is_ok())
+                Ok(self.0.get_canonical(&rust_monomial).is_ok())
             }
 
-            fn __getitem__<'py>(
+            fn get_canonical<'py>(
                 &self,
-                key: &Bound<'py, PyAny>,
-            ) -> PyResult<PositionMatrixRowColDataFormat<$scalar_type>> {
-                let python_monomial = $py_monomial::try_from_reference_bound(key, Some(self.0.associated_id))?;
-                let res = self
-                    .0
-                    .get(&python_monomial.0, RewritingStrategy::None, &BTreeMap::new())
-                    .map_err(PyValueError::new_err)?;
-                match res {
-                    Some((pos_matrix, _position_matrix_conj)) => {
-                        Ok(position_matrix_to_row_col_data_format(pos_matrix, self.0.size))
-                    }
-                    None => Err(PyKeyError::new_err(format!(
-                        "Couldn't find monomial {} in the moment matrix.",
-                        python_monomial.0
-                    ))),
-                }
-            }
-
-            fn get_canonical<'py>(&self, monomial: &Bound<'py, PyAny>) -> PyResult<($py_monomial, bool, bool)> {
+                monomial: &Bound<'py, PyAny>,
+            ) -> PyResult<($py_monomial, Canonicality, Realness)> {
                 let python_monomial = $py_monomial::try_from_reference_bound(monomial, Some(self.0.associated_id))?;
-                let (rust_monomial, is_adjoint, is_real_valued) = self
-                    .0
-                    .get_canonical(&python_monomial.0, RewritingStrategy::None, &BTreeMap::new())
-                    .map_err(PyValueError::new_err)?;
-                Ok(($py_monomial(rust_monomial), is_adjoint, is_real_valued))
+                let (rust_monomial, canonicality, realness) =
+                    self.0.get_canonical(&python_monomial.0).map_err(PyKeyError::new_err)?;
+                Ok(($py_monomial(rust_monomial), canonicality, realness))
             }
         }
     };

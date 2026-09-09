@@ -59,15 +59,14 @@ jobs:
         with:
           args: format --check --diff
 
-  # TODO: re-enable once ty passes
-  # ty:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-  #       with:
-  #         persist-credentials: false
-  #     - uses: dtolnay/rust-toolchain@stable
-  #     - uses: Swatinem/rust-cache@v2
-  #     - uses: astral-sh/setup-uv@v5
-  #     - name: uv run ty check
-  #       run: uv run ty check
+  ty:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+      - uses: astral-sh/setup-uv@v10.0.0
+      - name: ty check
+        run: uv run --dev --all-extras ty check
