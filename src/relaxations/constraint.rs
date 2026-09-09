@@ -26,6 +26,13 @@ pub(crate) enum ConstraintSide<MonomialType: Ord, Scalar: PolynomialDtype> {
     Scalar(Scalar),
 }
 
+#[pyclass(frozen, module = "ncpoleon.relaxations", eq, eq_int, skip_from_py_object)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Hermiticity {
+    Hermitian,
+    NonHermitian,
+}
+
 #[derive(Clone)]
 pub(crate) struct Constraint<MonomialType: Ord, Scalar: PolynomialDtype> {
     pub(crate) kind: ConstraintKind,

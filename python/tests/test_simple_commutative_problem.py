@@ -3,10 +3,7 @@ from math import sqrt
 import pytest
 from ncpoleon import generate_commutative_variables, get_relaxation, solve
 
-from .utils import SOLVER_SKIPS, reduce_sos_decomposition
-
-# TODO: Add complex-valued tests, tests for the attributes of the relaxations such that the equality constraints or the
-# monomial index
+from .utils import SOLVER_SKIPS, consistency_check
 
 
 def generate_simple_commutative_parameters():
@@ -40,7 +37,7 @@ def test_simple_real_commutative_problem(benchmark, solver: str, level: int, exp
     sdp = get_relaxation([x0, x1], level, obj, operator_constraints=operator_constraints)
     sol = benchmark(solve, sdp, "min", force_primal=force_primal, solver=solver)
     assert sol.value == pytest.approx(expected)
-    assert (sdp.rewrite(reduce_sos_decomposition(sol.get_sos_decomposition()) - obj)).is_zero(1e-7)
+    consistency_check(sdp, sol, objective_sense="min", sos_tol=1e-07)
 
 
 @pytest.mark.parametrize("solver, level, expected", generate_simple_commutative_parameters())
@@ -70,4 +67,4 @@ def test_simple_real_noncommutative_problem_with_extra_monomials(
     )
     sol = solve(sdp, "min", verbosity=0, solver=solver, force_primal=force_primal)
     assert sol.value == pytest.approx(expected, abs=1e-6)
-    assert (sdp.rewrite(reduce_sos_decomposition(sol.get_sos_decomposition()) - obj)).is_zero(1e-7)
+    consistency_check(sdp, sol, objective_sense="min", sos_tol=1e-07)

@@ -3,7 +3,7 @@ from math import log2, sqrt
 import pytest
 from ncpoleon import generate_noncommutative_variables, get_relaxation, solve
 
-from .utils import SOLVER_SKIPS, reduce_sos_decomposition
+from .utils import SOLVER_SKIPS, consistency_check
 
 
 def generate_multiple_moment_matrices_parameters():
@@ -153,10 +153,7 @@ def test_multiple_moment_matrices_solve(benchmark, solver, use_primal, level, w,
     )
     sol = benchmark(solve, sdp, "max", force_primal=use_primal, solver=solver)
     assert -log2(sol.value) == pytest.approx(expected, abs=1e-6)
-    sos_decompositions = sol.get_sos_decomposition_by_mm_id()
-    reduced_0 = reduce_sos_decomposition(sos_decompositions[0])
-    reduced_1 = reduce_sos_decomposition(sos_decompositions[1])
-    assert sdp.rewrite(reduced_0 + reduced_1 + objective).is_zero(1e-7)
+    consistency_check(sdp, sol, objective_sense="max", sos_tol=1e-07)
 
 
 @pytest.mark.parametrize("solver, use_primal, level, w, expected", generate_multiple_moment_matrices_parameters())
@@ -181,7 +178,7 @@ def test_multiple_moment_matrices_with_extra_monomials(benchmark, solver, use_pr
         monomial
         for operators, identity in moment_matrices_operators
         for monomial in _generating_set(level, operators, identity)
-    ]
+    ][::-1]  # revert so that we check that we don't assume that the identity is the first monomial
 
     # The operator constraints all are of degree 1, so that their localising moment matrices are
     # indexed by the generating set of the previous level. The first four constraints belong to the
@@ -206,7 +203,4 @@ def test_multiple_moment_matrices_with_extra_monomials(benchmark, solver, use_pr
     )
     sol = solve(sdp, "max", verbosity=0, force_primal=use_primal, solver=solver)
     assert -log2(sol.value) == pytest.approx(expected, abs=1e-6)
-    sos_decompositions = sol.get_sos_decomposition_by_mm_id()
-    reduced_0 = reduce_sos_decomposition(sos_decompositions[0])
-    reduced_1 = reduce_sos_decomposition(sos_decompositions[1])
-    assert sdp.rewrite(reduced_0 + reduced_1 + objective).is_zero(1e-7)
+    consistency_check(sdp, sol, objective_sense="max", sos_tol=1e-07)

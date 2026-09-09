@@ -1,0 +1,1 @@
+from ncpoleon.polynomials.noncommutative_polynomials import NonCommutativeMonomial as NonCommutativeMonomial

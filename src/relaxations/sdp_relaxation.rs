@@ -9,7 +9,7 @@ use log::{debug, info, trace};
 use num_complex::Complex;
 use num_traits::Zero;
 use pyo3::IntoPyObjectExt;
-use pyo3::exceptions::{PyNotImplementedError, PyValueError};
+use pyo3::exceptions::{PyKeyError, PyNotImplementedError, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyComplex, PyDict, PyFloat, PyInt, PyList};
 
@@ -36,12 +36,13 @@ use crate::polynomials::noncommutative_polynomials::polynomials::noncommutative_
 };
 use crate::polynomials::polynomial::{Polynomial, PolynomialDtype, PolynomialTrait, TryIntoReal};
 use crate::relaxations::constraint::{
-    ConstraintKind, PythonComplexCoefficientsCommutativeConstraint, PythonComplexCoefficientsNonCommutativeConstraint,
-    PythonRealCoefficientsCommutativeConstraint, PythonRealCoefficientsNonCommutativeConstraint,
+    ConstraintKind, Hermiticity, PythonComplexCoefficientsCommutativeConstraint,
+    PythonComplexCoefficientsNonCommutativeConstraint, PythonRealCoefficientsCommutativeConstraint,
+    PythonRealCoefficientsNonCommutativeConstraint,
 };
 use crate::relaxations::moment_matrix::{
-    PythonComplexValuedCommutativeMomentMatrix, PythonComplexValuedNonCommutativeMomentMatrix,
-    PythonRealValuedCommutativeMomentMatrix, PythonRealValuedNonCommutativeMomentMatrix, RustMomentMatrix,
+    Canonicality, PythonComplexValuedCommutativeMomentMatrix, PythonComplexValuedNonCommutativeMomentMatrix,
+    PythonRealValuedCommutativeMomentMatrix, PythonRealValuedNonCommutativeMomentMatrix, Realness, RustMomentMatrix,
 };
 use crate::utils::merge_btreemaps::merge_btreemaps;
 
@@ -649,8 +650,7 @@ macro_rules! impl_sdp_relaxation_pymethods {
         impl $py_relaxation {
             fn change_variables<'py>(
                 &self,
-                // FIXME: should probaby use a reference here, otherwise the polynomial is cloned
-                polynomial: $py_poly,
+                polynomial: &$py_poly,
                 mapping: &Bound<'py, PyDict>,
             ) -> PyResult<Bound<'py, PyAny>> {
                 let res = polynomial
@@ -665,19 +665,24 @@ macro_rules! impl_sdp_relaxation_pymethods {
                                 mon
                             ))
                         )?;
-                        let (canonical, is_adjoint, is_real) = moment_matrix
-                            .get_canonical(mon, self.0.substitution_strategy, &self.0.substitutions)
+                        let (canonical, canonicality, realness) = moment_matrix
+                            .get_canonical(mon)
                             .map_err(PyValueError::new_err)?;
-                        let mapped = mapping.get_item($py_monomial(canonical));
+                        let mapped = mapping.get_item($py_monomial(canonical))?;
 
-                        if let Ok(Some(mapped)) = mapped {
-                            if !is_adjoint || is_real {
-                                mapped.mul(coeff)
-                            } else {
-                                mapped.call_method0("conj")?.mul(coeff)
+                        if let Some(mapped) = mapped {
+                            match (canonicality, realness) {
+                                (Canonicality::Adjoint, Realness::Complex) => {
+                                    if let Ok(mapped_conj) = mapped.call_method0("conj") {
+                                        mapped_conj.mul(coeff)
+                                    } else {
+                                        mapped.getattr("conj")?.mul(coeff)
+                                    }
+                                },
+                                _ => mapped.mul(coeff)
                             }
                         } else {
-                            Err(PyValueError::new_err(format!(
+                            Err(PyKeyError::new_err(format!(
                                 "Couldn't find monomial {} in the provided mapping.",
                                 mon.__str__()
                             )))
@@ -692,32 +697,12 @@ macro_rules! impl_sdp_relaxation_pymethods {
                 if let Some(res) = res { res } else { Err(PyValueError::new_err("Can't replace the Zero polynomial.")) }
             }
 
-            // FIXME: This docstring is unclear and not helpful
-            /// Splits a polynomial of moments into its real and imaginary parts.
-            ///
-            /// Given `P = Σ_m c_m [m]` where each `[m]` is a (possibly complex) moment, this
-            /// groups contributions by canonical monomial and returns two maps:
-            ///
-            /// - `real_part`: for each canonical monomial `μ` with value `p + qi`, gives `(a, b)`
-            ///   such that `Σ_μ (a·p + b·q) = Re(P)`.
-            /// - `imag_part`: same structure, giving `(c, d)` such that `Σ_μ (c·p + d·q) = Im(P)`.
-            ///
-            /// For Hermitian monomials (real-valued moments), the `Option<f64>` is `None` and no
-            /// entry appears in `imag_part`. Returns `(real_part, None)` when `imag_part` is empty,
-            /// i.e. when the polynomial evaluates to a real number for all moment values.
-            ///
-            /// Used to extract dual SDP coefficients from moment (in)equality constraints.
-            // FIXME: Always returning a complex coefficient, with a value of 0 instead of an Option that is None,
-            //  would simplify the code for exporting using the dual problem
-            fn split_into_real_and_imaginary_parts(
+            fn get_coefficients_by_canonical(
                 &self,
                 polynomial: &$py_poly,
-            ) -> PyResult<(BTreeMap<$py_monomial, (f64, Option<f64>)>, Option<BTreeMap<$py_monomial, (f64, Option<f64>)>>)> {
-                let mut real_part: BTreeMap<_, (f64, Option<f64>)> = BTreeMap::new();
-                let mut imag_part: BTreeMap<_, (f64, Option<f64>)> = BTreeMap::new();
-                const REALNESS_INCONSISTENCY_ERR: &str =
-                    "Canonical monomial inconsistently marked as real and non-real. This is likely an error on our \
-                    part, so feel free to open an issue!";
+            ) -> PyResult<(BTreeMap<$py_monomial, $scalar>, BTreeMap<$py_monomial, (Complex<f64>, Complex<f64>)>)> {
+                let mut real_monomials = BTreeMap::new();
+                let mut complex_monomials: BTreeMap<$py_monomial, (Complex<f64>, Complex<f64>)> = BTreeMap::new();
 
                 for (mon, &coeff) in polynomial.0.data.iter() {
                     let moment_matrix = self.0.moment_matrices.get(
@@ -727,56 +712,32 @@ macro_rules! impl_sdp_relaxation_pymethods {
                             mon
                         ))
                     )?;
-                    // Unify f64/Complex<f64>, so that the macro knows that we deal with complex numbers
-                    let as_complex = Complex::from(coeff);
-                    let (canonical, is_adjoint, is_real) = moment_matrix
-                        .get_canonical(mon, self.0.substitution_strategy, &self.0.substitutions)
+                    let (canonical, canonicality, realness) = moment_matrix
+                        .get_canonical(mon)
                         .map_err(PyValueError::new_err)?;
 
-                    if is_real {
-                        real_part.entry(canonical).and_modify(|e| (*e).0 += as_complex.re).or_insert((as_complex.re, None));
-                    } else {
-                        real_part
-                            .entry(canonical.clone())
-                            .and_modify(|e| {
-                                (*e).0 += as_complex.re;
-                                let imag = e.1.as_mut().expect(REALNESS_INCONSISTENCY_ERR);
-                                *imag += if is_adjoint { as_complex.im } else { -as_complex.im };
-                            })
-                            .or_insert((as_complex.re, Some(if is_adjoint {as_complex.im} else {-as_complex.im})));
-                        imag_part
-                            .entry(canonical)
-                            .and_modify(|e| {
-                                (*e).0 += as_complex.im;
-                                let imag = e.1.as_mut().expect(REALNESS_INCONSISTENCY_ERR);
-                                *imag += if is_adjoint { -as_complex.re } else { as_complex.re };
-                            })
-                            .or_insert((as_complex.im, Some(if is_adjoint {-as_complex.re} else {as_complex.re})));
+                    match (realness, canonicality) {
+                        (Realness::Real, _) => {
+                            *real_monomials.entry($py_monomial(canonical)).or_insert(<$scalar>::zero()) += coeff;
+                        },
+                        (Realness::Complex, Canonicality::Canonical) => {
+                            complex_monomials
+                                .entry($py_monomial(canonical))
+                                .and_modify(|e|
+                                    (*e).0 = Complex::from(coeff)).or_insert((Complex::from(coeff), Complex::zero())
+                                );
+                        },
+                        (Realness::Complex, Canonicality::Adjoint) => {
+                            complex_monomials
+                                .entry($py_monomial(canonical))
+                                .and_modify(|e|
+                                    (*e).1 = Complex::from(coeff)).or_insert((Complex::zero(), Complex::from(coeff))
+                                );
+                        },
                     }
                 }
 
-                // FiXME: slightly slower to do it like this, but much cleaner to code. Benchmark whether
-                //  adding and then filtering is much slower than not adding/removing if coeff is nil
-                let python_real_part = real_part
-                    .into_iter()
-                    .filter(|(_mon, (coeff_re, coeff_im))| match coeff_im {
-                        None => *coeff_re != 0.0,
-                        Some(coeff_im) => (*coeff_re != 0.0) || (*coeff_im != 0.0)
-                    })
-                    .map(|(rust_monomial, coeff)| ($py_monomial(rust_monomial), coeff))
-                    .collect();
-                let python_imag_part: BTreeMap<_, _> = imag_part
-                    .into_iter()
-                    // We use unwrap here since we always insert the imaginarity part with Some, no None is unreachable
-                    .filter(|(_mon, (coeff_re, coeff_im))| *coeff_re != 0.0 || coeff_im.unwrap() != 0.0)
-                    .map(|(rust_monomial, coeff)| ($py_monomial(rust_monomial), coeff))
-                    .collect();
-
-                if python_imag_part.is_empty() {
-                    Ok((python_real_part, None))
-                } else {
-                    Ok((python_real_part, Some(python_imag_part)))
-                }
+                Ok((real_monomials, complex_monomials))
             }
 
             #[getter]
@@ -865,15 +826,30 @@ macro_rules! impl_sdp_relaxation_pymethods {
             }
 
             /// Localising moment matrices for the equality constraints.
-            ///
-            /// Same structure as `localising_moment_matrices_inequalities` but
-            /// for each equality constraint polynomial.
             #[getter]
-            fn localising_moment_matrices_equalities(&self) -> BTreeMap<u8, Vec<$py_moment_matrix>> {
+            fn localising_moment_matrices_equalities(&self) -> BTreeMap<u8, Vec<($py_poly, Vec<$py_poly>, Hermiticity)>> {
                 self.0
                     .localising_moment_matrices_equalities
                     .iter()
-                    .map(|(&index, equalities)| (index, equalities.iter().map(|moment_matrix| $py_moment_matrix(moment_matrix.clone())).collect()))
+                    .map(|(&mm_id, equalities_id)| {
+                        (
+                            mm_id,
+                            equalities_id
+                                .iter()
+                                .map(|(generator, generating_set, hermiticity)| {
+                                    (
+                                        $py_poly(generator.clone()),
+                                        generating_set
+                                            .iter()
+                                            .cloned()
+                                            .map($py_poly)
+                                            .collect(),
+                                        *hermiticity
+                                    )
+                                })
+                                .collect()
+                        )
+                    })
                     .collect()
             }
 
@@ -945,6 +921,8 @@ macro_rules! impl_sdp_relaxation_pymethods {
 }
 
 type PolynomialWithGeneratingSet<MonomialType, Scalar> = (Polynomial<MonomialType, Scalar>, Vec<MonomialType>);
+type OperatorEqualityAsMoments<MonomialType, Scalar> =
+    (Polynomial<MonomialType, Scalar>, Vec<Polynomial<MonomialType, Scalar>>, Hermiticity);
 
 pub(super) struct SdpRelaxation<MonomialType: AdjointTrait + Ord, Scalar: PolynomialDtype> {
     objective: Polynomial<MonomialType, Scalar>,
@@ -956,7 +934,7 @@ pub(super) struct SdpRelaxation<MonomialType: AdjointTrait + Ord, Scalar: Polyno
     moment_inequalities: Vec<(Polynomial<MonomialType, Scalar>, f64)>,
     moment_matrices: BTreeMap<u8, RustMomentMatrix<Scalar, MonomialType>>,
     generating_sets: BTreeMap<u8, Vec<MonomialType>>,
-    localising_moment_matrices_equalities: BTreeMap<u8, Vec<RustMomentMatrix<Scalar, MonomialType>>>,
+    localising_moment_matrices_equalities: BTreeMap<u8, Vec<OperatorEqualityAsMoments<MonomialType, Scalar>>>,
     localising_moment_matrices_inequalities: BTreeMap<u8, Vec<RustMomentMatrix<Scalar, MonomialType>>>,
     extra_monomials: BTreeMap<u8, Vec<MonomialType>>,
 }
@@ -1036,7 +1014,7 @@ impl_sdp_relaxation_pymethods!(
 type PolynomialWithOptionalGeneratingSet<MonomialType, Scalar> =
     (Polynomial<MonomialType, Scalar>, Option<Vec<MonomialType>>);
 
-impl<Data: Ord + Clone, Scalar: PolynomialDtype> SdpRelaxation<Monomial<Data>, Scalar>
+impl<Data: Ord + Clone, Scalar: PolynomialDtype + Into<Complex<f64>>> SdpRelaxation<Monomial<Data>, Scalar>
 where
     Polynomial<Monomial<Data>, Scalar>: PolynomialTrait,
     Monomial<Data>: RewritingTrait<Monomial<Data>> + OneWithMomentMatrixId + AdjointTrait,
@@ -1172,6 +1150,22 @@ where
         partition_operator_constraints!(equalities, temporary_equalities, "equality");
         partition_operator_constraints!(inequalities, temporary_inequalities, "inequality");
 
+        debug!("Checking the Hermiticity of operator inequalities.");
+        for operator_inequalities in temporary_inequalities.values() {
+            for (operator_inequality, _generating_set) in operator_inequalities {
+                if !(operator_inequality - operator_inequality.adjoint())
+                    .rewrite(self.substitution_strategy, &self.substitutions)
+                    .map_err(PyValueError::new_err)?
+                    .is_zero()
+                {
+                    return Err(PyValueError::new_err(format!(
+                        "The operator inequality constraint {} ≽ 0 isn't Hermitian.",
+                        operator_inequality
+                    )));
+                }
+            }
+        }
+
         // Auto-inject default normalization `<I_k> = 1` for each moment-matrix index `k` that
         // doesn't already appear in a user-supplied normalization constraint. Only normalization
         // constraints contribute to the "covered" set ; generic moment constraints don't, so a user
@@ -1219,6 +1213,22 @@ where
             })
             .collect::<Result<_, _>>()
             .map_err(PyValueError::new_err)?;
+
+        if !objective.is_real() {
+            debug!("Checking the Hermiticity of moment inequalities.");
+            for (moment_inequality, scalar) in self.moment_inequalities.iter() {
+                if !(moment_inequality - moment_inequality.adjoint())
+                    .rewrite(self.substitution_strategy, &self.substitutions)
+                    .map_err(PyValueError::new_err)?
+                    .is_zero()
+                {
+                    return Err(PyValueError::new_err(format!(
+                        "The moment inequality constraint {} >= {} isn't Hermitian.",
+                        moment_inequality, scalar
+                    )));
+                }
+            }
+        }
 
         debug!("Rewriting objective.");
         self.objective =
@@ -1311,24 +1321,22 @@ where
                             // assumes that rewriting a monomial can't increase its length. Though this is
                             // reasonable, we allow the user to disable this simpler check if one of this
                             // assumptions isn't verified
-                            if check_uniqueness_with_length {
-                                if (rewritten.len() == monomial_length) & !level_set.contains(&rewritten) {
-                                    trace!(
-                                        "Adding the rewritten monomial to the indexing set at level {}.",
-                                        monomial_length
-                                    );
-                                    level_set.insert(rewritten.clone());
-                                }
+                            // `insert` is idempotent and reports whether the monomial was new, so it
+                            // subsumes the membership test on `level_set` itself. Only the scan over the
+                            // previous levels has to be spelled out, and `&&` keeps it out of the way
+                            // whenever the length check has already ruled the monomial out
+                            let is_new = if check_uniqueness_with_length {
+                                rewritten.len() == monomial_length && level_set.insert(rewritten)
                             } else {
-                                if !level_set.contains(&rewritten)
-                                    & !monomials_sets.iter().any(|monomial_set| monomial_set.contains(&rewritten))
-                                {
-                                    trace!(
-                                        "Adding the rewritten monomial to the indexing set at level {}.",
-                                        monomial_length
-                                    );
-                                    level_set.insert(rewritten.clone());
-                                }
+                                !monomials_sets.iter().any(|monomial_set| monomial_set.contains(&rewritten))
+                                    && level_set.insert(rewritten)
+                            };
+
+                            if is_new {
+                                trace!(
+                                    "Added the rewritten monomial to the indexing set at level {}.",
+                                    monomial_length
+                                );
                             }
                             Ok(())
                         })
@@ -1366,7 +1374,7 @@ where
                     monomials_sets.iter().flatten().chain(extra_monomials.iter()).enumerate().skip(index_row);
 
                 for (index_column, monomial_column) in monomials_sets_iterator_cols {
-                    let new_monomial = if index_row == 0 {
+                    let new_monomial = if monomial_row.is_one() {
                         monomial_column.clone()
                     } else {
                         (&monomial_row_adjoint * monomial_column)
@@ -1377,43 +1385,63 @@ where
 
                     // `get_mut` finds the entry (in either orientation) via the matrix's own
                     // `adjoint_index`, so no per-cell `adjoint().rewrite()` is needed here.
-                    if let Some((position_matrix, position_matrix_conj)) = new_moment_matrix.get_mut(&new_monomial) {
-                        position_matrix.insert((index_row, index_column), Scalar::one());
-                        if let Some(position_matrix_conj) = position_matrix_conj {
-                            position_matrix_conj.insert((index_column, index_row), Scalar::one());
-                        } else {
-                            position_matrix.insert((index_column, index_row), Scalar::one());
-                        }
+                    if let Some((position_matrix, realness, canonicality)) =
+                        new_moment_matrix.get_mut(&new_monomial).map_err(PyKeyError::new_err)?
+                    {
+                        match (realness, canonicality) {
+                            (Realness::Real, _) => {
+                                position_matrix.insert((index_row, index_column), Scalar::one());
+                                position_matrix.insert((index_column, index_row), Scalar::one());
+                            }
+                            (Realness::Complex, Canonicality::Canonical) => {
+                                position_matrix.insert((index_row, index_column), Scalar::one());
+                            }
+                            (Realness::Complex, Canonicality::Adjoint) => {
+                                position_matrix.insert((index_column, index_row), Scalar::one());
+                            }
+                        };
                         continue;
                     }
 
-                    let use_single_matrix = is_problem_real_valued
+                    // FIXME: This repeats code in the get_localizing_moment_matrix function. The only difference
+                    //  is that we're performing multiplications betweeen monomials instead of between polynomials,
+                    //  with the polynomial being 1. If this doesn't have a huge impact on performance, we should
+                    // delegate  most of this code to this function with the polynomial being
+                    // Scalar::one()
+                    let use_symmetric_matrix = is_problem_real_valued
                         || (new_monomial
                             == new_monomial
                                 .adjoint()
                                 .rewrite(self.substitution_strategy, &self.substitutions)
                                 .map_err(PyValueError::new_err)?);
 
-                    let new_entry = if use_single_matrix {
-                        (
-                            BTreeMap::from([
-                                ((index_row, index_column), Scalar::one()),
-                                // On the diagonal, BTreeMap will remove the extra entry
-                                ((index_column, index_row), Scalar::one()),
-                            ]),
-                            None,
-                        )
-                    } else {
-                        (
-                            BTreeMap::from([((index_row, index_column), Scalar::one())]),
-                            Some(BTreeMap::from([((index_column, index_row), Scalar::one())])),
-                        )
-                    };
                     // `insert` records the entry and registers its adjoint's canonical form in
                     // `adjoint_index` (the single adjoint rewrite per stored monomial).
-                    new_moment_matrix
-                        .insert(new_monomial, new_entry, self.substitution_strategy, &self.substitutions)
-                        .map_err(PyValueError::new_err)?;
+                    if use_symmetric_matrix {
+                        new_moment_matrix
+                            .insert(
+                                new_monomial,
+                                BTreeMap::from([
+                                    ((index_row, index_column), Scalar::one()),
+                                    // On the diagonal, BTreeMap will remove the extra entry
+                                    ((index_column, index_row), Scalar::one()),
+                                ]),
+                                Realness::Real,
+                                self.substitution_strategy,
+                                &self.substitutions,
+                            )
+                            .map_err(PyValueError::new_err)?;
+                    } else {
+                        new_moment_matrix
+                            .insert(
+                                new_monomial,
+                                BTreeMap::from([((index_row, index_column), Scalar::one())]),
+                                Realness::Complex,
+                                self.substitution_strategy,
+                                &self.substitutions,
+                            )
+                            .map_err(PyValueError::new_err)?;
+                    }
                 }
             }
 
@@ -1421,7 +1449,7 @@ where
             // since filling their generating sets in place would otherwise borrow `self` mutably,
             // which would conflict with the immutable borrow taken by `get_localising_moment_matrix`
             macro_rules! build_localising_moment_matrices {
-                ($temporary_constraints:expr, $constraints_field:ident, $matrices_field:ident) => {{
+                ($temporary_constraints:expr, $constraints_field:ident, $matrices_field:ident, $generating_func:ident $(, $extra_args:expr)* $(,)?) => {{
                     let mut new_localising_moment_matrices = Vec::new();
                     if let Some(mut constraints) = $temporary_constraints.remove(&moment_matrix_id) {
                         new_localising_moment_matrices.reserve_exact(constraints.len());
@@ -1458,10 +1486,10 @@ where
                                     )));
                                 }
                             }
-                            new_localising_moment_matrices.push(self.get_localising_moment_matrix(
+                            new_localising_moment_matrices.push(self.$generating_func(
                                 constraint,
                                 generating_set,
-                                &new_moment_matrix,
+                                $($extra_args,)*
                                 verbosity,
                                 top_bar,
                             )?);
@@ -1473,15 +1501,57 @@ where
                 }};
             }
 
-            build_localising_moment_matrices!(temporary_equalities, equalities, localising_moment_matrices_equalities);
+            // TODO: if we don't assume that operator equalities are Hermitian, we should use a distinct function
+            build_localising_moment_matrices!(
+                temporary_equalities,
+                equalities,
+                localising_moment_matrices_equalities,
+                get_localizing_moment_equalities
+            );
             build_localising_moment_matrices!(
                 temporary_inequalities,
                 inequalities,
-                localising_moment_matrices_inequalities
+                localising_moment_matrices_inequalities,
+                get_localising_moment_matrix,
+                &new_moment_matrix
             );
 
             self.moment_matrices.insert(moment_matrix_id, new_moment_matrix);
             self.generating_sets.insert(moment_matrix_id, monomials_sets.iter().flatten().cloned().collect());
+        }
+
+        debug!("Checking the complex feasibility of moment equalities.");
+        if !self.objective.is_real() {
+            // Only check for complex-valued problems
+            for (moment_equality, scalar) in self.moment_equalities.iter() {
+                if Into::<Complex<f64>>::into(*scalar).im != 0.0
+                    && (moment_equality - moment_equality.adjoint())
+                        .rewrite(self.substitution_strategy, &self.substitutions)
+                        .map_err(PyValueError::new_err)?
+                        .is_zero()
+                {
+                    return Err(PyValueError::new_err(format!(
+                        "The moment equality constraint {} = {} can't be satisfied since the polynomial is hermitian \
+                        and thus real-valued.",
+                        moment_equality, scalar
+                    )));
+                }
+            }
+        }
+
+        for (moment_equality, scalar) in self.moment_equalities.iter() {
+            if Into::<Complex<f64>>::into(*scalar).re != 0.0
+                && (moment_equality + moment_equality.adjoint())
+                    .rewrite(self.substitution_strategy, &self.substitutions)
+                    .map_err(PyValueError::new_err)?
+                    .is_zero()
+            {
+                return Err(PyValueError::new_err(format!(
+                    "The moment equality constraint {} = {} can't be satisfied since the polynomial is antihermitian \
+                    and thus purely imaginary (or identically nil in a real-valued problem).",
+                    moment_equality, scalar
+                )));
+            }
         }
 
         info!("Finished setting relaxation.");
@@ -1521,9 +1591,12 @@ where
             let monomials_iterator_cols =
                 generating_set[index_row..].iter().enumerate().map(|(offset, operator)| (index_row + offset, operator));
 
+            // Computed once per row instead of once per cell. The multiplication below consumes it, so
+            // each cell clones it, which is cheaper than taking the adjoint again
+            let operator_row_adjoint = operator_row.adjoint();
+
             for (index_col, operator_col) in monomials_iterator_cols {
-                // FIXME: performance: no need to recompute the adjoint each time
-                let operator_row_adjoint = operator_row.adjoint();
+                let operator_row_adjoint = operator_row_adjoint.clone();
                 trace!(
                     "Rewriting {} * {} * {}, before inserting it to the localizing matrix.",
                     operator_row_adjoint, polynomial, operator_col
@@ -1536,71 +1609,107 @@ where
                 trace!("Adding the rewritten polynomial {} to the localizing matrix.", new_polynomial);
 
                 for (monomial, coefficient) in new_polynomial.data {
-                    if let Some((position_matrix, position_matrix_conj)) =
-                        new_localising_moment_matrix.get_mut(&monomial)
+                    if let Some((position_matrix, realness, canonicality)) =
+                        new_localising_moment_matrix.get_mut(&monomial).map_err(PyKeyError::new_err)?
                     {
-                        // Accumulate rather than insert: if `monomial` or its adjoint has already
-                        // been processed for this same (row, col), we must add to the existing
-                        // coefficient instead of overwriting it.
-                        let base = position_matrix.entry((index_row, index_col)).or_insert(Scalar::zero());
-                        *base = *base + coefficient;
+                        match (realness, canonicality) {
+                            (Realness::Real, _) => {
+                                let base_entry =
+                                    position_matrix.entry((index_row, index_col)).or_insert(Scalar::zero());
+                                *base_entry = *base_entry + coefficient;
 
-                        // On the diagonal the mirror position coincides with the base, so writing
-                        // it again would double-count.
-                        if index_row != index_col {
-                            let mirror = if let Some(position_matrix_conj) = position_matrix_conj {
-                                position_matrix_conj.entry((index_col, index_row)).or_insert(Scalar::zero())
-                            } else {
-                                position_matrix.entry((index_col, index_row)).or_insert(Scalar::zero())
-                            };
-                            *mirror = *mirror + coefficient.conjugate();
-                        }
+                                // On the diagonal the symmetric position coincides with the base one,
+                                // so accumulating it again would double-count the coefficient
+                                if index_row != index_col {
+                                    let symmetric_entry =
+                                        position_matrix.entry((index_col, index_row)).or_insert(Scalar::zero());
+                                    *symmetric_entry = *symmetric_entry + coefficient.conjugate();
+                                }
+                            }
+                            // new_polynomial is Hermitian, so for complex-valued monomials, the adjoint of a canonical
+                            // monomial is guaranteed to appear if the canonical monomial appears. However, it may
+                            // appear in the bottom triangular part of the matrix. As such, we should just check that
+                            // whenever an entry already exists, it's consistent with what we'd like to insert.
+                            (Realness::Complex, Canonicality::Canonical) => {
+                                match position_matrix.entry((index_row, index_col)) {
+                                    Entry::Vacant(vacant_entry) => {
+                                        vacant_entry.insert(coefficient);
+                                    }
+                                    Entry::Occupied(occupied_entry) => {
+                                        let incoming: Complex<f64> = coefficient.into();
+                                        let existing: Complex<f64> = (*occupied_entry.get()).into();
+                                        if (existing - incoming).norm()
+                                            > 1e-9 * existing.norm().max(incoming.norm()).max(1.0)
+                                        {
+                                            return Err(PyRuntimeError::new_err(format!(
+                                                "The position ({}, {}) has been visited twice for the monomial {} \
+                                                using different coefficients ({} and {}). This is likely an error on \
+                                                our part, so feel free to open an issue about this!",
+                                                index_row,
+                                                index_col,
+                                                monomial,
+                                                coefficient,
+                                                occupied_entry.get()
+                                            )));
+                                        }
+                                    }
+                                }
+                            }
+                            (Realness::Complex, Canonicality::Adjoint) => {
+                                match position_matrix.entry((index_col, index_row)) {
+                                    Entry::Vacant(vacant_entry) => {
+                                        vacant_entry.insert(coefficient.conjugate());
+                                    }
+                                    Entry::Occupied(occupied_entry) => {
+                                        let incoming: Complex<f64> = coefficient.conjugate().into();
+                                        let existing: Complex<f64> = (*occupied_entry.get()).into();
+                                        if (existing - incoming).norm()
+                                            > 1e-9 * existing.norm().max(incoming.norm()).max(1.0)
+                                        {
+                                            return Err(PyRuntimeError::new_err(format!(
+                                                "The position ({}, {}) has been visited twice for the monomial {} \
+                                                using different coefficients ({} and {}). This is likely an error on \
+                                                our part, so feel free to open an issue about this!",
+                                                index_row,
+                                                index_col,
+                                                monomial,
+                                                coefficient,
+                                                occupied_entry.get()
+                                            )));
+                                        }
+                                    }
+                                }
+                            }
+                        };
                     } else {
                         // Use the moment matrix's canonical form as the key so that the localising
                         // matrix and the moment matrix agree on which form (monomial vs. adjoint)
-                        // identifies each equivalence class.
-                        let canonical_info = moment_matrix
-                            .get_canonical(&monomial, self.substitution_strategy, &self.substitutions)
-                            .ok();
-                        let (key, new_entry) = match canonical_info {
-                            // Real entry (whether known via the moment matrix or implied by a
-                            // real-valued problem): single matrix, both (row, col) and (col, row)
-                            // populated.
-                            Some((canonical, _, true)) => (
-                                canonical,
-                                (
-                                    BTreeMap::from([
-                                        ((index_row, index_col), coefficient),
-                                        ((index_col, index_row), coefficient.conjugate()),
-                                    ]),
-                                    None,
-                                ),
-                            ),
-                            // Complex entry, monomial is canonical
-                            Some((canonical, false, false)) => (
-                                canonical,
-                                (
-                                    BTreeMap::from([((index_row, index_col), coefficient)]),
-                                    Some(BTreeMap::from([((index_col, index_row), coefficient.conjugate())])),
-                                ),
-                            ),
-                            // Complex entry, monomial is the adjoint of the canonical form
-                            Some((canonical, true, false)) => (
-                                canonical,
-                                (
-                                    BTreeMap::from([((index_col, index_row), coefficient.conjugate())]),
-                                    Some(BTreeMap::from([((index_row, index_col), coefficient)])),
-                                ),
-                            ),
-                            None => {
-                                return Err(PyValueError::new_err(format!(
-                                    "Couldn't find the monomial {} in the moment matrix index.",
-                                    monomial
-                                )));
+                        // identifies each equivalence class. This also allows us to get the
+                        // realness of this monomial
+                        let (canonical, canonicality, realness) =
+                            moment_matrix.get_canonical(&monomial).map_err(PyKeyError::new_err)?;
+
+                        let position_matrix = match (realness, canonicality) {
+                            (Realness::Real, _) => BTreeMap::from([
+                                ((index_row, index_col), coefficient),
+                                ((index_col, index_row), coefficient.conjugate()),
+                            ]),
+                            (Realness::Complex, Canonicality::Canonical) => {
+                                BTreeMap::from([((index_row, index_col), coefficient)])
+                            }
+                            (Realness::Complex, Canonicality::Adjoint) => {
+                                BTreeMap::from([((index_col, index_row), coefficient.conjugate())])
                             }
                         };
+
                         new_localising_moment_matrix
-                            .insert(key, new_entry, self.substitution_strategy, &self.substitutions)
+                            .insert(
+                                canonical,
+                                position_matrix,
+                                realness,
+                                self.substitution_strategy,
+                                &self.substitutions,
+                            )
                             .map_err(PyValueError::new_err)?;
                     }
                 }
@@ -1608,5 +1717,78 @@ where
         }
 
         Ok(new_localising_moment_matrix)
+    }
+
+    fn get_localizing_moment_equalities(
+        &self,
+        polynomial: &Polynomial<Monomial<Data>, Scalar>,
+        generating_set: &[Monomial<Data>],
+        verbosity: u8,
+        top_bar: bool,
+    ) -> PyResult<OperatorEqualityAsMoments<Monomial<Data>, Scalar>>
+    where
+        Monomial<Data>: Display + RewritingTrait<Monomial<Data>>,
+        Polynomial<Monomial<Data>, Scalar>: Display,
+    {
+        let size = generating_set.len();
+
+        // If the polynomial is Hermitian, we only need to consider the upper triangular part of the matrix
+        let hermiticity = if (polynomial - polynomial.adjoint())
+            .rewrite(self.substitution_strategy, &self.substitutions)
+            .map_err(PyValueError::new_err)?
+            .is_zero()
+        {
+            Hermiticity::Hermitian
+        } else {
+            Hermiticity::NonHermitian
+        };
+
+        let mut moment_equalities = Vec::with_capacity(if hermiticity == Hermiticity::Hermitian {
+            (generating_set.len() * (generating_set.len() + 1)) / 2
+        } else {
+            generating_set.len().pow(2)
+        });
+
+        let monomials_iterator_rows = if verbosity > 0 {
+            itertools::Either::Left(tqdm!(
+                generating_set.iter().enumerate(),
+                desc = "Filling localising matrix rows",
+                position = if top_bar { 2 } else { 1 },
+                leave = false,
+                total = size
+            ))
+        } else {
+            itertools::Either::Right(generating_set.iter().enumerate())
+        };
+
+        for (index_row, operator_row) in monomials_iterator_rows {
+            // Slicing rather than `skip` keeps this at n*(n+1)/2 instead of n^2.
+            let monomials_iterator_cols = if hermiticity == Hermiticity::Hermitian {
+                itertools::Either::Left(generating_set[index_row..].iter())
+            } else {
+                itertools::Either::Right(generating_set.iter())
+            };
+
+            // Computed once per row instead of once per cell. The multiplication below consumes it, so
+            // each cell clones it, which is cheaper than taking the adjoint again
+            let operator_row_adjoint = operator_row.adjoint();
+
+            for operator_col in monomials_iterator_cols {
+                let operator_row_adjoint = operator_row_adjoint.clone();
+                trace!(
+                    "Rewriting {} * {} * {}, before adding it as a moment equality.",
+                    operator_row_adjoint, polynomial, operator_col
+                );
+                let intermediate = (operator_row_adjoint * polynomial).map_err(PyValueError::new_err)?;
+                let new_polynomial = (intermediate * operator_col)
+                    .map_err(PyValueError::new_err)?
+                    .rewrite(self.substitution_strategy, &self.substitutions)
+                    .map_err(PyValueError::new_err)?;
+                trace!("Adding the rewritten polynomial {} to the moment equalities.", new_polynomial);
+                moment_equalities.push(new_polynomial);
+            }
+        }
+
+        Ok((polynomial.clone(), moment_equalities, hermiticity))
     }
 }

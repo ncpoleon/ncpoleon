@@ -3,7 +3,7 @@ from math import sqrt
 import pytest
 from ncpoleon import generate_noncommutative_variables, get_relaxation, solve
 
-from .utils import SOLVERS, reduce_sos_decomposition
+from .utils import SOLVERS, consistency_check
 
 
 def _chsh_variables():
@@ -59,4 +59,4 @@ def test_chsh_uniform_solve(benchmark, chsh_sdp, solver, use_primal):
     sdp, obj = chsh_sdp
     sol = benchmark(solve, sdp, "max", force_primal=use_primal, solver=solver)
     assert sol.value == pytest.approx(3 * sqrt(3) / 2)
-    assert (sdp.rewrite(reduce_sos_decomposition(sol.get_sos_decomposition()) + obj)).is_zero(1e-7)
+    consistency_check(sdp, sol, objective_sense="max", sos_tol=1e-07)

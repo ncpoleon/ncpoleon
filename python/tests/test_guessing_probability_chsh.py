@@ -3,7 +3,7 @@ from math import sqrt
 import pytest
 from ncpoleon import generate_noncommutative_variables, get_relaxation, solve
 
-from .utils import SOLVERS, reduce_sos_decomposition
+from .utils import SOLVERS, consistency_check
 
 
 def _guessing_probability_chsh_params(w):
@@ -62,4 +62,4 @@ def test_guessing_probability_chsh_solve(benchmark, solver, use_primal, level, w
     else:
         assert sol.value == pytest.approx((1 + sqrt(2 - (w**2) / 4)) / 2)
 
-    assert (sdp.rewrite(reduce_sos_decomposition(sol.get_sos_decomposition()) + obj)).is_zero(1e-7)
+    consistency_check(sdp, sol, objective_sense="max", sos_tol=1e-07)
