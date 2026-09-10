@@ -42,7 +42,7 @@ Homepage = "https://github.com/ncpoleon/ncpoleon/"
 
 [project.optional-dependencies]
 mosek = ["mosek>=11.2.0"]
-picos = ["picos>=2.6.2", "scipy>=1.17.1"]
+picos = ["picos>=2.6.2"]
 
 [dependency-groups]
 # MOSEK is deliberately absent here: it belongs to the `mosek` extra alone. A
