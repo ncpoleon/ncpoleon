@@ -114,6 +114,24 @@ jobs:
           UV_PYTHON: ${{ steps.native-python.outputs.python-path || matrix.python-version }}
         run: uv run ${{ matrix.extras }} --dev --config-setting 'build-args=--profile=dev' pytest -x
 
+  pytest-lowest:
+    name: pytest (dependency floors)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        with:
+          key: lowest
+      - uses: astral-sh/setup-uv@v10.0.1
+      - name: Python tests
+        env:
+          UV_RESOLUTION: lowest-direct
+          UV_PYTHON: "3.11"
+        run: uv run --all-extras --dev --config-setting 'build-args=--profile=dev' pytest -x
+
   cargo-test:
     name: cargo test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
