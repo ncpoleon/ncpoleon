@@ -36,8 +36,6 @@ updates:
           - "major"
           - "minor"
           - "patch"
-  # The "uv" ecosystem is used rather than "pip" because the lockfile is uv's.
-  #
   # `lockfile-only` is what keeps this from eroding the supported version range.
   # The default strategy would rewrite the constraints in pyproject.toml, so
   # `numpy>=2.3.0` would become `numpy>=2.4.6` and every user still on 2.3 would
