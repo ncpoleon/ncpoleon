@@ -94,7 +94,7 @@ jobs:
           # Without this every combination shares one cache entry and they
           # overwrite each other's.
           key: ${{ matrix.os }}-${{ matrix.python-version }}
-      - uses: astral-sh/setup-uv@v10.0.1
+      - uses: astral-sh/setup-uv@v10.1.0
       # uv downloads an interpreter only when no installed one matches, and its
       # managed builds for this runner are x86_64. Taking one would make maturin
       # target `x86_64-pc-windows-msvc` against an aarch64 host toolchain, which
@@ -125,7 +125,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
           key: lowest
-      - uses: astral-sh/setup-uv@v10.0.1
+      - uses: astral-sh/setup-uv@v10.1.0
       - name: Python tests
         env:
           UV_RESOLUTION: lowest-direct
