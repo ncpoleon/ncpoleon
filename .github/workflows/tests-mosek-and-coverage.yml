@@ -37,7 +37,7 @@ jobs:
         with:
           components: llvm-tools-preview
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
-      - uses: taiki-e/install-action@v2.87.10
+      - uses: taiki-e/install-action@v2.87.14
         with:
           tool: cargo-llvm-cov
       - uses: astral-sh/setup-uv@v10.1.0
@@ -55,14 +55,14 @@ jobs:
           MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run --all-extras --dev --config-setting 'build-args=--profile=dev' pytest --cov=ncpoleon --cov-report xml
           cargo llvm-cov report --lcov --output-path coverage.lcov
       - name: Upload Rust coverage
-        uses: codecov/codecov-action@v7.0.0
+        uses: codecov/codecov-action@v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.lcov
           flags: rust
           disable_search: true
       - name: Upload Python coverage
-        uses: codecov/codecov-action@v7.0.0
+        uses: codecov/codecov-action@v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.xml
@@ -94,7 +94,7 @@ jobs:
         with:
           components: llvm-tools-preview
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
-      - uses: taiki-e/install-action@v2.87.10
+      - uses: taiki-e/install-action@v2.87.14
         with:
           tool: cargo-llvm-cov
       - uses: astral-sh/setup-uv@v10.1.0
@@ -112,7 +112,7 @@ jobs:
           MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run --all-extras --dev --config-setting 'build-args=--profile=dev' pytest --cov=ncpoleon --cov-report xml
           cargo llvm-cov report --lcov --output-path coverage.lcov
       - name: Upload Rust coverage
-        uses: codecov/codecov-action@v7.0.0
+        uses: codecov/codecov-action@v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           override_pr: ${{ github.event.number }}
@@ -121,7 +121,7 @@ jobs:
           flags: rust
           disable_search: true
       - name: Upload Python coverage
-        uses: codecov/codecov-action@v7.0.0
+        uses: codecov/codecov-action@v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           override_pr: ${{ github.event.number }}
