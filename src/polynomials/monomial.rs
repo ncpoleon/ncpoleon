@@ -4,6 +4,7 @@ use std::ops::{Add, Mul, Neg, Sub};
 
 use num_traits::{Pow, Zero};
 use pyo3::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use crate::polynomials::operator::Operator;
 use crate::polynomials::polynomial::{Polynomial, PolynomialDtype};
@@ -46,7 +47,8 @@ impl<Data: HasAMomentMatrixId> HasAMomentMatrixId for Monomial<Data> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(transparent)]
 pub(crate) struct Monomial<Data> {
     pub(crate) data: Data,
 }
@@ -56,7 +58,7 @@ pub(crate) struct Monomial<Data> {
 /// The strategy controls how the substitution rules are applied when
 /// simplifying or normalizing monomials.
 #[pyclass(frozen, module = "ncpoleon.polynomials", from_py_object)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 pub(crate) enum RewritingStrategy {
     /// Do not perform any substitution
     None,

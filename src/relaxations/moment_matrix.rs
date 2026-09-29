@@ -4,6 +4,7 @@ use std::fmt::Display;
 use num_complex::Complex;
 use pyo3::exceptions::PyKeyError;
 use pyo3::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use crate::polynomials::commutative_polynomials::monomials::commutative_monomial::{
     PythonCommutativeMonomial, RustCommutativeMonomial,
@@ -21,14 +22,14 @@ type PositionMatrixMutTriple<'a, Scalar> = (&'a mut PositionMatrix<Scalar>, Real
 type PositionMatrixRowColDataFormat<Scalar> = (Vec<usize>, Vec<usize>, Vec<Scalar>);
 
 #[pyclass(frozen, module = "ncpoleon.relaxations", eq, eq_int, skip_from_py_object)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub(super) enum Realness {
     Real,
     Complex,
 }
 
 #[pyclass(frozen, module = "ncpoleon.relaxations", eq, eq_int, skip_from_py_object)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub(super) enum Canonicality {
     Canonical,
     Adjoint,
@@ -52,7 +53,7 @@ fn position_matrix_to_row_col_data_format<Scalar: PolynomialDtype>(
     (rows, cols, data)
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub(super) struct RustMomentMatrix<Scalar: PolynomialDtype, MonomialType: AdjointTrait + Ord> {
     pub(super) associated_id: u8,
     /// The realness is needed to interpret the adjoints. For instance, if the problem is

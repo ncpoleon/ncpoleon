@@ -2,6 +2,7 @@ use num_complex::Complex;
 use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use crate::polynomials::commutative_polynomials::monomials::commutative_monomial::RustCommutativeMonomial;
 use crate::polynomials::commutative_polynomials::polynomials::commutative_polynomial::{
@@ -27,7 +28,7 @@ pub(crate) enum ConstraintSide<MonomialType: Ord, Scalar: PolynomialDtype> {
 }
 
 #[pyclass(frozen, module = "ncpoleon.relaxations", eq, eq_int, skip_from_py_object)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub(super) enum Hermiticity {
     Hermitian,
     NonHermitian,
