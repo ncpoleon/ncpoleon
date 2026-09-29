@@ -208,7 +208,6 @@ mosek = [
 ]
 picos = [
     { name = "picos" },
-    { name = "scipy" },
 ]
 
 [package.dev-dependencies]
@@ -229,7 +228,6 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.3.0" },
     { name = "picos", marker = "extra == 'picos'", specifier = ">=2.6.2" },
     { name = "scipy", specifier = ">=1.17.1" },
-    { name = "scipy", marker = "extra == 'picos'", specifier = ">=1.17.1" },
 ]
 provides-extras = ["mosek", "picos"]
 
