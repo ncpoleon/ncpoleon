@@ -4,6 +4,8 @@ from typing import Any, ClassVar, Generic, Literal, TypeAlias, final, overload
 
 __all__ = [
     "get_relaxation",
+    "save_relaxation",
+    "load_relaxation",
     "Realness",
     "Canonicality",
     "Hermiticity",
@@ -169,7 +171,6 @@ class ComplexValuedNonCommutativeMomentMatrix(MomentMatrix[NonCommutativeMonomia
     ) -> tuple[NonCommutativeMonomial, Canonicality, Realness]: ...
 
 class BaseSdpRelaxation(Generic[MonomialType, Scalar]):
-    def save(self, path: str | PathLike[str], format: Literal["postcard", "ron"] = "postcard") -> None: ...
     @property
     def objective(self) -> Polynomial[MonomialType, Scalar]: ...
     # `dict` and `list` are invariant, so these three are declared as the read-only views they are
@@ -222,10 +223,6 @@ class BaseSdpRelaxation(Generic[MonomialType, Scalar]):
 # Unlike every other class here, the four relaxations are `#[pyclass(subclass)]`, so Python code
 # may subclass them and they are deliberately not `@final`.
 class RealValuedCommutativeSdpRelaxation(BaseSdpRelaxation[CommutativeMonomial, float]):
-    @staticmethod
-    def load(
-        path: str | PathLike[str], format: Literal["postcard", "ron"] = "postcard"
-    ) -> RealValuedCommutativeSdpRelaxation: ...
     @property
     def is_real(self) -> Literal[True]: ...
     @property
@@ -247,10 +244,6 @@ class RealValuedCommutativeSdpRelaxation(BaseSdpRelaxation[CommutativeMonomial, 
     def rewrite(self, mon_or_poly: Polynomial[CommutativeMonomial, float]) -> RealCoefficientsCommutativePolynomial: ...
 
 class ComplexValuedCommutativeSdpRelaxation(BaseSdpRelaxation[CommutativeMonomial, complex]):
-    @staticmethod
-    def load(
-        path: str | PathLike[str], format: Literal["postcard", "ron"] = "postcard"
-    ) -> ComplexValuedCommutativeSdpRelaxation: ...
     @property
     def is_real(self) -> Literal[False]: ...
     @property
@@ -276,10 +269,6 @@ class ComplexValuedCommutativeSdpRelaxation(BaseSdpRelaxation[CommutativeMonomia
     ) -> ComplexCoefficientsCommutativePolynomial: ...
 
 class RealValuedNonCommutativeSdpRelaxation(BaseSdpRelaxation[NonCommutativeMonomial, float]):
-    @staticmethod
-    def load(
-        path: str | PathLike[str], format: Literal["postcard", "ron"] = "postcard"
-    ) -> RealValuedNonCommutativeSdpRelaxation: ...
     @property
     def is_real(self) -> Literal[True]: ...
     @property
@@ -307,10 +296,6 @@ class RealValuedNonCommutativeSdpRelaxation(BaseSdpRelaxation[NonCommutativeMono
     ) -> RealCoefficientsNonCommutativePolynomial: ...
 
 class ComplexValuedNonCommutativeSdpRelaxation(BaseSdpRelaxation[NonCommutativeMonomial, complex]):
-    @staticmethod
-    def load(
-        path: str | PathLike[str], format: Literal["postcard", "ron"] = "postcard"
-    ) -> ComplexValuedNonCommutativeSdpRelaxation: ...
     @property
     def is_real(self) -> Literal[False]: ...
     @property
@@ -435,3 +420,14 @@ def get_relaxation(
     verbosity: Literal[0] | Literal[1] | Literal[2] | Literal[3] = 0,
     check_uniqueness_with_length: bool = True,
 ) -> ComplexValuedNonCommutativeSdpRelaxation: ...
+def save_relaxation(
+    relaxation: BaseSdpRelaxation[Any, Any], path: str | PathLike[str], format: Literal["postcard", "ron"] = "postcard"
+) -> None: ...
+def load_relaxation(
+    path: str | PathLike[str], format: Literal["postcard", "ron"] = "postcard"
+) -> (
+    RealValuedCommutativeSdpRelaxation
+    | ComplexValuedCommutativeSdpRelaxation
+    | RealValuedNonCommutativeSdpRelaxation
+    | ComplexValuedNonCommutativeSdpRelaxation
+): ...

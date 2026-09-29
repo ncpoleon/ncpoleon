@@ -1,7 +1,14 @@
 from math import sqrt
 
 import pytest
-from ncpoleon import generate_commutative_variables, generate_noncommutative_variables, get_relaxation, solve
+from ncpoleon import (
+    generate_commutative_variables,
+    generate_noncommutative_variables,
+    get_relaxation,
+    load_relaxation,
+    save_relaxation,
+    solve,
+)
 
 from .test_simple_commutative_problem import _simple_commutative_params
 from .test_simple_complex_problem import _simple_complex_params
@@ -50,8 +57,8 @@ def _snapshot(sdp):
 def test_save_load_round_trip(tmp_path, name, fmt):
     sdp = _relaxations()[name]
     path = tmp_path / f"relaxation.{fmt}"
-    sdp.save(path, format=fmt)
-    loaded = type(sdp).load(path, format=fmt)
+    save_relaxation(sdp, path, format=fmt)
+    loaded = load_relaxation(path, format=fmt)
     assert type(loaded) is type(sdp)
     assert _snapshot(loaded) == _snapshot(sdp)
 
@@ -94,23 +101,41 @@ def _solvable_relaxations():
 def test_loaded_relaxation_solves(tmp_path, name, fmt, solver):
     sdp, sense, expected = _solvable_relaxations()[name]
     path = tmp_path / f"relaxation.{fmt}"
-    sdp.save(path, format=fmt)
-    loaded = type(sdp).load(path, format=fmt)
+    save_relaxation(sdp, path, format=fmt)
+    loaded = load_relaxation(path, format=fmt)
     sol = solve(loaded, sense, solver=solver)
     assert sol.value == pytest.approx(expected, abs=1e-6)
     consistency_check(loaded, sol, objective_sense=sense, sos_tol=1e-07)
 
 
+def test_load_unknown_class_fails(tmp_path):
+    # Well-formed data under an unknown class name, so only the class lookup can reject it
+    path = tmp_path / "relaxation.ron"
+    save_relaxation(_relaxations()["real_commutative"], path, format="ron")
+    path.write_text(path.read_text().replace('("', '("Other', 1))
+    with pytest.raises(ValueError, match="holds a Other.*which isn't a relaxation class"):
+        load_relaxation(path, format="ron")
+
+
 @pytest.mark.parametrize("fmt", ["postcard", "ron"])
-def test_load_into_wrong_class_fails(tmp_path, fmt):
-    relaxations = _relaxations()
+def test_load_corrupted_file_fails(tmp_path, fmt):
     path = tmp_path / "relaxation"
-    relaxations["real_commutative"].save(str(path), format=fmt)
-    with pytest.raises(ValueError):
-        type(relaxations["complex_noncommutative"]).load(path, format=fmt)
+    save_relaxation(_relaxations()["real_commutative"], path, format=fmt)
+    path.write_bytes(path.read_bytes()[:-10])
+    with pytest.raises(ValueError, match="Couldn't load a relaxation"):
+        load_relaxation(path, format=fmt)
+
+
+def test_save_non_relaxation_fails(tmp_path):
+    with pytest.raises(TypeError, match="Expected an SDP relaxation, got int"):
+        save_relaxation(1, tmp_path / "relaxation")
 
 
 def test_unknown_format(tmp_path):
     sdp = _relaxations()["real_commutative"]
+    path = tmp_path / "relaxation"
     with pytest.raises(ValueError, match="Unknown format"):
-        sdp.save(tmp_path / "relaxation", format="json")
+        save_relaxation(sdp, path, format="json")
+    save_relaxation(sdp, path)
+    with pytest.raises(ValueError, match="Unknown format"):
+        load_relaxation(path, format="json")
