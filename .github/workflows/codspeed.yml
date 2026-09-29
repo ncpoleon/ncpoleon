@@ -54,7 +54,27 @@ jobs:
       # and rustc are not executed under the measurement harness.
       - name: Build the extension module
         run: uv sync --all-extras --dev --config-setting 'build-args=--profile=release'
-      # No benchmark in this selection calls `solve`, so MOSEK is not needed here.
+      # Same license handling as the walltime job below; see the comment there.
+      # The small `solve` benchmarks live in this selection, and their `mosek-*`
+      # parametrisations skip themselves without a license.
+      - name: Check out the MOSEK license
+        env:
+          MSK_LICENSE: ${{ secrets.MSK_LICENSE }}
+          NO_LICENSE_EXPECTED: ${{ github.event_name == 'pull_request' && (github.event.pull_request.head.repo.fork || github.actor == 'dependabot[bot]') }}
+        run: |
+          if [ -z "$MSK_LICENSE" ]; then
+            if [ "$NO_LICENSE_EXPECTED" != "true" ]; then
+              echo "::error::MSK_LICENSE is required for benchmark runs that can read the Actions secrets"
+              exit 1
+            fi
+            echo "No MOSEK license available (fork or Dependabot pull request): the MOSEK-backed benchmarks will skip themselves." \
+              >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "$MSK_LICENSE" > "$HOME/mosek.lic"
+          echo "MOSEKLM_LICENSE_FILE=$HOME/mosek.lic" >> "$GITHUB_ENV"
+          MOSEKLM_LICENSE_FILE="$HOME/mosek.lic" uv run --no-sync python -c \
+            "from ncpoleon.utils import is_mosek_available; assert is_mosek_available(), 'MOSEK license checkout failed'"
       - name: Run the benchmarks
         uses: CodSpeedHQ/action@373d6868929f444bc08d901fd0eb0ad52a8875ea
         with:
