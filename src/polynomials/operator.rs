@@ -1,10 +1,13 @@
 use std::cmp::Ordering;
 use std::ops::{Add, Sub};
 
+use serde::{Deserialize, Serialize};
+
 use crate::polynomials::monomial::{HasAMomentMatrixId, Monomial};
 use crate::polynomials::polynomial::{Polynomial, PolynomialDtype};
 
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug, Copy, Serialize, Deserialize)]
+#[serde(transparent)]
 pub(crate) struct Operator<Id> {
     pub(crate) id: Id,
 }

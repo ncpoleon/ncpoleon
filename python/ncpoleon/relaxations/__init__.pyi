@@ -1,8 +1,11 @@
 from collections.abc import Mapping, Sequence
+from os import PathLike
 from typing import Any, ClassVar, Generic, Literal, TypeAlias, final, overload
 
 __all__ = [
     "get_relaxation",
+    "save_relaxation",
+    "load_relaxation",
     "Realness",
     "Canonicality",
     "Hermiticity",
@@ -417,3 +420,14 @@ def get_relaxation(
     verbosity: Literal[0] | Literal[1] | Literal[2] | Literal[3] = 0,
     check_uniqueness_with_length: bool = True,
 ) -> ComplexValuedNonCommutativeSdpRelaxation: ...
+def save_relaxation(
+    relaxation: BaseSdpRelaxation[Any, Any], path: str | PathLike[str], format: Literal["postcard", "ron"] = "postcard"
+) -> None: ...
+def load_relaxation(
+    path: str | PathLike[str], format: Literal["postcard", "ron"] = "postcard"
+) -> (
+    RealValuedCommutativeSdpRelaxation
+    | ComplexValuedCommutativeSdpRelaxation
+    | RealValuedNonCommutativeSdpRelaxation
+    | ComplexValuedNonCommutativeSdpRelaxation
+): ...

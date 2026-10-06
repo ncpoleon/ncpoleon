@@ -12,6 +12,7 @@ use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyNone;
 use rustc_hash::FxHasher;
+use serde::{Deserialize, Serialize};
 
 use crate::polynomials::commutative_polynomials::operators::commutative_operator::{
     PythonCommutativeOperator, RustCommutativeOperator,
@@ -26,7 +27,7 @@ use crate::polynomials::monomial::{
 use crate::relaxations::constraint::{ConstraintKind, make_commutative_constraint};
 use crate::utils::merge_btreemaps::merge_btreemaps;
 
-#[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
+#[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Serialize, Deserialize)]
 pub(crate) struct CommutativeMonomialDataWithMomentMatrixIndex {
     pub(crate) inner_data: BTreeMap<RustCommutativeOperator, u8>,
     pub(crate) moment_matrix_id: u8,
