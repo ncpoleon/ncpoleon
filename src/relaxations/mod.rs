@@ -22,5 +22,7 @@ pub fn relaxations(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<sdp_relaxation::PythonRealValuedNonCommutativeSdpRelaxation>()?;
     m.add_class::<sdp_relaxation::PythonComplexValuedNonCommutativeSdpRelaxation>()?;
     m.add_function(wrap_pyfunction!(sdp_relaxation::get_relaxation, m)?)?;
+    m.add_function(wrap_pyfunction!(sdp_relaxation::save_relaxation, m)?)?;
+    m.add_function(wrap_pyfunction!(sdp_relaxation::load_relaxation, m)?)?;
     Ok(())
 }

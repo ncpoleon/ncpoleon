@@ -16,3 +16,5 @@ from ncpoleon.relaxations import RealValuedNonCommutativeMomentMatrix as RealVal
 from ncpoleon.relaxations import RealValuedNonCommutativeSdpRelaxation as RealValuedNonCommutativeSdpRelaxation
 from ncpoleon.relaxations import Realness as Realness
 from ncpoleon.relaxations import get_relaxation as get_relaxation
+from ncpoleon.relaxations import load_relaxation as load_relaxation
+from ncpoleon.relaxations import save_relaxation as save_relaxation

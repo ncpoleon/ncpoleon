@@ -11,6 +11,7 @@ use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyNone;
 use rustc_hash::FxHasher;
+use serde::{Deserialize, Serialize};
 
 use crate::polynomials::monomial::{AdjointTrait, HasAMomentMatrixId, OneWithMomentMatrixId};
 use crate::polynomials::noncommutative_polynomials::monomials::noncommutative_monomial::{
@@ -25,7 +26,7 @@ use crate::polynomials::polynomial::PolynomialDtype;
 use crate::polynomials::utils::add::manage_entry;
 use crate::relaxations::constraint::{ConstraintKind, make_noncommutative_constraint};
 
-#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Debug)]
+#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Debug, Serialize, Deserialize)]
 pub(crate) struct NonCommutativeOperatorIdentifier {
     pub(crate) index: u8,
     pub(crate) label: char, /* We could convert to an Arc<str>, but we lose in performance by
