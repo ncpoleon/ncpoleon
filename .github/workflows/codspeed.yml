@@ -22,14 +22,16 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Pushes run unattended; only pull requests wait for a reviewer.
   approve-benchmarks:
+    if: github.event_name == 'pull_request'
     environment:
       name: Run walltime benchmarks
     runs-on: ubuntu-latest
 
     steps:
-      - name: Approve walltime benchmarks
-        run: echo Only run walltime benchmarks if required.
+      - name: Approve benchmarks
+        run: echo Only run benchmarks if required.
 
   benchmarks:
     name: Run benchmarks
@@ -37,6 +39,9 @@ jobs:
     strategy:
       matrix:
         shard: [1, 2, 3]
+    needs: [approve-benchmarks]
+    # A skipped approval (push) must not skip this job; a rejected one must.
+    if: ${{ !failure() && !cancelled() }}
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -89,6 +94,7 @@ jobs:
       matrix:
         shard: [1, 2, 3]
     needs: [approve-benchmarks]
+    if: ${{ !failure() && !cancelled() }}
     timeout-minutes: 90 # The Codspeed runner macro hard stops after one hour anyway
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
