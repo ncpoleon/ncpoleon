@@ -1732,18 +1732,27 @@ where
     {
         let size = generating_set.len();
 
-        // If the polynomial is Hermitian, we only need to consider the upper triangular part of the matrix
-        let hermiticity = if (polynomial - polynomial.adjoint())
+        // Entry (j, i) of the localising matrix is the conjugate of <m_i^† g^† m_j>. When g^† = ±g, it is ± the
+        // conjugate of entry (i, j), so the upper triangular part of the matrix is enough. Emitting the lower one
+        // too would hand the solver linearly dependent equalities, which CVXOPT cannot factor
+        let adjoint = polynomial.adjoint();
+        let hermiticity = if (polynomial - &adjoint)
             .rewrite(self.substitution_strategy, &self.substitutions)
             .map_err(PyValueError::new_err)?
             .is_zero()
         {
             Hermiticity::Hermitian
+        } else if (polynomial + &adjoint)
+            .rewrite(self.substitution_strategy, &self.substitutions)
+            .map_err(PyValueError::new_err)?
+            .is_zero()
+        {
+            Hermiticity::AntiHermitian
         } else {
             Hermiticity::NonHermitian
         };
 
-        let mut moment_equalities = Vec::with_capacity(if hermiticity == Hermiticity::Hermitian {
+        let mut moment_equalities = Vec::with_capacity(if hermiticity != Hermiticity::NonHermitian {
             (generating_set.len() * (generating_set.len() + 1)) / 2
         } else {
             generating_set.len().pow(2)
@@ -1763,7 +1772,7 @@ where
 
         for (index_row, operator_row) in monomials_iterator_rows {
             // Slicing rather than `skip` keeps this at n*(n+1)/2 instead of n^2.
-            let monomials_iterator_cols = if hermiticity == Hermiticity::Hermitian {
+            let monomials_iterator_cols = if hermiticity != Hermiticity::NonHermitian {
                 itertools::Either::Left(generating_set[index_row..].iter())
             } else {
                 itertools::Either::Right(generating_set.iter())
