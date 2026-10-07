@@ -68,12 +68,9 @@ class PicosSolution(BaseSolution[MonomialType, Scalar]):
 
         for id in self._moment_matrices:
             if self._primal:
-                res[id] = np.array(self._psd_matrices[f"MM-{id}"].value)
+                res[id] = np.atleast_2d(np.array(self._psd_matrices[f"MM-{id}"].value))
             else:
-                res[id] = np.array(self._constraints[f"Y_{id}"].dual).conj()
-
-            if not res[id].shape:  # For 1x1 constraints or variables, Picos returns a 0D array
-                res[id] = res[id].reshape((1, 1))
+                res[id] = np.atleast_2d(np.array(self._constraints[f"Y_{id}"].dual).conj())
 
         return res
 
@@ -85,12 +82,9 @@ class PicosSolution(BaseSolution[MonomialType, Scalar]):
 
         for id in self._moment_matrices:
             if self._primal:
-                res[id] = np.array(self._constraints[f"MM-{id}"].dual).conj()
+                res[id] = np.atleast_2d(np.array(self._constraints[f"MM-{id}"].dual).conj())
             else:
-                res[id] = np.array(self._problem.get_variable(f"Y_{id}").value)
-
-            if not res[id].shape:  # For 1x1 constraints or variables, Picos returns a 0D array
-                res[id] = res[id].reshape((1, 1))
+                res[id] = np.atleast_2d(np.array(self._problem.get_variable(f"Y_{id}").value))
 
         return res
 
@@ -173,12 +167,9 @@ class PicosSolution(BaseSolution[MonomialType, Scalar]):
 
             for index, (inequality_constraint, generating_set) in enumerate(inequalities.get(id, [])):
                 if self._primal:
-                    to_append = np.array(self._psd_matrices[f"LMMI-{id}-{index}"].value)
+                    to_append = np.atleast_2d(np.array(self._psd_matrices[f"LMMI-{id}-{index}"].value))
                 else:
-                    to_append = np.array(self._constraints[f"P_({id}, {index})"].dual).conj()
-
-                if not to_append.shape:  # For 1x1 constraints or variables, Picos returns a 0D array
-                    to_append = to_append.reshape((1, 1))
+                    to_append = np.atleast_2d(np.array(self._constraints[f"P_({id}, {index})"].dual).conj())
 
                 to_add.append((inequality_constraint, to_append, generating_set))
 
@@ -209,12 +200,9 @@ class PicosSolution(BaseSolution[MonomialType, Scalar]):
 
             for index, (inequality_constraint, generating_set) in enumerate(inequalities.get(id, [])):
                 if self._primal:
-                    to_append = np.array(self._constraints[f"LMMI-{id}-{index}"].dual).conj()
+                    to_append = np.atleast_2d(np.array(self._constraints[f"LMMI-{id}-{index}"].dual).conj())
                 else:
-                    to_append = np.array(self._problem.get_variable(f"P_({id}, {index})").value)
-
-                if not to_append.shape:  # For 1x1 constraints or variables, Picos returns a 0D array
-                    to_append = to_append.reshape((1, 1))
+                    to_append = np.atleast_2d(np.array(self._problem.get_variable(f"P_({id}, {index})").value))
 
                 to_add.append((inequality_constraint, to_append, generating_set))
 
