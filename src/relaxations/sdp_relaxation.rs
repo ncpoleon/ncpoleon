@@ -2,6 +2,7 @@ use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Display;
 use std::ops::Mul;
+use std::path::{Path, PathBuf};
 
 use itertools::Itertools;
 use kdam::tqdm;
@@ -9,9 +10,11 @@ use log::{debug, info, trace};
 use num_complex::Complex;
 use num_traits::Zero;
 use pyo3::IntoPyObjectExt;
-use pyo3::exceptions::{PyKeyError, PyNotImplementedError, PyRuntimeError, PyValueError};
+use pyo3::exceptions::{PyKeyError, PyNotImplementedError, PyRuntimeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyComplex, PyDict, PyFloat, PyInt, PyList};
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 
 use crate::polynomials::commutative_polynomials::monomials::commutative_monomial::{
     PythonCommutativeMonomial, RustCommutativeMonomial,
@@ -916,14 +919,109 @@ macro_rules! impl_sdp_relaxation_pymethods {
                     })
                     .collect()
             }
+
         }
     };
+}
+
+/// Save a relaxation to `path`, either as compact binary (`"postcard"`) or as human-readable text
+/// (`"ron"`). Files start with the relaxation class and the ncpoleon version that wrote them, so
+/// `load_relaxation` knows which class to rebuild.
+#[pyfunction]
+#[pyo3(signature = (relaxation, path, format = "postcard"))]
+pub(crate) fn save_relaxation(relaxation: &Bound<'_, PyAny>, path: PathBuf, format: &str) -> PyResult<()> {
+    macro_rules! save_as {
+        ($($class:ident),+) => {$(
+            if let Ok(relaxation) = relaxation.cast::<$class>() {
+                return write_relaxation(&relaxation.get().0, stringify!($class), &path, format);
+            }
+        )+};
+    }
+    save_as!(
+        PythonRealValuedCommutativeSdpRelaxation,
+        PythonComplexValuedCommutativeSdpRelaxation,
+        PythonRealValuedNonCommutativeSdpRelaxation,
+        PythonComplexValuedNonCommutativeSdpRelaxation
+    );
+    Err(PyTypeError::new_err(format!("Expected an SDP relaxation, got {}.", relaxation.get_type().name()?)))
+}
+
+fn write_relaxation<R: Serialize>(relaxation: &R, kind: &str, path: &Path, format: &str) -> PyResult<()> {
+    let saved = (kind, env!("CARGO_PKG_VERSION"), relaxation);
+    let bytes = match format {
+        "postcard" => postcard::to_allocvec(&saved).map_err(|e| e.to_string()),
+        "ron" => ron::ser::to_string_pretty(&saved, ron::ser::PrettyConfig::default())
+            .map(String::into_bytes)
+            .map_err(|e| e.to_string()),
+        _ => return Err(unknown_format(format)),
+    }
+    .map_err(|e| PyValueError::new_err(format!("Couldn't serialize the relaxation: {e}")))?;
+    // Write next to the destination then rename over it, so a failed write leaves any existing file intact.
+    let mut tmp = path.as_os_str().to_owned();
+    tmp.push(".tmp");
+    std::fs::write(&tmp, bytes).and_then(|()| std::fs::rename(&tmp, path)).inspect_err(|_| {
+        let _ = std::fs::remove_file(&tmp);
+    })?;
+    Ok(())
+}
+
+/// Load a relaxation previously written by `save_relaxation` with the same `format`, as whichever relaxation
+/// class it was saved from.
+#[pyfunction]
+#[pyo3(signature = (path, format = "postcard"))]
+pub(crate) fn load_relaxation(py: Python<'_>, path: PathBuf, format: &str) -> PyResult<Py<PyAny>> {
+    let bytes = std::fs::read(&path)?;
+    let decode_error = |e: String| {
+        PyValueError::new_err(format!(
+            "Couldn't load a relaxation from {} as {format}: {e}. Was it saved with this format and ncpoleon version?",
+            path.display()
+        ))
+    };
+    // Read just the header first: postcard isn't self-describing, so the class must be known to decode the rest
+    let (kind, version): (String, String) = match format {
+        "postcard" => postcard::take_from_bytes(&bytes).map(|(header, _)| header).map_err(|e| e.to_string()),
+        "ron" => ron::de::from_bytes::<(String, String, serde::de::IgnoredAny)>(&bytes)
+            .map(|(kind, version, _)| (kind, version))
+            .map_err(|e| e.to_string()),
+        _ => return Err(unknown_format(format)),
+    }
+    .map_err(decode_error)?;
+    macro_rules! load_as {
+        ($($class:ident),+) => {
+            match kind.as_str() {
+                $(stringify!($class) => $class(decode_relaxation(&bytes, format).map_err(decode_error)?).into_py_any(py),)+
+                _ => Err(PyValueError::new_err(format!(
+                    "{} holds a {kind} (saved by ncpoleon {version}), which isn't a relaxation class.",
+                    path.display()
+                ))),
+            }
+        };
+    }
+    load_as!(
+        PythonRealValuedCommutativeSdpRelaxation,
+        PythonComplexValuedCommutativeSdpRelaxation,
+        PythonRealValuedNonCommutativeSdpRelaxation,
+        PythonComplexValuedNonCommutativeSdpRelaxation
+    )
+}
+
+fn decode_relaxation<R: DeserializeOwned>(bytes: &[u8], format: &str) -> Result<R, String> {
+    let (_, _, relaxation): (String, String, R) = match format {
+        "postcard" => postcard::from_bytes(bytes).map_err(|e| e.to_string())?,
+        _ => ron::de::from_bytes(bytes).map_err(|e| e.to_string())?,
+    };
+    Ok(relaxation)
+}
+
+fn unknown_format(format: &str) -> PyErr {
+    PyValueError::new_err(format!("Unknown format {format:?}, expected \"postcard\" or \"ron\"."))
 }
 
 type PolynomialWithGeneratingSet<MonomialType, Scalar> = (Polynomial<MonomialType, Scalar>, Vec<MonomialType>);
 type OperatorEqualityAsMoments<MonomialType, Scalar> =
     (Polynomial<MonomialType, Scalar>, Vec<Polynomial<MonomialType, Scalar>>, Hermiticity);
 
+#[derive(Serialize, Deserialize)]
 pub(super) struct SdpRelaxation<MonomialType: AdjointTrait + Ord, Scalar: PolynomialDtype> {
     objective: Polynomial<MonomialType, Scalar>,
     substitutions: BTreeMap<MonomialType, MonomialType>,

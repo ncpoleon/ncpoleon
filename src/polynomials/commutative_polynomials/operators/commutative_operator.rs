@@ -10,6 +10,7 @@ use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyNone;
 use rustc_hash::FxHasher;
+use serde::{Deserialize, Serialize};
 
 use crate::polynomials::commutative_polynomials::monomials::commutative_monomial::{
     PythonCommutativeMonomial, RustCommutativeMonomial,
@@ -24,7 +25,7 @@ use crate::polynomials::polynomial::PolynomialDtype;
 use crate::polynomials::utils::add::manage_entry;
 use crate::relaxations::constraint::{ConstraintKind, make_commutative_constraint};
 
-#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Debug)]
+#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Debug, Serialize, Deserialize)]
 pub(crate) struct CommutativeOperatorIdentifier {
     index: u8,
     label: char, // We could convert to an Arc<str>, but we lose in performance by doing so
@@ -33,7 +34,7 @@ pub(crate) struct CommutativeOperatorIdentifier {
     pub(crate) is_projector: bool,
 }
 
-#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Debug)]
+#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Debug, Serialize, Deserialize)]
 pub(crate) struct CommutativeOperatorIdentifierWithMomentMatrixIndex {
     pub(crate) inner_identifier: CommutativeOperatorIdentifier,
     pub(crate) moment_matrix_id: u8,

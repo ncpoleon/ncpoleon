@@ -5,6 +5,7 @@ use std::ops::{Add, Div, Mul, Neg, Sub};
 use log::{trace, warn};
 use num_complex::Complex;
 use num_traits::{One, Pow, Zero};
+use serde::{Deserialize, Serialize};
 
 use crate::polynomials::monomial::{
     AdjointTrait, HasAMomentMatrixId, Monomial, OneWithMomentMatrixId, RewritingStrategy, RewritingTrait,
@@ -81,7 +82,9 @@ pub(crate) trait PolynomialTrait: AdjointTrait {
     fn is_real(&self) -> bool;
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+#[serde(bound(deserialize = "MonomialType: Deserialize<'de> + Ord, Scalar: Deserialize<'de>"))]
+#[serde(transparent)]
 pub(crate) struct Polynomial<MonomialType, Scalar: PolynomialDtype> {
     pub(crate) data: BTreeMap<MonomialType, Scalar>,
 }
