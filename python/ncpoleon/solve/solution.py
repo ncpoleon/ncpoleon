@@ -86,9 +86,10 @@ class BaseSolution(ABC, Generic[MonomialType, Scalar]):
         localizing_matrices_multipliers = self.localizing_matrices_hermitian_equality_multipliers_by_mm_id
         if len(localizing_matrices_multipliers) > 1:
             warnings.warn(
-                "The solution contains multiple moment matrices. The `localizing_matrices_equality_multipliers` "
-                "property will only return the equality localizing moment matrices multipliers associated to the moment"
-                " matrix of index 0. Use `localizing_matrices_equality_multipliers_by_mm_id` to access all of them.",
+                "The solution contains multiple moment matrices. The "
+                "`localizing_matrices_hermitian_equality_multipliers` property will only return the equality "
+                "localizing moment matrices multipliers associated to the moment matrix of index 0. Use "
+                "`localizing_matrices_hermitian_equality_multipliers_by_mm_id` to access all of them.",
             )
         return localizing_matrices_multipliers[0]
 
@@ -120,9 +121,10 @@ class BaseSolution(ABC, Generic[MonomialType, Scalar]):
         localizing_matrices_multipliers = self.localizing_matrices_antihermitian_equality_multipliers_by_mm_id
         if len(localizing_matrices_multipliers) > 1:
             warnings.warn(
-                "The solution contains multiple moment matrices. The `localizing_matrices_equality_multipliers` "
-                "property will only return the equality localizing moment matrices multipliers associated to the moment"
-                " matrix of index 0. Use `localizing_matrices_equality_multipliers_by_mm_id` to access all of them.",
+                "The solution contains multiple moment matrices. The "
+                "`localizing_matrices_antihermitian_equality_multipliers` property will only return the equality "
+                "localizing moment matrices multipliers associated to the moment matrix of index 0. Use "
+                "`localizing_matrices_antihermitian_equality_multipliers_by_mm_id` to access all of them.",
             )
         return localizing_matrices_multipliers[0]
 
@@ -180,9 +182,10 @@ class BaseSolution(ABC, Generic[MonomialType, Scalar]):
         localizing_matrices_multipliers = self.localizing_matrices_nonhermitian_equality_multipliers_by_mm_id
         if len(localizing_matrices_multipliers) > 1:
             warnings.warn(
-                "The solution contains multiple moment matrices. The `localizing_matrices_equality_multipliers` "
-                "property will only return the equality localizing moment matrices multipliers associated to the moment"
-                " matrix of index 0. Use `localizing_matrices_equality_multipliers_by_mm_id` to access all of them.",
+                "The solution contains multiple moment matrices. The "
+                "`localizing_matrices_nonhermitian_equality_multipliers` property will only return the equality "
+                "localizing moment matrices multipliers associated to the moment matrix of index 0. Use "
+                "`localizing_matrices_nonhermitian_equality_multipliers_by_mm_id` to access all of them.",
             )
         return localizing_matrices_multipliers[0]
 
