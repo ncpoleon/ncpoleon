@@ -120,6 +120,7 @@ class Canonicality:
 @final
 class Hermiticity:
     Hermitian: ClassVar[Hermiticity]
+    AntiHermitian: ClassVar[Hermiticity]
     NonHermitian: ClassVar[Hermiticity]
     def __int__(self) -> int: ...
     def __eq__(self, other: object) -> bool: ...
