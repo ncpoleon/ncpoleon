@@ -68,24 +68,19 @@ def sos_pair_vectors_of_antihermitian_matrix(
     matrix: RealOrComplexMatrix, cutoff: float
 ) -> tuple[RealOrComplexMatrix, RealOrComplexMatrix]:
     """Columns ``P`` and ``Q`` such that ``matrix = Q @ P^† - P @ Q^†``, real whenever ``matrix`` is."""
-    # `-1j * matrix` is hermitian, so `matrix = sum_k 1j * mu_k * w_k @ w_k^†`
-    eigvals, eigvecs = np.linalg.eigh(-1j * matrix)
-
-    cutoff_mask = np.abs(eigvals) >= cutoff
-    eigvecs = eigvecs[:, cutoff_mask]
-    eigvals = eigvals[cutoff_mask]
+    # `-1j * matrix` is hermitian, so `matrix = sum_k 1j * mu_k * w_k @ w_k^†`, and its SoS vectors are the columns
+    # `v_k = sqrt(|mu_k|) * w_k`, split by the sign of `mu_k`
+    positive, negative = sos_vectors_of_hermitian_matrix(
+        cast("np.ndarray[tuple[int, int], np.dtype[np.complex128]]", -1j * matrix), cutoff
+    )
 
     if np.isrealobj(matrix):
         # A real antisymmetric matrix has its eigenvalues in pairs ±mu with conjugate eigenvectors, so the positive half
         # alone holds the whole matrix, as 2 * mu * (Re w @ Im w^T - Im w @ Re w^T)
-        mask = eigvals > 0
-        scale = np.sqrt(2 * eigvals[mask])
-        positive_eigvecs = eigvecs[:, mask]
-        result = scale * positive_eigvecs.imag, scale * positive_eigvecs.real
+        result = np.sqrt(2) * positive.imag, np.sqrt(2) * positive.real
     else:
-        # Each eigenvector stands on its own: the pair (s * w, 1j * sign(mu) * s * w) with s = sqrt(|mu| / 2) gives back
+        # Each vector stands on its own: the pair (v / sqrt(2), ±1j * v / sqrt(2)), with the sign of mu, gives back
         # 1j * mu * w @ w^†
-        scale = np.sqrt(np.abs(eigvals) / 2)
-        result = scale * eigvecs, 1j * np.sign(eigvals) * scale * eigvecs
+        result = np.hstack([negative, positive]) / np.sqrt(2), 1j * np.hstack([-negative, positive]) / np.sqrt(2)
 
     return cast(tuple[RealOrComplexMatrix, RealOrComplexMatrix], result)

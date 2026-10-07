@@ -143,6 +143,22 @@ def test_simple_real_noncommutative_problem_with_nonhermitian_equality_constrain
     consistency_check(sdp, sol, objective_sense="max", sos_tol=1e-07)
 
 
+@pytest.mark.parametrize(
+    "solver, level, expected, force_primal", generate_simple_noncommutative_with_equality_constraints_parameters()
+)
+def test_simple_complex_noncommutative_problem_with_nonhermitian_equality_constraints(
+    benchmark, solver: str, level: int, expected: float, force_primal: bool
+):
+    x1, x2, obj = _simple_noncommutative_vars()
+    # In a complex relaxation, the localising matrix of `h1 + 1j * h2` with hermitian `h1` and `h2` vanishes only if
+    # both of theirs do, so this single equality imposes both `x1 - x1**2 == 0` and `x2 - x2**2 == 0`
+    operator_constraints = [x1 - x1**2 + 1j * (x2 - x2**2) == 0]
+    sdp = get_relaxation([x1, x2], level, obj, operator_constraints=operator_constraints)
+    sol = benchmark(solve, sdp, "max", force_primal=force_primal, solver=solver)
+    assert sol.value == pytest.approx(expected)
+    consistency_check(sdp, sol, objective_sense="max", sos_tol=1e-07)
+
+
 @pytest.mark.parametrize("level", [1, 2])
 def test_simple_real_noncommutative_problem_with_commutative_substitution_relaxation(benchmark, level):
     x1, x2, obj = _simple_noncommutative_vars()
@@ -171,10 +187,11 @@ def test_simple_real_noncommutative_problem_with_commutative_substitution(
     "solver, level, expected, force_primal",
     generate_simple_noncommutative_as_operator_equalities_parameters(),
 )
-def test_simple_real_noncommutative_problem_with_commutative_substitution_as_nonhermitian_operator_equalities(
+def test_simple_real_noncommutative_problem_with_commutative_substitution_as_antihermitian_operator_equalities(
     benchmark, solver: str, level: int, expected: float, force_primal: bool
 ):
     x1, x2, obj = _simple_noncommutative_vars()
+    # The commutator is anti-hermitian, with real coefficients
     operator_constraints = [x1 - x1**2 >= 0, x2 - x2**2 >= 0, x2 * x1 == x1 * x2]
     sdp = get_relaxation([x1, x2], level, obj, operator_constraints=operator_constraints)
     sol = benchmark(solve, sdp, "max", force_primal=force_primal, solver=solver)

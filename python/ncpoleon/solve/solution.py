@@ -95,7 +95,7 @@ class BaseSolution(ABC, Generic[MonomialType, Scalar]):
 
     @abstractmethod
     def _localizing_matrices_equality_multipliers_by_mm_id(
-        self, hermiticity: Hermiticity
+        self,
     ) -> dict[
         int,
         list[
@@ -103,16 +103,23 @@ class BaseSolution(ABC, Generic[MonomialType, Scalar]):
                 Polynomial[MonomialType, Scalar],
                 list[tuple[Polynomial[MonomialType, Scalar], Scalar]],
                 list[MonomialType],
+                Hermiticity,
             ]
         ],
     ]:
-        """The multiplier of every moment equality a localizing equality was expanded into, by moment matrix id."""
+        """The multiplier of every moment equality a localizing equality was expanded into, by moment matrix id.
+
+        Every hermiticity comes out of the same call, as it reads and clones every localizing equality of the
+        relaxation.
+        """
 
     @property
     def localizing_matrices_hermitian_equality_multipliers_by_mm_id(
         self,
     ) -> dict[int, list[tuple[Polynomial[MonomialType, Scalar], RealOrComplexMatrix, list[MonomialType]]]]:
-        return self._localizing_matrices_equality_multiplier_matrices_by_mm_id(Hermiticity.Hermitian)
+        return self._localizing_matrices_equality_multiplier_matrices_by_mm_id(
+            self._localizing_matrices_equality_multipliers_by_mm_id(), Hermiticity.Hermitian
+        )
 
     @property
     def localizing_matrices_antihermitian_equality_multipliers(
@@ -132,10 +139,24 @@ class BaseSolution(ABC, Generic[MonomialType, Scalar]):
     def localizing_matrices_antihermitian_equality_multipliers_by_mm_id(
         self,
     ) -> dict[int, list[tuple[Polynomial[MonomialType, Scalar], RealOrComplexMatrix, list[MonomialType]]]]:
-        return self._localizing_matrices_equality_multiplier_matrices_by_mm_id(Hermiticity.AntiHermitian)
+        return self._localizing_matrices_equality_multiplier_matrices_by_mm_id(
+            self._localizing_matrices_equality_multipliers_by_mm_id(), Hermiticity.AntiHermitian
+        )
 
+    @staticmethod
     def _localizing_matrices_equality_multiplier_matrices_by_mm_id(
-        self, hermiticity: Hermiticity
+        equality_multipliers: Mapping[
+            int,
+            list[
+                tuple[
+                    Polynomial[MonomialType, Scalar],
+                    list[tuple[Polynomial[MonomialType, Scalar], Scalar]],
+                    list[MonomialType],
+                    Hermiticity,
+                ]
+            ],
+        ],
+        hermiticity: Hermiticity,
     ) -> dict[int, list[tuple[Polynomial[MonomialType, Scalar], RealOrComplexMatrix, list[MonomialType]]]]:
         """The multiplier matrix ``C`` of every (anti-)hermitian equality, contributing ``trace(C @ M)`` to the SoS.
 
@@ -146,10 +167,13 @@ class BaseSolution(ABC, Generic[MonomialType, Scalar]):
         # multiplier of (i, j) splits into both entries of `C` with that sign
         sign = 1 if hermiticity == Hermiticity.Hermitian else -1
 
-        for mm_id, list_of_multipliers in self._localizing_matrices_equality_multipliers_by_mm_id(hermiticity).items():
+        for mm_id, list_of_multipliers in equality_multipliers.items():
             res_id: list[tuple[Polynomial[MonomialType, Scalar], RealOrComplexMatrix, list[MonomialType]]] = []
 
-            for generator, moments_with_multipliers, generating_set in list_of_multipliers:
+            for generator, moments_with_multipliers, generating_set, equality_hermiticity in list_of_multipliers:
+                if equality_hermiticity != hermiticity:
+                    continue
+
                 matrix_size = len(generating_set)
                 dtype = complex if any(np.iscomplexobj(m) for _moment, m in moments_with_multipliers) else float
                 matrix = np.empty((matrix_size, matrix_size), dtype=dtype)
@@ -196,11 +220,34 @@ class BaseSolution(ABC, Generic[MonomialType, Scalar]):
         int,
         list[tuple[Polynomial[MonomialType, Scalar], Sequence[tuple[Polynomial[MonomialType, Scalar], Scalar]]]],
     ]:
+        return self._localizing_matrices_nonhermitian_equality_multipliers(
+            self._localizing_matrices_equality_multipliers_by_mm_id()
+        )
+
+    @staticmethod
+    def _localizing_matrices_nonhermitian_equality_multipliers(
+        equality_multipliers: Mapping[
+            int,
+            list[
+                tuple[
+                    Polynomial[MonomialType, Scalar],
+                    list[tuple[Polynomial[MonomialType, Scalar], Scalar]],
+                    list[MonomialType],
+                    Hermiticity,
+                ]
+            ],
+        ],
+    ) -> dict[
+        int,
+        list[tuple[Polynomial[MonomialType, Scalar], Sequence[tuple[Polynomial[MonomialType, Scalar], Scalar]]]],
+    ]:
         return {
-            mm_id: [(generator, moments) for (generator, moments, _generating_set) in res_id]
-            for mm_id, res_id in self._localizing_matrices_equality_multipliers_by_mm_id(
-                Hermiticity.NonHermitian
-            ).items()
+            mm_id: [
+                (generator, moments)
+                for (generator, moments, _generating_set, hermiticity) in res_id
+                if hermiticity == Hermiticity.NonHermitian
+            ]
+            for mm_id, res_id in equality_multipliers.items()
         }
 
     @property
@@ -303,14 +350,18 @@ class BaseSolution(ABC, Generic[MonomialType, Scalar]):
     ) -> dict[int, SoSDecomposition[MonomialType, Scalar]]:
         res: dict[int, SoSDecomposition[MonomialType, Scalar]] = {}
         moment_matrix_multipliers = self.moment_matrix_multiplier_by_mm_id
+        # Fetching the equality multipliers clones every localizing equality, so it happens once for all hermiticities
+        equality_multipliers = self._localizing_matrices_equality_multipliers_by_mm_id()
         localizing_moment_matrices_multipliers_nonhermitian_equality = (
-            self.localizing_matrices_nonhermitian_equality_multipliers_by_mm_id
+            self._localizing_matrices_nonhermitian_equality_multipliers(equality_multipliers)
         )
         localizing_moment_matrices_multipliers_hermitian_equality = (
-            self.localizing_matrices_hermitian_equality_multipliers_by_mm_id
+            self._localizing_matrices_equality_multiplier_matrices_by_mm_id(equality_multipliers, Hermiticity.Hermitian)
         )
         localizing_moment_matrices_multipliers_antihermitian_equality = (
-            self.localizing_matrices_antihermitian_equality_multipliers_by_mm_id
+            self._localizing_matrices_equality_multiplier_matrices_by_mm_id(
+                equality_multipliers, Hermiticity.AntiHermitian
+            )
         )
         localizing_moment_matrices_multipliers_inequality = self.localizing_matrices_inequality_multipliers_by_mm_id
         # `generating_sets` merges and clones both of its Rust maps on every access, so it is read once here rather
@@ -334,14 +385,18 @@ class BaseSolution(ABC, Generic[MonomialType, Scalar]):
                 else:
                     moment_inequality_multipliers[mm_id] = [(poly_id, scalar)]
 
+        def chop(polynomials: list[Polynomial[MonomialType, Scalar]]) -> list[Polynomial[MonomialType, Scalar]]:
+            """Rewrite and chop every polynomial with `delta`, dropping those that vanish, if there is a `delta`."""
+            if not delta:
+                return polynomials
+
+            chopped = [self.relaxation.rewrite(p).chop(delta) for p in polynomials]
+            return [p for p in chopped if not p.is_zero()]
+
         for mm_id in generating_sets:
             sos_vectors = sos_vectors_of_hermitian_matrix(moment_matrix_multipliers[mm_id], cutoff)[0]
             n_monomials = sos_vectors.shape[0]
-            decomposition = (np.array(generating_sets[mm_id][:n_monomials]) @ sos_vectors).tolist()
-
-            if delta:
-                decomposition = [self.relaxation.rewrite(p).chop(delta) for p in decomposition]
-                decomposition = [p for p in decomposition if not p.is_zero()]
+            decomposition = chop((np.array(generating_sets[mm_id][:n_monomials]) @ sos_vectors).tolist())
 
             moment_matrix_term = MomentMatrixDecomposition(decomposition=decomposition)
 
@@ -351,11 +406,7 @@ class BaseSolution(ABC, Generic[MonomialType, Scalar]):
                 mm_id, []
             ):
                 sos_vectors = sos_vectors_of_hermitian_matrix(coefficient, cutoff)[0]
-                decompositions = (np.array(generating_set) @ sos_vectors).tolist()
-
-                if delta:
-                    decompositions = [self.relaxation.rewrite(p).chop(delta) for p in decompositions]
-                    decompositions = [p for p in decompositions if not p.is_zero()]
+                decompositions = chop((np.array(generating_set) @ sos_vectors).tolist())
 
                 if decompositions:
                     inequalities_terms.append(
@@ -388,15 +439,17 @@ class BaseSolution(ABC, Generic[MonomialType, Scalar]):
                 mm_id, []
             ):
                 sos_vectors_pos, sos_vectors_neg = sos_vectors_of_hermitian_matrix(coefficient, cutoff)
-                decomposition_positive = (np.array(generating_set) @ sos_vectors_pos).tolist()
-                decomposition_negative = (np.array(generating_set) @ sos_vectors_neg).tolist()
-                hermitian_equalities_terms.append(
-                    LocalizingMomentMatrixHermitianEqualityDecomposition(
-                        generator=generator,
-                        decomposition_positive=decomposition_positive,
-                        decomposition_negative=decomposition_negative,
+                decomposition_positive = chop((np.array(generating_set) @ sos_vectors_pos).tolist())
+                decomposition_negative = chop((np.array(generating_set) @ sos_vectors_neg).tolist())
+
+                if decomposition_positive or decomposition_negative:
+                    hermitian_equalities_terms.append(
+                        LocalizingMomentMatrixHermitianEqualityDecomposition(
+                            generator=generator,
+                            decomposition_positive=decomposition_positive,
+                            decomposition_negative=decomposition_negative,
+                        )
                     )
-                )
 
             antihermitian_equalities_terms = []
 
@@ -408,12 +461,22 @@ class BaseSolution(ABC, Generic[MonomialType, Scalar]):
                 sos_vectors_p, sos_vectors_q = sos_pair_vectors_of_antihermitian_matrix(coefficient, cutoff)
                 decomposition_p = (np.array(generating_set) @ sos_vectors_p).tolist()
                 decomposition_q = (np.array(generating_set) @ sos_vectors_q).tolist()
-                antihermitian_equalities_terms.append(
-                    LocalizingMomentMatrixAntiHermitianEqualityDecomposition(
-                        generator=generator,
-                        decomposition_pairs=list(zip(decomposition_p, decomposition_q, strict=True)),
+                pairs = list(zip(decomposition_p, decomposition_q, strict=True))
+
+                if delta:
+                    pairs = [
+                        (self.relaxation.rewrite(p).chop(delta), self.relaxation.rewrite(q).chop(delta))
+                        for p, q in pairs
+                    ]
+                    # A pair adds nothing once either of its polynomials vanishes
+                    pairs = [(p, q) for p, q in pairs if not (p.is_zero() or q.is_zero())]
+
+                if pairs:
+                    antihermitian_equalities_terms.append(
+                        LocalizingMomentMatrixAntiHermitianEqualityDecomposition(
+                            generator=generator, decomposition_pairs=pairs
+                        )
                     )
-                )
 
             # Annotated because the branches below append differently-specialized instances, and a
             # bare `[]` would infer a union element type that the invariant `list` then rejects
