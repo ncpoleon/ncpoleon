@@ -52,6 +52,10 @@ def _reduce_sos_decomposition(
             [poly.adjoint() * localizing_term.generator * poly for poly in localizing_term.decomposition_positive]
         )
 
+    for localizing_term in sos.antihermitian_equalities_terms:
+        for p, q in localizing_term.decomposition_pairs:
+            res += p.adjoint() * localizing_term.generator * q - q.adjoint() * localizing_term.generator * p
+
     for localizing_term in sos.inequalities_terms:
         res += sum([poly.adjoint() * localizing_term.generator * poly for poly in localizing_term.decomposition])
 
