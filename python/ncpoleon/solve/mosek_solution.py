@@ -172,7 +172,7 @@ class MosekSolution(BaseSolution[MonomialType, Scalar]):
         return res
 
     def _localizing_matrices_equality_multipliers_by_mm_id(
-        self, hermiticity: Hermiticity
+        self,
     ) -> dict[
         int,
         list[
@@ -180,6 +180,7 @@ class MosekSolution(BaseSolution[MonomialType, Scalar]):
                 Polynomial[MonomialType, Scalar],
                 list[tuple[Polynomial[MonomialType, Scalar], Scalar]],
                 list[MonomialType],
+                Hermiticity,
             ]
         ],
     ]:
@@ -194,6 +195,7 @@ class MosekSolution(BaseSolution[MonomialType, Scalar]):
                     Polynomial[MonomialType, Scalar],
                     list[tuple[Polynomial[MonomialType, Scalar], Scalar]],
                     list[MonomialType],
+                    Hermiticity,
                 ]
             ] = []
 
@@ -201,9 +203,6 @@ class MosekSolution(BaseSolution[MonomialType, Scalar]):
                 (equality_as_polynomial, equality_as_moments, equality_hermiticity),
                 (_generator, generating_set),
             ) in enumerate(zip(equalities_as_moments, equalities.get(moment_matrix_id, []), strict=True)):
-                if equality_hermiticity != hermiticity:
-                    continue
-
                 list_of_moments: list[tuple[Polynomial[MonomialType, Scalar], Scalar]] = []
 
                 for moment_index, moment in enumerate(equality_as_moments):
@@ -274,7 +273,9 @@ class MosekSolution(BaseSolution[MonomialType, Scalar]):
                                 )
                             )
 
-                list_of_equalities.append((equality_as_polynomial, list_of_moments, generating_set))
+                list_of_equalities.append(
+                    (equality_as_polynomial, list_of_moments, generating_set, equality_hermiticity)
+                )
 
             res[moment_matrix_id] = list_of_equalities
 
