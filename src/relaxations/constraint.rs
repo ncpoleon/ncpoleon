@@ -32,6 +32,7 @@ pub(crate) enum ConstraintSide<MonomialType: Ord, Scalar: PolynomialDtype> {
 pub(super) enum Hermiticity {
     Hermitian,
     NonHermitian,
+    AntiHermitian,
 }
 
 #[derive(Clone)]

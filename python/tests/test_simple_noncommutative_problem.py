@@ -36,7 +36,7 @@ def generate_simple_noncommutative_with_substitution_parameters():
     return res
 
 
-def generate_simple_noncommutative_as_operator_equalities_parameters(*, xfail_cvxopt_level_2_primal: bool):
+def generate_simple_noncommutative_as_operator_equalities_parameters():
     """Parameters for imposing commutativity as an operator equality rather than as a substitution.
 
     A substitution rewrites every monomial, whereas an operator equality only constrains the moments its
@@ -48,17 +48,7 @@ def generate_simple_noncommutative_as_operator_equalities_parameters(*, xfail_cv
     for solver in ["picos-cvxopt", "mosek"]:
         for level, expected in [(1, 1 / 8), (2, 5.52e-05)]:
             for force_primal in [True, False]:
-                marks = [SOLVER_SKIPS[solver]]
-
-                if xfail_cvxopt_level_2_primal and solver == "picos-cvxopt" and level == 2 and force_primal:
-                    marks.append(
-                        pytest.mark.xfail(
-                            reason="Solving the primal at level 2 using the CVXOPT Solver results in an error",
-                            raises=ArithmeticError,
-                        )
-                    )
-
-                res.append(pytest.param(solver, level, expected, force_primal, marks=marks))
+                res.append(pytest.param(solver, level, expected, force_primal, marks=[SOLVER_SKIPS[solver]]))
 
     return res
 
@@ -97,10 +87,6 @@ def test_simple_real_noncommutative_problem(benchmark, solver: str, level: int, 
 @pytest.mark.parametrize("level", [1, 2])
 def test_simple_real_noncommutative_problem_with_equality_constraints_relaxation(benchmark, level):
     x1, x2, obj = _simple_noncommutative_vars()
-    # FIXME: So, for SOME REASON, CVXOPT fails to solve the problem if we input the constraints in this order. That is,
-    #  if we swap these two constraints, the code works. Maybe we'll have to investigate this at some point, but since
-    #  it only happens on the primal, it's not *too* bad. It might reveal a bug on Picos' side though, so it might be
-    #  worth invectigating
     operator_constraints = [x2 - x2**2 == 0, x1 - x1**2 == 0]
     benchmark(get_relaxation, [x1, x2], level, obj, operator_constraints=operator_constraints)
 
@@ -113,6 +99,60 @@ def test_simple_real_noncommutative_problem_with_equality_constraints(
 ):
     x1, x2, obj = _simple_noncommutative_vars()
     operator_constraints = [x2 - x2**2 == 0, x1 - x1**2 == 0]
+    sdp = get_relaxation([x1, x2], level, obj, operator_constraints=operator_constraints)
+    sol = benchmark(solve, sdp, "max", force_primal=force_primal, solver=solver)
+    assert sol.value == pytest.approx(expected)
+    consistency_check(sdp, sol, objective_sense="max", sos_tol=1e-07)
+
+
+@pytest.mark.parametrize(
+    "solver, level, expected, force_primal", generate_simple_noncommutative_with_equality_constraints_parameters()
+)
+def test_simple_complex_noncommutative_problem_with_antihermitian_equality_constraints(
+    benchmark, solver: str, level: int, expected: float, force_primal: bool
+):
+    x1, x2, obj = _simple_noncommutative_vars()
+    # The factor `1j` makes the equality anti-hermitian and the relaxation complex, without changing its feasible set
+    operator_constraints = [x2 - x2**2 == 0, 1j * (x1 - x1**2) == 0]
+    sdp = get_relaxation([x1, x2], level, obj, operator_constraints=operator_constraints)
+    sol = benchmark(solve, sdp, "max", force_primal=force_primal, solver=solver)
+    assert sol.value == pytest.approx(expected)
+    consistency_check(sdp, sol, objective_sense="max", sos_tol=1e-07)
+
+
+@pytest.mark.parametrize(
+    "solver, level, expected, force_primal",
+    [
+        pytest.param(solver, level, expected, force_primal, marks=[SOLVER_SKIPS[solver]])
+        for solver in ["picos-cvxopt", "mosek"]
+        for level, expected in [(1, 1 / 8), (2, 0.0)]
+        for force_primal in [True, False]
+    ],
+)
+def test_simple_real_noncommutative_problem_with_nonhermitian_equality_constraints(
+    benchmark, solver: str, level: int, expected: float, force_primal: bool
+):
+    x1, x2, obj = _simple_noncommutative_vars()
+    # In a real relaxation, entries (i, j) and (j, i) of the localising matrix of this equality are the sum and the
+    # difference of those of `x1 - x1**2` and of the commutator, so it imposes both `x1 - x1**2 == 0` and
+    # `x2 * x1 == x1 * x2`
+    operator_constraints = [x2 - x2**2 == 0, x1 - x1**2 + x2 * x1 - x1 * x2 == 0]
+    sdp = get_relaxation([x1, x2], level, obj, operator_constraints=operator_constraints)
+    sol = benchmark(solve, sdp, "max", force_primal=force_primal, solver=solver)
+    assert sol.value == pytest.approx(expected, abs=1e-6)
+    consistency_check(sdp, sol, objective_sense="max", sos_tol=1e-07)
+
+
+@pytest.mark.parametrize(
+    "solver, level, expected, force_primal", generate_simple_noncommutative_with_equality_constraints_parameters()
+)
+def test_simple_complex_noncommutative_problem_with_nonhermitian_equality_constraints(
+    benchmark, solver: str, level: int, expected: float, force_primal: bool
+):
+    x1, x2, obj = _simple_noncommutative_vars()
+    # In a complex relaxation, the localising matrix of `h1 + 1j * h2` with hermitian `h1` and `h2` vanishes only if
+    # both of theirs do, so this single equality imposes both `x1 - x1**2 == 0` and `x2 - x2**2 == 0`
+    operator_constraints = [x1 - x1**2 + 1j * (x2 - x2**2) == 0]
     sdp = get_relaxation([x1, x2], level, obj, operator_constraints=operator_constraints)
     sol = benchmark(solve, sdp, "max", force_primal=force_primal, solver=solver)
     assert sol.value == pytest.approx(expected)
@@ -145,12 +185,13 @@ def test_simple_real_noncommutative_problem_with_commutative_substitution(
 
 @pytest.mark.parametrize(
     "solver, level, expected, force_primal",
-    generate_simple_noncommutative_as_operator_equalities_parameters(xfail_cvxopt_level_2_primal=True),
+    generate_simple_noncommutative_as_operator_equalities_parameters(),
 )
-def test_simple_real_noncommutative_problem_with_commutative_substitution_as_nonhermitian_operator_equalities(
+def test_simple_real_noncommutative_problem_with_commutative_substitution_as_antihermitian_operator_equalities(
     benchmark, solver: str, level: int, expected: float, force_primal: bool
 ):
     x1, x2, obj = _simple_noncommutative_vars()
+    # The commutator is anti-hermitian, with real coefficients
     operator_constraints = [x1 - x1**2 >= 0, x2 - x2**2 >= 0, x2 * x1 == x1 * x2]
     sdp = get_relaxation([x1, x2], level, obj, operator_constraints=operator_constraints)
     sol = benchmark(solve, sdp, "max", force_primal=force_primal, solver=solver)
@@ -160,7 +201,7 @@ def test_simple_real_noncommutative_problem_with_commutative_substitution_as_non
 
 @pytest.mark.parametrize(
     "solver, level, expected, force_primal",
-    generate_simple_noncommutative_as_operator_equalities_parameters(xfail_cvxopt_level_2_primal=False),
+    generate_simple_noncommutative_as_operator_equalities_parameters(),
 )
 def test_simple_real_noncommutative_problem_with_commutative_substitution_as_hermitian_operator_equalities(
     benchmark, solver: str, level: int, expected: float, force_primal: bool

@@ -43,6 +43,18 @@ class LocalizingMomentMatrixHermitianEqualityDecomposition(Generic[MonomialType,
 
 
 @dataclass(eq=False, order=False, kw_only=True)
+class LocalizingMomentMatrixAntiHermitianEqualityDecomposition(Generic[MonomialType, Scalar]):
+    """A single anti-hermitian localizing moment matrix equality contribution to a SoS decomposition.
+
+    It amounts to the sum of ``p.adjoint() * generator * q - q.adjoint() * generator * p`` over its pairs ``(p, q)``,
+    whose coefficients are real when the relaxation is.
+    """
+
+    generator: Polynomial[MonomialType, Scalar]
+    decomposition_pairs: list[tuple[Polynomial[MonomialType, Scalar], Polynomial[MonomialType, Scalar]]]
+
+
+@dataclass(eq=False, order=False, kw_only=True)
 class LocalizingMomentMatrixNonHermitianEqualityDecomposition(Generic[MonomialType, Scalar]):
     """A single localizing moment matrix equality contribution to a SoS decomposition.
 
@@ -76,6 +88,7 @@ class SingleMomentInequalityDecomposition(Generic[MonomialType, Scalar]):
 class SoSDecomposition(Generic[MonomialType, Scalar]):
     moment_matrix_term: MomentMatrixDecomposition[MonomialType, Scalar]
     hermitian_equalities_terms: list[LocalizingMomentMatrixHermitianEqualityDecomposition[MonomialType, Scalar]]
+    antihermitian_equalities_terms: list[LocalizingMomentMatrixAntiHermitianEqualityDecomposition[MonomialType, Scalar]]
     nonhermitian_equalities_terms: list[LocalizingMomentMatrixNonHermitianEqualityDecomposition[MonomialType, Scalar]]
     inequalities_terms: list[LocalizingMomentMatrixInequalityDecomposition[MonomialType, Scalar]]
     moment_equalities_terms: list[SingleMomentEqualityDecomposition[MonomialType, Scalar]]
