@@ -90,6 +90,7 @@ def consistency_check(
     rtol: float = 1e-5,
     atol: float = 1e-07,
     sos_tol: float = 1e-07,
+    delta: float = 0.0,
 ):
     sos_decomposition = 0
     mapping = {
@@ -129,7 +130,7 @@ def consistency_check(
                 atol=atol,
             )
 
-        sos_decomposition += _reduce_sos_decomposition(solution.get_sos_decomposition_by_mm_id()[mm_id])
+        sos_decomposition += _reduce_sos_decomposition(solution.get_sos_decomposition_by_mm_id(delta=delta)[mm_id])
 
     if objective_sense == "max":
         sos_decomposition *= -1

@@ -324,6 +324,15 @@ impl RustNonCommutativeMonomial {
     /// Check whether a noncommutative monomial can be reduced under a given substitution rule
     /// by finding the substitution key as a contiguous subsequence of operators.
     fn can_be_reduced(&self, substitution_rule: &(Self, Self)) -> Result<Option<Self>, String> {
+        if substitution_rule.0.data.moment_matrix_id != substitution_rule.1.data.moment_matrix_id {
+            return Err(format!(
+                "Cannot substitute monomial {} with moment matrix index {} to monomial {} with moment matrix index {}.",
+                substitution_rule.0,
+                substitution_rule.0.data.moment_matrix_id,
+                substitution_rule.1,
+                substitution_rule.1.data.moment_matrix_id
+            ));
+        }
         let divisor = &substitution_rule.0.data.inner_data;
         let replacement_data = &substitution_rule.1.data.inner_data;
         let mmi = self.data.moment_matrix_id;
@@ -439,25 +448,24 @@ impl Mul<&RustNonCommutativeOperator> for &RustNonCommutativeMonomial {
     type Output = Result<RustNonCommutativeMonomial, String>;
 
     fn mul(self, rhs: &RustNonCommutativeOperator) -> Self::Output {
+        if self.moment_matrix_id() != rhs.id.moment_matrix_id {
+            return Err(format!(
+                "Cannot multiply operators from different parties: {} and {}",
+                self.moment_matrix_id(),
+                rhs.id.moment_matrix_id
+            ));
+        }
         let last = self.data.inner_data.last();
         match last {
             None => Ok(RustNonCommutativeMonomial::from(rhs)),
-            Some(op) => {
-                if op.id.moment_matrix_id != rhs.id.moment_matrix_id {
-                    return Err(format!(
-                        "Cannot multiply operators from different parties: {} and {}",
-                        op.id.moment_matrix_id, rhs.id.moment_matrix_id
-                    ));
-                }
-                Ok(if (rhs == op) & rhs.id.is_projector {
-                    self.clone()
-                } else {
-                    let mut res = Vec::with_capacity(1 + self.data.inner_data.len());
-                    res.extend(self.data.inner_data.to_vec());
-                    res.push(*rhs);
-                    RustNonCommutativeMonomial::new(res, self.data.moment_matrix_id)
-                })
-            }
+            Some(op) => Ok(if (rhs == op) & rhs.id.is_projector {
+                self.clone()
+            } else {
+                let mut res = Vec::with_capacity(1 + self.data.inner_data.len());
+                res.extend(self.data.inner_data.to_vec());
+                res.push(*rhs);
+                RustNonCommutativeMonomial::new(res, self.data.moment_matrix_id)
+            }),
         }
     }
 }
@@ -468,29 +476,6 @@ impl Mul<RustNonCommutativeOperator> for &RustNonCommutativeMonomial {
 
     fn mul(self, rhs: RustNonCommutativeOperator) -> Self::Output {
         self * &rhs
-    }
-}
-
-impl Mul<&RustNonCommutativeOperator> for RustNonCommutativeMonomial {
-    type Output = Result<RustNonCommutativeMonomial, String>;
-
-    fn mul(mut self, rhs: &RustNonCommutativeOperator) -> Self::Output {
-        let last = self.data.inner_data.last().copied();
-        match last {
-            None => Ok(RustNonCommutativeMonomial::from(rhs)),
-            Some(op) => {
-                if op.id.moment_matrix_id != rhs.id.moment_matrix_id {
-                    return Err(format!(
-                        "Cannot multiply operators from different parties: {} and {}",
-                        op.id.moment_matrix_id, rhs.id.moment_matrix_id
-                    ));
-                }
-                if (rhs != &op) | !rhs.id.is_projector {
-                    self.data.inner_data.push(*rhs);
-                }
-                Ok(self)
-            }
-        }
     }
 }
 
@@ -643,59 +628,6 @@ impl Mul<&RustNonCommutativeMonomial> for RustNonCommutativeMonomial {
                             self.data.inner_data.splice(len..len, rhs.data.inner_data.to_vec());
                         }
                         Ok(self)
-                    }
-                }
-            }
-        }
-    }
-}
-
-impl Mul<RustNonCommutativeMonomial> for RustNonCommutativeMonomial {
-    type Output = Result<RustNonCommutativeMonomial, String>;
-
-    fn mul(self, mut rhs: RustNonCommutativeMonomial) -> Self::Output {
-        let last_self = self.data.inner_data.last().copied();
-
-        match last_self {
-            None => {
-                if self.data.moment_matrix_id != rhs.data.moment_matrix_id {
-                    return Err(format!(
-                        "Cannot multiply monomials from different moment matrix indices: {} and {}",
-                        self.data.moment_matrix_id, rhs.data.moment_matrix_id
-                    ));
-                }
-                Ok(rhs)
-            }
-            Some(op_self) => {
-                let first_rhs = rhs.data.inner_data.first().copied();
-
-                match first_rhs {
-                    None => {
-                        if self.data.moment_matrix_id != rhs.data.moment_matrix_id {
-                            return Err(format!(
-                                "Cannot multiply monomials from different moment matrix indices: {} and {}",
-                                self.data.moment_matrix_id, rhs.data.moment_matrix_id
-                            ));
-                        }
-                        Ok(self)
-                    }
-                    Some(op_rhs) => {
-                        if op_self.id.moment_matrix_id != op_rhs.id.moment_matrix_id {
-                            return Err(format!(
-                                "Cannot multiply monomials from different parties: {} and {}",
-                                op_self.id.moment_matrix_id, op_rhs.id.moment_matrix_id
-                            ));
-                        }
-                        if (op_self == op_rhs) & op_self.id.is_projector {
-                            rhs.data.inner_data.splice(
-                                0..0,
-                                self.data.inner_data.iter().cloned().take(self.data.inner_data.len() - 1),
-                            );
-                        } else {
-                            rhs.data.inner_data.splice(0..0, self.data.inner_data.to_vec());
-                        }
-                        rhs.data.moment_matrix_id = self.data.moment_matrix_id;
-                        Ok(rhs)
                     }
                 }
             }

@@ -139,3 +139,10 @@ def test_unknown_format(tmp_path):
     save_relaxation(sdp, path)
     with pytest.raises(ValueError, match="Unknown format"):
         load_relaxation(path, format="json")
+
+
+def test_save_to_missing_directory_fails(tmp_path):
+    path = tmp_path / "missing" / "relaxation"
+    with pytest.raises(FileNotFoundError):
+        save_relaxation(_relaxations()["real_commutative"], path)
+    assert not path.parent.exists()
