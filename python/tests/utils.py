@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
+from ncpoleon import generate_commutative_variables
 from ncpoleon._typing import MonomialType, RealOrComplexMatrix, Scalar
 from ncpoleon.solve.solution import BaseSolution
 from ncpoleon.solve.sos_decomposition import SoSDecomposition
@@ -37,6 +38,14 @@ SOLVER_SKIPS = {
 }
 
 SOLVERS = [pytest.param(solver, marks=[mark]) for solver, mark in SOLVER_SKIPS.items()]
+
+
+def simple_commutative_params():
+    x0 = generate_commutative_variables("x", 1, projector=True)[0]
+    x1 = generate_commutative_variables("x", 1, real=True, starting_index=1)[0]
+    obj = 2 * x0 * x1
+    operator_constraints = [-(x1**2) + x1 + 1 / 4 >= 0]
+    return x0, x1, obj, operator_constraints
 
 
 def _reduce_sos_decomposition(
@@ -90,6 +99,7 @@ def consistency_check(
     rtol: float = 1e-5,
     atol: float = 1e-07,
     sos_tol: float = 1e-07,
+    delta: float = 0.0,
 ):
     sos_decomposition = 0
     mapping = {
@@ -129,7 +139,7 @@ def consistency_check(
                 atol=atol,
             )
 
-        sos_decomposition += _reduce_sos_decomposition(solution.get_sos_decomposition_by_mm_id()[mm_id])
+        sos_decomposition += _reduce_sos_decomposition(solution.get_sos_decomposition_by_mm_id(delta=delta)[mm_id])
 
     if objective_sense == "max":
         sos_decomposition *= -1

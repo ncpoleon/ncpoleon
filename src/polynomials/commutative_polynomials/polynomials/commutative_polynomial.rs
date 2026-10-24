@@ -85,22 +85,6 @@ impl PythonRealCoefficientsCommutativePolynomial {
     }
 }
 
-impl<'py> FromPyObject<'_, 'py> for PythonRealCoefficientsCommutativePolynomial {
-    type Error = PyErr;
-
-    fn extract(obj: pyo3::Borrowed<'_, 'py, pyo3::PyAny>) -> Result<Self, Self::Error> {
-        if let Ok(poly) = obj.cast::<PythonRealCoefficientsCommutativePolynomial>() {
-            Ok(poly.get().clone())
-        } else if let Ok(mon) = obj.cast::<PythonCommutativeMonomial>() {
-            Ok(mon.get().clone().into())
-        } else if let Ok(op) = obj.cast::<PythonCommutativeOperator>() {
-            Ok((*op.get()).into())
-        } else {
-            Err(PyTypeError::new_err("Couldn't convert to PythonRealCoefficientsCommutativePolynomial"))
-        }
-    }
-}
-
 impl PythonComplexCoefficientsCommutativePolynomial {
     pub(crate) fn try_from_reference_bound<'py>(
         value: &Bound<'py, PyAny>,
@@ -120,20 +104,6 @@ impl PythonComplexCoefficientsCommutativePolynomial {
             }
         } else {
             Ok(PythonRealCoefficientsCommutativePolynomial::try_from_reference_bound(value, unique_moment_id)?.into())
-        }
-    }
-}
-
-impl<'py> FromPyObject<'_, 'py> for PythonComplexCoefficientsCommutativePolynomial {
-    type Error = PyErr;
-
-    fn extract(obj: pyo3::Borrowed<'_, 'py, pyo3::PyAny>) -> Result<Self, Self::Error> {
-        if let Ok(poly) = obj.cast::<PythonComplexCoefficientsCommutativePolynomial>() {
-            Ok(poly.get().clone())
-        } else if let Ok(real_poly) = obj.cast::<PythonRealCoefficientsCommutativePolynomial>() {
-            Ok(real_poly.get().clone().into())
-        } else {
-            Err(PyTypeError::new_err("Couldn't convert to PythonComplexCoefficientsCommutativePolynomial"))
         }
     }
 }
@@ -700,14 +670,6 @@ impl Sub<f64> for &RustComplexCoefficientsCommutativePolynomial {
     }
 }
 
-impl Sub<Complex<f64>> for RustRealCoefficientsCommutativePolynomial {
-    type Output = Result<RustComplexCoefficientsCommutativePolynomial, String>;
-
-    fn sub(self, rhs: Complex<f64>) -> Self::Output {
-        RustComplexCoefficientsCommutativePolynomial::from(self) - rhs
-    }
-}
-
 impl Mul<Complex<f64>> for &RustRealCoefficientsCommutativePolynomial {
     type Output = RustComplexCoefficientsCommutativePolynomial;
 
@@ -721,14 +683,6 @@ impl Mul<f64> for &RustComplexCoefficientsCommutativePolynomial {
 
     fn mul(self, rhs: f64) -> Self::Output {
         self * Complex::from(rhs)
-    }
-}
-
-impl Mul<Complex<f64>> for RustRealCoefficientsCommutativePolynomial {
-    type Output = RustComplexCoefficientsCommutativePolynomial;
-
-    fn mul(self, rhs: Complex<f64>) -> Self::Output {
-        RustComplexCoefficientsCommutativePolynomial::from(self) * rhs
     }
 }
 
@@ -761,22 +715,6 @@ impl Sub<&RustRealCoefficientsCommutativePolynomial> for &RustComplexCoefficient
 
     fn sub(self, rhs: &RustRealCoefficientsCommutativePolynomial) -> Self::Output {
         self - RustComplexCoefficientsCommutativePolynomial::from(rhs)
-    }
-}
-
-impl Mul<&RustComplexCoefficientsCommutativePolynomial> for &RustRealCoefficientsCommutativePolynomial {
-    type Output = Result<RustComplexCoefficientsCommutativePolynomial, String>;
-
-    fn mul(self, rhs: &RustComplexCoefficientsCommutativePolynomial) -> Self::Output {
-        RustComplexCoefficientsCommutativePolynomial::from(self) * rhs
-    }
-}
-
-impl Mul<&RustRealCoefficientsCommutativePolynomial> for &RustComplexCoefficientsCommutativePolynomial {
-    type Output = Result<RustComplexCoefficientsCommutativePolynomial, String>;
-
-    fn mul(self, rhs: &RustRealCoefficientsCommutativePolynomial) -> Self::Output {
-        self * RustComplexCoefficientsCommutativePolynomial::from(rhs)
     }
 }
 
