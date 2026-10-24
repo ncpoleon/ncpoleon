@@ -256,18 +256,6 @@ where
     }
 }
 
-impl<D, T> Add<Polynomial<Monomial<D>, T>> for Monomial<D>
-where
-    T: PolynomialDtype,
-    D: Ord + Clone,
-{
-    type Output = Polynomial<Monomial<D>, T>;
-
-    fn add(self, rhs: Polynomial<Monomial<D>, T>) -> Self::Output {
-        Polynomial::<Monomial<D>, T>::from(self) + rhs
-    }
-}
-
 impl<D> Sub<&Monomial<D>> for &Monomial<D>
 where
     Monomial<D>: Clone,
@@ -335,18 +323,6 @@ where
     type Output = Polynomial<Monomial<D>, T>;
 
     fn sub(self, rhs: &Polynomial<Monomial<D>, T>) -> Self::Output {
-        Polynomial::<Monomial<D>, T>::from(self) - rhs
-    }
-}
-
-impl<D, T> Sub<Polynomial<Monomial<D>, T>> for Monomial<D>
-where
-    T: PolynomialDtype,
-    D: Ord + Clone,
-{
-    type Output = Polynomial<Monomial<D>, T>;
-
-    fn sub(self, rhs: Polynomial<Monomial<D>, T>) -> Self::Output {
         Polynomial::<Monomial<D>, T>::from(self) - rhs
     }
 }

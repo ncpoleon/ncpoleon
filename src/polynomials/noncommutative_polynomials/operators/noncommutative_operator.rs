@@ -344,14 +344,6 @@ impl Mul<&RustNonCommutativeOperator> for &RustNonCommutativeOperator {
 }
 
 #[allow(clippy::op_ref)]
-impl Mul<&RustNonCommutativeOperator> for RustNonCommutativeOperator {
-    type Output = Result<RustNonCommutativeMonomial, String>;
-    fn mul(self, rhs: &RustNonCommutativeOperator) -> Self::Output {
-        &self * rhs
-    }
-}
-
-#[allow(clippy::op_ref)]
 impl Mul<RustNonCommutativeOperator> for &RustNonCommutativeOperator {
     type Output = Result<RustNonCommutativeMonomial, String>;
     fn mul(self, rhs: RustNonCommutativeOperator) -> Self::Output {
@@ -388,7 +380,7 @@ impl Mul<&RustNonCommutativeMonomial> for &RustNonCommutativeOperator {
             } else {
                 let mut res = Vec::with_capacity(1 + rhs.data.inner_data.len());
                 res.push(*self);
-                res.extend(rhs.data.inner_data.to_vec());
+                res.extend_from_slice(&rhs.data.inner_data);
                 RustNonCommutativeMonomial::new(res, self.id.moment_matrix_id)
             })
         } else {
@@ -437,14 +429,6 @@ impl Mul<RustNonCommutativeMonomial> for &RustNonCommutativeOperator {
     }
 }
 
-#[allow(clippy::op_ref)]
-impl Mul<RustNonCommutativeMonomial> for RustNonCommutativeOperator {
-    type Output = Result<RustNonCommutativeMonomial, String>;
-    fn mul(self, rhs: RustNonCommutativeMonomial) -> Self::Output {
-        &self * rhs
-    }
-}
-
 impl<Scalar: PolynomialDtype> Mul<&RustNonCommutativePolynomial<Scalar>> for &RustNonCommutativeOperator {
     type Output = Result<RustNonCommutativePolynomial<Scalar>, String>;
     fn mul(self, rhs: &RustNonCommutativePolynomial<Scalar>) -> Self::Output {
@@ -483,30 +467,6 @@ impl Sub<&RustNonCommutativeOperator> for &RustNonCommutativeOperator {
     type Output = RustNonCommutativePolynomial<f64>;
     fn sub(self, rhs: &RustNonCommutativeOperator) -> RustNonCommutativePolynomial<f64> {
         RustNonCommutativeMonomial::from(self) - RustNonCommutativeMonomial::from(rhs)
-    }
-}
-
-#[allow(clippy::op_ref)]
-impl Add<RustNonCommutativeOperator> for &RustNonCommutativeOperator {
-    type Output = RustNonCommutativePolynomial<f64>;
-    fn add(self, rhs: RustNonCommutativeOperator) -> RustNonCommutativePolynomial<f64> {
-        self + &rhs
-    }
-}
-
-#[allow(clippy::op_ref)]
-impl Sub<RustNonCommutativeOperator> for &RustNonCommutativeOperator {
-    type Output = RustNonCommutativePolynomial<f64>;
-    fn sub(self, rhs: RustNonCommutativeOperator) -> RustNonCommutativePolynomial<f64> {
-        self - &rhs
-    }
-}
-
-impl Neg for RustNonCommutativeOperator {
-    type Output = RustNonCommutativePolynomial<f64>;
-
-    fn neg(self) -> RustNonCommutativePolynomial<f64> {
-        -RustNonCommutativeMonomial::from(self)
     }
 }
 

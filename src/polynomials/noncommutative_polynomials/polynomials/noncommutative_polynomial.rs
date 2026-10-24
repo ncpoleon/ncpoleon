@@ -90,26 +90,6 @@ impl PythonRealCoefficientsNonCommutativePolynomial {
     }
 }
 
-impl<'py> FromPyObject<'_, 'py> for PythonRealCoefficientsNonCommutativePolynomial {
-    type Error = PyErr;
-
-    fn extract(obj: pyo3::Borrowed<'_, 'py, pyo3::PyAny>) -> Result<Self, Self::Error> {
-        if let Ok(poly) = obj.cast::<PythonRealCoefficientsNonCommutativePolynomial>() {
-            Ok(poly.get().clone())
-        } else if let Ok(mon) = obj.cast::<PythonNonCommutativeMonomial>() {
-            Ok(Self(RustRealCoefficientsNonCommutativePolynomial {
-                data: BTreeMap::from([(mon.get().0.clone(), 1.0)]),
-            }))
-        } else if let Ok(op) = obj.cast::<PythonNonCommutativeOperator>() {
-            Ok(Self(RustRealCoefficientsNonCommutativePolynomial {
-                data: BTreeMap::from([(RustNonCommutativeMonomial::from(op.get().0), 1.0)]),
-            }))
-        } else {
-            Err(PyTypeError::new_err("Couldn't convert to PythonRealCoefficientsNonCommutativePolynomial"))
-        }
-    }
-}
-
 impl PythonComplexCoefficientsNonCommutativePolynomial {
     pub(crate) fn try_from_reference_bound<'py>(
         value: &Bound<'py, PyAny>,
@@ -130,20 +110,6 @@ impl PythonComplexCoefficientsNonCommutativePolynomial {
         } else {
             Ok(PythonRealCoefficientsNonCommutativePolynomial::try_from_reference_bound(value, unique_moment_id)?
                 .into())
-        }
-    }
-}
-
-impl<'py> FromPyObject<'_, 'py> for PythonComplexCoefficientsNonCommutativePolynomial {
-    type Error = PyErr;
-
-    fn extract(obj: pyo3::Borrowed<'_, 'py, pyo3::PyAny>) -> Result<Self, Self::Error> {
-        if let Ok(poly) = obj.cast::<PythonComplexCoefficientsNonCommutativePolynomial>() {
-            Ok(poly.get().clone())
-        } else if let Ok(real_poly) = obj.cast::<PythonRealCoefficientsNonCommutativePolynomial>() {
-            Ok(real_poly.get().clone().into())
-        } else {
-            Err(PyTypeError::new_err("Couldn't convert to PythonComplexCoefficientsNonCommutativePolynomial"))
         }
     }
 }

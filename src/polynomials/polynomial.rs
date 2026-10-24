@@ -508,21 +508,6 @@ where
     }
 }
 
-impl<Data, Scalar> Mul<Polynomial<Monomial<Data>, Scalar>> for Polynomial<Monomial<Data>, Scalar>
-where
-    for<'a> &'a Monomial<Data>: Mul<&'a Monomial<Data>, Output = Result<Monomial<Data>, String>>,
-    Data: Ord + Clone,
-    Monomial<Data>: HasAMomentMatrixId,
-    Scalar: PolynomialDtype,
-    Polynomial<Monomial<Data>, Scalar>: Display,
-{
-    type Output = Result<Polynomial<Monomial<Data>, Scalar>, String>;
-
-    fn mul(self, rhs: Polynomial<Monomial<Data>, Scalar>) -> Self::Output {
-        &self * &rhs
-    }
-}
-
 impl<Data, Scalar> Add<Scalar> for &Polynomial<Monomial<Data>, Scalar>
 where
     Data: Clone + Ord,
@@ -624,31 +609,6 @@ where
     }
 }
 
-impl<Data, Scalar> Add<&Monomial<Data>> for Polynomial<Monomial<Data>, Scalar>
-where
-    Monomial<Data>: Clone,
-    Scalar: PolynomialDtype,
-    Data: Ord + Clone,
-{
-    type Output = Polynomial<Monomial<Data>, Scalar>;
-
-    fn add(self, rhs: &Monomial<Data>) -> Polynomial<Monomial<Data>, Scalar> {
-        self + Polynomial::from(rhs)
-    }
-}
-
-impl<Data, Scalar> Add<Monomial<Data>> for Polynomial<Monomial<Data>, Scalar>
-where
-    Scalar: PolynomialDtype,
-    Data: Ord + Clone,
-{
-    type Output = Polynomial<Monomial<Data>, Scalar>;
-
-    fn add(self, rhs: Monomial<Data>) -> Polynomial<Monomial<Data>, Scalar> {
-        self + Polynomial::from(rhs)
-    }
-}
-
 impl<Data, Scalar, Identifier> Sub<&Operator<Identifier>> for &Polynomial<Monomial<Data>, Scalar>
 where
     Monomial<Data>: Clone,
@@ -664,19 +624,6 @@ where
 }
 
 impl<Data, Scalar> Sub<&Monomial<Data>> for &Polynomial<Monomial<Data>, Scalar>
-where
-    Monomial<Data>: Clone,
-    Scalar: PolynomialDtype,
-    Data: Ord + Clone,
-{
-    type Output = Polynomial<Monomial<Data>, Scalar>;
-
-    fn sub(self, rhs: &Monomial<Data>) -> Polynomial<Monomial<Data>, Scalar> {
-        self - Polynomial::from(rhs)
-    }
-}
-
-impl<Data, Scalar> Sub<&Monomial<Data>> for Polynomial<Monomial<Data>, Scalar>
 where
     Monomial<Data>: Clone,
     Scalar: PolynomialDtype,

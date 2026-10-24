@@ -288,15 +288,6 @@ impl RustCommutativeMonomial {
     /// Check whether a commutative monomial can be reduced under a given substitution rule and
     /// return the result if so
     fn can_be_reduced(&self, substitution_rule: &(Self, Self)) -> Result<Option<Self>, String> {
-        if substitution_rule.0.data.moment_matrix_id != substitution_rule.1.data.moment_matrix_id {
-            return Err(format!(
-                "Cannot substitute monomial {} with moment matrix index {} to monomial {} with moment matrix index {}.",
-                substitution_rule.0,
-                substitution_rule.0.data.moment_matrix_id,
-                substitution_rule.1,
-                substitution_rule.1.data.moment_matrix_id
-            ));
-        }
         let mut res = BTreeMap::new();
         let mut self_iter = self.data.inner_data.iter().map(|(&op, &op_power)| (op, op_power));
         // Transforms into owned values
@@ -474,14 +465,6 @@ impl Mul<RustCommutativeOperator> for &RustCommutativeMonomial {
     }
 }
 
-impl Mul<&RustCommutativeOperator> for RustCommutativeMonomial {
-    type Output = Result<RustCommutativeMonomial, String>;
-
-    fn mul(self, rhs: &RustCommutativeOperator) -> Result<RustCommutativeMonomial, String> {
-        rhs * self
-    }
-}
-
 #[allow(clippy::suspicious_arithmetic_impl)]
 impl Mul<&RustCommutativeMonomial> for &RustCommutativeMonomial {
     type Output = Result<RustCommutativeMonomial, String>;
@@ -515,26 +498,6 @@ impl Mul<RustCommutativeMonomial> for &RustCommutativeMonomial {
         }
         Ok(RustCommutativeMonomial::new(
             merge_btreemaps(&self.data.inner_data, rhs.data.inner_data, |&op, power_left, power_right| {
-                if op.id.inner_identifier.is_projector { 1 } else { power_left + power_right }
-            }),
-            self.data.moment_matrix_id,
-        ))
-    }
-}
-
-#[allow(clippy::suspicious_arithmetic_impl)]
-impl Mul<RustCommutativeMonomial> for RustCommutativeMonomial {
-    type Output = Result<RustCommutativeMonomial, String>;
-
-    fn mul(self, rhs: RustCommutativeMonomial) -> Result<RustCommutativeMonomial, String> {
-        if self.data.moment_matrix_id != rhs.data.moment_matrix_id {
-            return Err(format!(
-                "Cannot multiply monomial {} with moment matrix index {} with monomial {} with moment matrix index {}.",
-                self, self.data.moment_matrix_id, rhs, rhs.data.moment_matrix_id
-            ));
-        }
-        Ok(RustCommutativeMonomial::new(
-            merge_btreemaps(self.data.inner_data, rhs.data.inner_data, |&op, power_left, power_right| {
                 if op.id.inner_identifier.is_projector { 1 } else { power_left + power_right }
             }),
             self.data.moment_matrix_id,
