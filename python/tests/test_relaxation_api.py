@@ -81,6 +81,18 @@ def _invalid_relaxation_cases():
             "Cannot substitute",
             id="noncommutative_substitution_across_moment_matrices",
         ),
+        pytest.param(
+            [x], 1, x, {"substitutions": {1: x}}, ValueError, "identity", id="commutative_identity_substitution"
+        ),
+        pytest.param(
+            [h0, h1],
+            1,
+            h0,
+            {"substitutions": {1: h0}},
+            ValueError,
+            "identity",
+            id="noncommutative_identity_substitution",
+        ),
     ]
 
 
@@ -100,6 +112,23 @@ def test_scalar_on_the_left_of_a_constraint():
 
     assert str(flipped.inequalities) == str(expected.inequalities)
     assert str(flipped.moment_inequalities) == str(expected.moment_inequalities)
+
+
+@pytest.mark.parametrize("commutative", [True, False])
+def test_self_mapping_substitution_is_dropped(commutative):
+    # `p * p` already collapses to `p` for a projector, so `{p * p: p}` is the rule `p -> p`, which
+    # used to make the greedy rewriter loop forever.
+    if commutative:
+        p, q = generate_commutative_variables("p", 2, projector=True)
+    else:
+        p, q = generate_noncommutative_variables("p", 2, hermitian=True, projector=True)
+    objective = p * q + q * p
+
+    with_rule = get_relaxation([p, q], 2, objective, substitutions={p * p: p, q * q: q})
+    without_rule = get_relaxation([p, q], 2, objective)
+
+    assert str(with_rule.objective) == str(without_rule.objective)
+    assert str(with_rule.rewrite(p * q * p)) == str(p * q * p)
 
 
 @pytest.mark.parametrize("real", [True, False])
@@ -138,7 +167,7 @@ def _two_moment_matrices():
     return a + b, objective, operator_constraints
 
 
-@pytest.mark.parametrize("verbosity", [1, 2, 3])
+@pytest.mark.parametrize("verbosity", [0, 1, 2, 3])
 def test_verbosity(verbosity):
     """Logging and progress bars, over two moment matrices so that every bar is drawn."""
     variables, objective, operator_constraints = _two_moment_matrices()
@@ -147,14 +176,13 @@ def test_verbosity(verbosity):
     set_notebook(False)
     try:
         sdp = get_relaxation(variables, 2, objective, operator_constraints=operator_constraints, verbosity=verbosity)
-        assert logging.getLogger("ncpoleon").level == {1: logging.INFO, 2: logging.DEBUG, 3: 5}[verbosity]
+        assert logging.getLogger("ncpoleon").level == [logging.WARNING, logging.INFO, logging.DEBUG, 5][verbosity]
     finally:
         set_verbosity_level(0)
 
     assert str(sdp.generating_sets) == str(expected.generating_sets)
     assert str(sdp.equalities) == str(expected.equalities)
     assert str(sdp.inequalities) == str(expected.inequalities)
-    assert logging.getLogger("ncpoleon").level == logging.WARNING
 
 
 def test_rewriting_a_scalar_needs_a_unique_moment_matrix():

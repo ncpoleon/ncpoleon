@@ -1124,10 +1124,33 @@ where
         Mul<&'a Monomial<Data>, Output = Result<Polynomial<Monomial<Data>, Scalar>, String>>,
 {
     pub(super) fn new(
-        substitutions: BTreeMap<Monomial<Data>, Monomial<Data>>,
+        mut substitutions: BTreeMap<Monomial<Data>, Monomial<Data>>,
         substitution_strategy: RewritingStrategy,
         extra_monomials: BTreeMap<u8, Vec<Monomial<Data>>>,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, String>
+    where
+        Monomial<Data>: Display,
+    {
+        // The rules are validated once here rather than on every `rewrite` call. A rule mapping a
+        // monomial to itself (e.g. `P**2: P` for a projector, where `P**2` already collapses to `P`)
+        // is a no-op that the greedy rewriter would re-apply forever, so it is dropped. An identity
+        // key matches every monomial and keeps growing it, so it is rejected.
+        substitutions.retain(|key, value| key != value);
+        for (key, value) in substitutions.iter() {
+            if key.is_one() {
+                return Err(format!("Cannot substitute the identity {} with {}.", key, value));
+            }
+            if key.moment_matrix_id() != value.moment_matrix_id() {
+                return Err(format!(
+                    "Cannot substitute monomial {} with moment matrix index {} to monomial {} with moment matrix index {}.",
+                    key,
+                    key.moment_matrix_id(),
+                    value,
+                    value.moment_matrix_id()
+                ));
+            }
+        }
+
         let rewritten_extra_monomials: BTreeMap<u8, Vec<Monomial<Data>>> = extra_monomials
             .into_iter()
             .map(|(moment_matrix_index, monomials)| {

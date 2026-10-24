@@ -10,10 +10,9 @@ from ncpoleon import (
     solve,
 )
 
-from .test_simple_commutative_problem import _simple_commutative_params
 from .test_simple_complex_problem import _simple_complex_params
 from .test_simple_noncommutative_problem import _simple_noncommutative_vars
-from .utils import SOLVERS, consistency_check
+from .utils import SOLVERS, consistency_check, simple_commutative_params
 
 
 def _relaxations():
@@ -65,7 +64,7 @@ def test_save_load_round_trip(tmp_path, name, fmt):
 
 def _solvable_relaxations():
     """One problem per relaxation class, with the known optimum asserted by the solver tests."""
-    x0, x1, obj, constraints = _simple_commutative_params()
+    x0, x1, obj, constraints = simple_commutative_params()
     y1, y2, nc_obj = _simple_noncommutative_vars()
     z1, z2, complex_obj, complex_constraints = _simple_complex_params()
     return {

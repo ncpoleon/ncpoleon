@@ -5,12 +5,19 @@ from contextlib import nullcontext
 import pytest
 from ncpoleon import generate_noncommutative_variables, get_relaxation, solve
 from ncpoleon.export import to_mosek, to_picos
+from ncpoleon.logging import set_verbosity_level
 from ncpoleon.solve import MosekSolution
 from ncpoleon.solve.utils import automatic_solver_detection
 from ncpoleon.utils import is_mosek_available
 
-from .test_simple_commutative_problem import _simple_commutative_params
-from .utils import MOSEK_AVAILABLE, MOSEK_SKIP_REASON, SOLVER_SKIPS, SOLVERS, consistency_check
+from .utils import (
+    MOSEK_AVAILABLE,
+    MOSEK_SKIP_REASON,
+    SOLVER_SKIPS,
+    SOLVERS,
+    consistency_check,
+    simple_commutative_params,
+)
 
 # `ncpoleon.solve.solve` and friends are shadowed by the functions of the same name, hence `import_module`
 utils_module = importlib.import_module("ncpoleon.utils")
@@ -21,7 +28,7 @@ to_picos_module = importlib.import_module("ncpoleon.export.to_picos")
 
 
 def _relaxation():
-    x0, x1, obj, operator_constraints = _simple_commutative_params()
+    x0, x1, obj, operator_constraints = simple_commutative_params()
     return get_relaxation([x0, x1], 1, obj, operator_constraints=operator_constraints)
 
 
@@ -103,7 +110,11 @@ def test_export_errors(monkeypatch, export, module, available):
 
 @pytest.mark.skipif(not MOSEK_AVAILABLE, reason=MOSEK_SKIP_REASON)
 def test_mosek_verbosity_and_parameters(capfd):
-    sol = solve(_relaxation(), "min", solver="mosek", verbosity=1, intpntCoTolRelGap=1e-9)
+    sdp = _relaxation()
+    try:
+        sol = solve(sdp, "min", solver="mosek", verbosity=1, intpntCoTolRelGap=1e-9)
+    finally:
+        set_verbosity_level(0)
     assert sol.value == pytest.approx(EXPECTED, abs=1e-6)
     assert capfd.readouterr().out
 

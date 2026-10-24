@@ -324,15 +324,6 @@ impl RustNonCommutativeMonomial {
     /// Check whether a noncommutative monomial can be reduced under a given substitution rule
     /// by finding the substitution key as a contiguous subsequence of operators.
     fn can_be_reduced(&self, substitution_rule: &(Self, Self)) -> Result<Option<Self>, String> {
-        if substitution_rule.0.data.moment_matrix_id != substitution_rule.1.data.moment_matrix_id {
-            return Err(format!(
-                "Cannot substitute monomial {} with moment matrix index {} to monomial {} with moment matrix index {}.",
-                substitution_rule.0,
-                substitution_rule.0.data.moment_matrix_id,
-                substitution_rule.1,
-                substitution_rule.1.data.moment_matrix_id
-            ));
-        }
         let divisor = &substitution_rule.0.data.inner_data;
         let replacement_data = &substitution_rule.1.data.inner_data;
         let mmi = self.data.moment_matrix_id;
@@ -462,7 +453,7 @@ impl Mul<&RustNonCommutativeOperator> for &RustNonCommutativeMonomial {
                 self.clone()
             } else {
                 let mut res = Vec::with_capacity(1 + self.data.inner_data.len());
-                res.extend(self.data.inner_data.to_vec());
+                res.extend_from_slice(&self.data.inner_data);
                 res.push(*rhs);
                 RustNonCommutativeMonomial::new(res, self.data.moment_matrix_id)
             }),
@@ -574,7 +565,7 @@ impl Mul<RustNonCommutativeMonomial> for &RustNonCommutativeMonomial {
                                 self.data.inner_data.iter().cloned().take(self.data.inner_data.len() - 1),
                             );
                         } else {
-                            rhs.data.inner_data.splice(0..0, self.data.inner_data.to_vec());
+                            rhs.data.inner_data.splice(0..0, self.data.inner_data.iter().cloned());
                         }
                         rhs.data.moment_matrix_id = self.data.moment_matrix_id;
                         Ok(rhs)
@@ -625,7 +616,7 @@ impl Mul<&RustNonCommutativeMonomial> for RustNonCommutativeMonomial {
                         if (op_self == *op_rhs) & op_self.id.is_projector {
                             self.data.inner_data.splice(len..len, rhs.data.inner_data.iter().cloned().skip(1));
                         } else {
-                            self.data.inner_data.splice(len..len, rhs.data.inner_data.to_vec());
+                            self.data.inner_data.splice(len..len, rhs.data.inner_data.iter().cloned());
                         }
                         Ok(self)
                     }

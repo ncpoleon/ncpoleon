@@ -1,7 +1,7 @@
 """Every arithmetic operator between every kind of polynomial element, checked against a pure-Python reference."""
 
 import operator
-from collections import defaultdict
+from collections import Counter, defaultdict
 from itertools import product
 
 import pytest
@@ -19,7 +19,7 @@ PAIRS = [(lhs, rhs) for lhs, rhs in product(KINDS, KINDS) if not {lhs, rhs} <= S
 
 def _elements(family, moment_matrix_id=0):
     (x, y), identity = GENERATORS[family]("x", 2, moment_matrix_id=moment_matrix_id, return_identity=True)
-    elements = {
+    return {
         "operator": x,
         "monomial": x * y,
         "identity": identity,
@@ -28,47 +28,60 @@ def _elements(family, moment_matrix_id=0):
         "float": 1.5,
         "complex": 2 + 1j,
     }
-    return elements, identity
 
 
-def _terms(value, identity):
-    """The (monomial, coefficient) pairs of any element, a scalar being a multiple of the identity."""
-    if isinstance(value, (int, float, complex)):
-        return [(identity, value)]
-    if hasattr(value, "as_dict"):
-        return list(value.as_dict().items())
-    return [(value, 1.0)]
+def _reference_terms(family):
+    """The terms of `_elements` in moment matrix 0, each monomial written as the word of its operators' names."""
+    x, y = (str(variable) for variable in GENERATORS[family]("x", 2))
+    return {
+        "operator": [((x,), 1.0)],
+        "monomial": [((x, y), 1.0)],
+        "identity": [((), 1.0)],
+        "real_poly": [((x,), 1.0), ((), 2.0)],
+        "complex_poly": [((y,), 1.0), ((), 1j)],
+        "float": [((), 1.5)],
+        "complex": [((), 2 + 1j)],
+    }
 
 
-# Keyed by `str`: monomials' `__eq__` builds a (truthy) constraint, so they can't be compared as dict keys
-def _as_dict(value, identity):
+def _render(family, word):
+    """How the library displays the moment matrix 0 monomial that `word` stands for."""
+    if family == "noncommutative":
+        return "".join(word) or "I_0"
+    powers = sorted(Counter(word).items())
+    return "".join(name if power == 1 else f"{name}^{power}" for name, power in powers) or "1"
+
+
+def _accumulate(terms):
     res = defaultdict(complex)
-    for monomial, coefficient in _terms(value, identity):
-        res[str(monomial)] += coefficient
+    for key, coefficient in terms:
+        res[key] += coefficient
     return {key: coefficient for key, coefficient in res.items() if coefficient != 0}
 
 
-def _reference(op, lhs, rhs, identity):
-    left, right = _terms(lhs, identity), _terms(rhs, identity)
-    if op is operator.mul:
-        terms = [(m1 * m2, c1 * c2) for (m1, c1), (m2, c2) in product(left, right)]
-    elif op is operator.truediv:
-        terms = [(m, c / rhs) for m, c in left]
+# Keyed by moment matrix and `str`, as monomials' `__eq__` builds a (truthy) constraint and can't key a dict
+def _as_dict(value):
+    terms = value.as_dict().items() if hasattr(value, "as_dict") else [(value, 1.0)]
+    return _accumulate(((monomial.moment_matrix_id, str(monomial)), coefficient) for monomial, coefficient in terms)
+
+
+def _reference(family, op, lhs_kind, rhs_kind):
+    terms = _reference_terms(family)
+    left, right = terms[lhs_kind], terms[rhs_kind]
+    if op in (operator.mul, operator.truediv):
+        # Division is only ever by a scalar, whose word is empty
+        words = [(w1 + w2, op(c1, c2)) for (w1, c1), (w2, c2) in product(left, right)]
     else:
         sign = 1 if op is operator.add else -1
-        terms = left + [(m, sign * c) for m, c in right]
-
-    res = defaultdict(complex)
-    for monomial, coefficient in terms:
-        res[str(monomial)] += coefficient
-    return {key: coefficient for key, coefficient in res.items() if coefficient != 0}
+        words = left + [(w, sign * c) for w, c in right]
+    return _accumulate(((0, _render(family, word)), coefficient) for word, coefficient in words)
 
 
 @pytest.mark.parametrize("family", GENERATORS)
 @pytest.mark.parametrize("op", OPERATORS, ids=lambda op: op.__name__)
 @pytest.mark.parametrize("lhs_kind, rhs_kind", PAIRS)
 def test_binary_operator(family, op, lhs_kind, rhs_kind):
-    elements, identity = _elements(family)
+    elements = _elements(family)
     lhs, rhs = elements[lhs_kind], elements[rhs_kind]
 
     if op is operator.truediv and rhs_kind not in SCALAR_KINDS:
@@ -78,7 +91,7 @@ def test_binary_operator(family, op, lhs_kind, rhs_kind):
 
     res = op(lhs, rhs)
 
-    assert _as_dict(res, identity) == pytest.approx(_reference(op, lhs, rhs, identity))
+    assert _as_dict(res) == pytest.approx(_reference(family, op, lhs_kind, rhs_kind))
     is_complex = bool({lhs_kind, rhs_kind} & COMPLEX_KINDS)
     if hasattr(res, "is_real"):
         assert res.is_real is not is_complex
@@ -90,7 +103,7 @@ def test_binary_operator(family, op, lhs_kind, rhs_kind):
 @pytest.mark.parametrize("op", OPERATORS, ids=lambda op: op.__name__)
 @pytest.mark.parametrize("kind", NON_SCALAR_KINDS)
 def test_unsupported_operand(family, op, kind):
-    element = _elements(family)[0][kind]
+    element = _elements(family)[kind]
 
     with pytest.raises(TypeError):
         op(element, None)
@@ -101,13 +114,12 @@ def test_unsupported_operand(family, op, kind):
 @pytest.mark.parametrize("family", GENERATORS)
 @pytest.mark.parametrize("kind", NON_SCALAR_KINDS)
 def test_unary_methods(family, kind):
-    elements, identity = _elements(family)
-    element = elements[kind]
-    expected = _as_dict(element, identity)
+    element = _elements(family)[kind]
+    expected = _as_dict(element)
 
-    assert _as_dict(-element, identity) == {key: -coefficient for key, coefficient in expected.items()}
-    assert _as_dict(element**2, identity) == pytest.approx(_reference(operator.mul, element, element, identity))
-    assert _as_dict(element.adjoint().adjoint(), identity) == expected
+    assert _as_dict(-element) == {key: -coefficient for key, coefficient in expected.items()}
+    assert _as_dict(element**2) == pytest.approx(_reference(family, operator.mul, kind, kind))
+    assert _as_dict(element.adjoint().adjoint()) == expected
     assert repr(element) == str(element)
 
     if kind in {"operator", "monomial", "identity"}:
@@ -123,19 +135,19 @@ def test_unary_methods(family, kind):
 @pytest.mark.parametrize("family", GENERATORS)
 @pytest.mark.parametrize("kind", NON_SCALAR_KINDS)
 def test_comparisons_build_constraints(family, kind):
-    elements, identity = _elements(family)
+    elements = _elements(family)
     element = elements[kind]
 
     greater = element >= 1.0
     assert greater.is_inequality and not greater.is_equality
-    assert _as_dict(greater.lhs, identity) == _as_dict(element, identity)
+    assert _as_dict(greater.lhs) == _as_dict(element)
     assert greater.rhs == 1.0
 
-    # Reflected by Python into `element.__ge__`, so the scalar ends up on the left
+    # The element's own `__le__` swaps the operands, so the scalar ends up on the left
     lower = element <= 1.0
     assert lower.is_inequality
     assert lower.lhs == 1.0
-    assert _as_dict(lower.rhs, identity) == _as_dict(element, identity)
+    assert _as_dict(lower.rhs) == _as_dict(element)
     assert str(lower) == repr(lower)
     assert str(lower).endswith(f" >= {lower.rhs})")
 
@@ -151,8 +163,8 @@ def test_comparisons_build_constraints(family, kind):
 @pytest.mark.parametrize("lhs_kind", NON_SCALAR_KINDS)
 @pytest.mark.parametrize("rhs_kind", NON_SCALAR_KINDS)
 def test_multiplying_different_moment_matrices_fails(family, lhs_kind, rhs_kind):
-    lhs = _elements(family, moment_matrix_id=0)[0][lhs_kind]
-    rhs = _elements(family, moment_matrix_id=1)[0][rhs_kind]
+    lhs = _elements(family, moment_matrix_id=0)[lhs_kind]
+    rhs = _elements(family, moment_matrix_id=1)[rhs_kind]
 
     with pytest.raises(ValueError):
         lhs * rhs
@@ -178,7 +190,8 @@ def test_polynomial_spanning_moment_matrices(family):
 
 @pytest.mark.parametrize("family", GENERATORS)
 def test_zero_polynomial(family, caplog):
-    elements, identity = _elements(family)
+    # Built in moment matrix 1, so that the fallback to moment matrix 0 below is observable
+    elements = _elements(family, moment_matrix_id=1)
 
     for kind in ["real_poly", "complex_poly"]:
         zero = elements[kind] - elements[kind]
@@ -186,7 +199,7 @@ def test_zero_polynomial(family, caplog):
         assert str(zero) == "0"
         assert (zero**2).is_zero()
         # A zero polynomial has no moment matrix to take the identity from, so it falls back to moment matrix 0
-        assert _as_dict(zero + 1.5, identity) == {str(identity): 1.5}
+        assert _as_dict(zero + 1.5) == {(0, _render(family, ())): 1.5}
     assert "was added to a zero polynomial" in caplog.text
 
 
@@ -214,7 +227,7 @@ def test_projectors_are_idempotent(family):
 @pytest.mark.parametrize("family", GENERATORS)
 @pytest.mark.parametrize("kind", ["real_poly", "complex_poly"])
 def test_change_variables(family, kind):
-    poly = _elements(family)[0][kind]
+    poly = _elements(family)[kind]
     terms = list(poly.as_dict().items())
 
     assert poly.change_variables({monomial: 2.0 for monomial, _ in terms}) == pytest.approx(

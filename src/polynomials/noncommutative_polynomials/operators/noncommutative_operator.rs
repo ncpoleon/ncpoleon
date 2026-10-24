@@ -380,7 +380,7 @@ impl Mul<&RustNonCommutativeMonomial> for &RustNonCommutativeOperator {
             } else {
                 let mut res = Vec::with_capacity(1 + rhs.data.inner_data.len());
                 res.push(*self);
-                res.extend(rhs.data.inner_data.to_vec());
+                res.extend_from_slice(&rhs.data.inner_data);
                 RustNonCommutativeMonomial::new(res, self.id.moment_matrix_id)
             })
         } else {
