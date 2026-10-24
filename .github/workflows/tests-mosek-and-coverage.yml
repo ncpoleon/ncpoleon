@@ -40,7 +40,7 @@ jobs:
         with:
           # `cargo test` links against the runner's system Python, so a cache
           # built on an older image links a libpython that no longer exists.
-          env-vars: ImageOS
+          env-vars: ImageOS ImageVersion
       - uses: taiki-e/install-action@v2.87.22
         with:
           tool: cargo-llvm-cov
@@ -101,7 +101,7 @@ jobs:
         with:
           # `cargo test` links against the runner's system Python, so a cache
           # built on an older image links a libpython that no longer exists.
-          env-vars: ImageOS
+          env-vars: ImageOS ImageVersion
       - uses: taiki-e/install-action@v2.87.22
         with:
           tool: cargo-llvm-cov

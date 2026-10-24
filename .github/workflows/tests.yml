@@ -155,6 +155,6 @@ jobs:
           key: ${{ matrix.os }}
           # `cargo test` links against the runner's system Python, so a cache
           # built on an older image links a libpython that no longer exists.
-          env-vars: ImageOS
+          env-vars: ImageOS ImageVersion
       - name: Rust tests
         run: cargo test
