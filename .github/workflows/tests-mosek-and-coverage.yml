@@ -36,15 +36,15 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: llvm-tools-preview
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0
         with:
           # `cargo test` links against the runner's system Python, so a cache
           # built on an older image links a libpython that no longer exists.
           env-vars: ImageOS ImageVersion
-      - uses: taiki-e/install-action@v2.87.22
+      - uses: taiki-e/install-action@v2.87.30
         with:
           tool: cargo-llvm-cov
-      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: astral-sh/setup-uv@v10.3.2
       - name: Tests and coverage with MOSEK license
         env:
           MSK_LICENSE: ${{ secrets.MSK_LICENSE }}
@@ -97,15 +97,15 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: llvm-tools-preview
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0
         with:
           # `cargo test` links against the runner's system Python, so a cache
           # built on an older image links a libpython that no longer exists.
           env-vars: ImageOS ImageVersion
-      - uses: taiki-e/install-action@v2.87.22
+      - uses: taiki-e/install-action@v2.87.30
         with:
           tool: cargo-llvm-cov
-      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: astral-sh/setup-uv@v10.3.2
       - name: Tests and coverage with MOSEK license
         env:
           MSK_LICENSE: ${{ secrets.MSK_LICENSE }}
