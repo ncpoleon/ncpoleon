@@ -89,19 +89,19 @@ jobs:
         with:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0
         with:
           # Without this every combination shares one cache entry and they
           # overwrite each other's.
           key: ${{ matrix.os }}-${{ matrix.python-version }}
-      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: astral-sh/setup-uv@v10.3.2
       # uv downloads an interpreter only when no installed one matches, and its
       # managed builds for this runner are x86_64. Taking one would make maturin
       # target `x86_64-pc-windows-msvc` against an aarch64 host toolchain, which
       # pyo3 refuses to build without the `PYO3_CROSS_*` variables -- and the
       # wheel it produced would not be the aarch64 one distribute.yml ships.
       # Installing the interpreter ourselves keeps the whole job native.
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
         id: native-python
         if: matrix.os == 'windows-11-arm'
         with:
@@ -122,10 +122,10 @@ jobs:
         with:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0
         with:
           key: lowest
-      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: astral-sh/setup-uv@v10.3.2
       - name: Python tests
         env:
           UV_RESOLUTION: lowest-direct
@@ -150,7 +150,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0
         with:
           key: ${{ matrix.os }}
           # `cargo test` links against the runner's system Python, so a cache
