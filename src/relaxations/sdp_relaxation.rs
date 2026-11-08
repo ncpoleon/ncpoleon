@@ -10,7 +10,7 @@ use log::{debug, info, trace};
 use num_complex::Complex;
 use num_traits::Zero;
 use pyo3::IntoPyObjectExt;
-use pyo3::exceptions::{PyKeyError, PyNotImplementedError, PyRuntimeError, PyTypeError, PyValueError};
+use pyo3::exceptions::{PyIndexError, PyKeyError, PyNotImplementedError, PyRuntimeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyComplex, PyDict, PyFloat, PyInt, PyList};
 use serde::de::DeserializeOwned;
@@ -39,7 +39,7 @@ use crate::polynomials::noncommutative_polynomials::polynomials::noncommutative_
 };
 use crate::polynomials::polynomial::{Polynomial, PolynomialDtype, PolynomialTrait, TryIntoReal};
 use crate::relaxations::constraint::{
-    ConstraintKind, Hermiticity, PythonComplexCoefficientsCommutativeConstraint,
+    Constraint, ConstraintKind, Hermiticity, PythonComplexCoefficientsCommutativeConstraint,
     PythonComplexCoefficientsNonCommutativeConstraint, PythonRealCoefficientsCommutativeConstraint,
     PythonRealCoefficientsNonCommutativeConstraint,
 };
@@ -648,7 +648,74 @@ fn get_realness_and_commutativity_of_constraint_from_bound<'py>(
 }
 
 macro_rules! impl_sdp_relaxation_pymethods {
-    ($py_relaxation:ident, $py_poly:ident, $py_monomial:ident, $py_moment_matrix:ident, $scalar:ty) => {
+    (
+        $py_relaxation:ident, $py_poly:ident, $py_monomial:ident, $py_moment_matrix:ident, $py_constraint:ident,
+        $rust_monomial:ty, $scalar:ty
+    ) => {
+        impl $py_relaxation {
+            /// Converts the `label` constraint at `index` of a list into this relaxation's constraint type.
+            fn convert_constraint(
+                constraint: &Bound<'_, PyAny>,
+                index: usize,
+                label: &str,
+            ) -> PyResult<Constraint<$rust_monomial, $scalar>> {
+                $py_constraint::try_from(constraint).map(|constraint| constraint.0).map_err(|_err| {
+                    PyValueError::new_err(format!(
+                        concat!("Couldn't convert the {} constraint at index {} into a ", stringify!($py_constraint), "."),
+                        label, index
+                    ))
+                })
+            }
+
+            /// Converts moment constraints given as in `get_relaxation`.
+            fn convert_moment_constraints(
+                constraints: &Bound<'_, PyList>,
+            ) -> PyResult<Vec<MomentConstraint<$rust_monomial, $scalar>>> {
+                constraints
+                    .iter()
+                    .enumerate()
+                    .map(|(index, constraint)| {
+                        let constraint = Self::convert_constraint(&constraint, index, "moment")?;
+                        let kind = constraint.kind;
+                        Ok((kind, constraint.into_poly_scalar_tuple().map_err(PyValueError::new_err)?))
+                    })
+                    .collect()
+            }
+
+            /// Converts operator constraints given as in `get_relaxation`, each optionally paired with its
+            /// generating set.
+            fn convert_operator_constraints(
+                &self,
+                constraints: &Bound<'_, PyList>,
+            ) -> PyResult<Vec<OperatorConstraint<$rust_monomial, $scalar>>> {
+                let unique_moment_matrix_id = self.0.unique_moment_matrix_id();
+                constraints
+                    .iter()
+                    .enumerate()
+                    .map(|(index, item)| {
+                        let (constraint, generating_set) = item
+                            .extract::<(Bound<'_, PyAny>, Option<Bound<'_, PyList>>)>()
+                            .unwrap_or_else(|_err| (item, None));
+                        let constraint = Self::convert_constraint(&constraint, index, "operator")?;
+                        let generating_set = generating_set
+                            .map(|generating_set| {
+                                generating_set
+                                    .iter()
+                                    .map(|monomial| {
+                                        $py_monomial::try_from_reference_bound(&monomial, unique_moment_matrix_id)
+                                            .map(|monomial| monomial.0)
+                                    })
+                                    .collect::<PyResult<Vec<_>>>()
+                            })
+                            .transpose()?;
+                        let kind = constraint.kind;
+                        let polynomial = constraint.into_polynomial_diff().map_err(PyValueError::new_err)?;
+                        Ok((kind, (polynomial, generating_set)))
+                    })
+                    .collect()
+            }
+        }
+
         #[pymethods]
         impl $py_relaxation {
             fn change_variables<'py>(
@@ -767,11 +834,7 @@ macro_rules! impl_sdp_relaxation_pymethods {
 
             fn rewrite<'py>(&self, mon_or_poly: &Bound<'py, PyAny>) -> PyResult<Py<PyAny>> {
                 let py = mon_or_poly.py();
-                let unique_moment_matrix_id = if self.0.moment_matrices.len() == 1 {
-                    self.0.moment_matrices.keys().next().copied()
-                } else {
-                    None
-                };
+                let unique_moment_matrix_id = self.0.unique_moment_matrix_id();
                 if let Ok(mon) = $py_monomial::try_from_reference_bound(mon_or_poly, unique_moment_matrix_id) {
                     $py_monomial(
                         mon.0
@@ -802,7 +865,7 @@ macro_rules! impl_sdp_relaxation_pymethods {
                 let left_btreemap: BTreeMap<u8, Vec<$py_monomial>> = self.0
                     .generating_sets
                     .iter()
-                    .map(|(&index, generating_set)| (index, generating_set.iter().cloned().map($py_monomial).collect())).collect();
+                    .map(|(&index, monomials_sets)| (index, monomials_sets.iter().flatten().cloned().map($py_monomial).collect())).collect();
                 let right_btreemap: BTreeMap<u8, Vec<$py_monomial>> = self.0
                     .extra_monomials
                     .iter()
@@ -871,9 +934,9 @@ macro_rules! impl_sdp_relaxation_pymethods {
             }
 
             #[getter]
-            fn equalities(&self) -> BTreeMap<u8, Vec<($py_poly, Vec<$py_monomial>)>> {
+            fn operator_equalities(&self) -> BTreeMap<u8, Vec<($py_poly, Vec<$py_monomial>)>> {
                 self.0
-                    .equalities
+                    .operator_equalities
                     .iter()
                     .map(|(&mm_id, equalities_id)| {
                         (
@@ -896,9 +959,9 @@ macro_rules! impl_sdp_relaxation_pymethods {
             }
 
             #[getter]
-            fn inequalities(&self) -> BTreeMap<u8, Vec<($py_poly, Vec<$py_monomial>)>> {
+            fn operator_inequalities(&self) -> BTreeMap<u8, Vec<($py_poly, Vec<$py_monomial>)>> {
                 self.0
-                    .inequalities
+                    .operator_inequalities
                     .iter()
                     .map(|(&mm_id, inequalities_id)| {
                         (
@@ -920,6 +983,75 @@ macro_rules! impl_sdp_relaxation_pymethods {
                     .collect()
             }
 
+            /// Adds operator constraints, given as in `get_relaxation`. The relaxation is then the same as if
+            /// they had been appended to the `operator_constraints` it was built with.
+            fn add_operator_constraints(&mut self, constraints: &Bound<'_, PyList>) -> PyResult<()> {
+                let (mut equalities, mut inequalities) = (Vec::new(), Vec::new());
+                for (kind, constraint) in self.convert_operator_constraints(constraints)? {
+                    match kind {
+                        ConstraintKind::Equality => equalities.push(constraint),
+                        ConstraintKind::Inequality => inequalities.push(constraint),
+                    }
+                }
+                let moment_matrix_ids = self.0.moment_matrices.keys().copied().collect();
+                let (equalities, inequalities) =
+                    self.0.partition_operator_constraints(equalities, inequalities, &moment_matrix_ids)?;
+                self.0.add_operator_constraints(equalities, inequalities, 0, false)
+            }
+
+            /// Removes the operator constraints at the given positions in `operator_equalities[moment_matrix_id]`
+            /// and `operator_inequalities[moment_matrix_id]`. The relaxation is then the same as if it had been
+            /// built without them. `moment_matrix_id` can be omitted when the relaxation has a single moment matrix.
+            #[pyo3(signature = (*, equalities = Vec::new(), inequalities = Vec::new(), moment_matrix_id = None))]
+            fn remove_operator_constraints(
+                &mut self,
+                equalities: Vec<usize>,
+                inequalities: Vec<usize>,
+                moment_matrix_id: Option<u8>,
+            ) -> PyResult<()> {
+                let moment_matrix_id = moment_matrix_id.or_else(|| self.0.unique_moment_matrix_id()).ok_or_else(|| {
+                    PyValueError::new_err("The relaxation has several moment matrices, so moment_matrix_id must be given.")
+                })?;
+                self.0.remove_operator_constraints(moment_matrix_id, equalities, inequalities)
+            }
+
+            /// Replaces operator constraints in place: `constraints[k]`, given as in `get_relaxation`, takes the
+            /// position `indices[k]` among the operator constraints of its kind on its moment matrix. The relaxation
+            /// is then the same as if it had been built with these constraints instead.
+            fn replace_operator_constraints(
+                &mut self,
+                indices: Vec<usize>,
+                constraints: &Bound<'_, PyList>,
+            ) -> PyResult<()> {
+                check_one_index_per_constraint(&indices, constraints)?;
+                let replacements = indices.into_iter().zip(self.convert_operator_constraints(constraints)?).collect();
+                self.0.replace_operator_constraints(replacements)
+            }
+
+            /// Adds moment constraints, given as in `get_relaxation`. They go after the existing ones, normalization
+            /// constraints included.
+            fn add_moment_constraints(&mut self, constraints: &Bound<'_, PyList>) -> PyResult<()> {
+                self.0.add_moment_constraints(Self::convert_moment_constraints(constraints)?)
+            }
+
+            /// Removes the moment constraints at the given positions in `moment_equalities` and
+            /// `moment_inequalities`, normalization constraints included.
+            #[pyo3(signature = (*, equalities = Vec::new(), inequalities = Vec::new()))]
+            fn remove_moment_constraints(&mut self, equalities: Vec<usize>, inequalities: Vec<usize>) -> PyResult<()> {
+                self.0.remove_moment_constraints(equalities, inequalities)
+            }
+
+            /// Replaces moment constraints in place: `constraints[k]`, given as in `get_relaxation`, takes the
+            /// position `indices[k]` in `moment_equalities` or `moment_inequalities`, depending on its kind.
+            fn replace_moment_constraints(
+                &mut self,
+                indices: Vec<usize>,
+                constraints: &Bound<'_, PyList>,
+            ) -> PyResult<()> {
+                check_one_index_per_constraint(&indices, constraints)?;
+                let replacements = indices.into_iter().zip(Self::convert_moment_constraints(constraints)?).collect();
+                self.0.replace_moment_constraints(replacements)
+            }
         }
     };
 }
@@ -933,7 +1065,7 @@ pub(crate) fn save_relaxation(relaxation: &Bound<'_, PyAny>, path: PathBuf, form
     macro_rules! save_as {
         ($($class:ident),+) => {$(
             if let Ok(relaxation) = relaxation.cast::<$class>() {
-                return write_relaxation(&relaxation.get().0, stringify!($class), &path, format);
+                return write_relaxation(&relaxation.borrow().0, stringify!($class), &path, format);
             }
         )+};
     }
@@ -1018,6 +1150,9 @@ fn unknown_format(format: &str) -> PyErr {
 }
 
 type PolynomialWithGeneratingSet<MonomialType, Scalar> = (Polynomial<MonomialType, Scalar>, Vec<MonomialType>);
+type ByMomentMatrix<T> = BTreeMap<u8, Vec<T>>;
+type ConstraintsByMomentMatrix<MonomialType, Scalar> =
+    ByMomentMatrix<PolynomialWithGeneratingSet<MonomialType, Scalar>>;
 type OperatorEqualityAsMoments<MonomialType, Scalar> =
     (Polynomial<MonomialType, Scalar>, Vec<Polynomial<MonomialType, Scalar>>, Hermiticity);
 
@@ -1026,12 +1161,14 @@ pub(super) struct SdpRelaxation<MonomialType: AdjointTrait + Ord, Scalar: Polyno
     objective: Polynomial<MonomialType, Scalar>,
     substitutions: BTreeMap<MonomialType, MonomialType>,
     substitution_strategy: RewritingStrategy,
-    equalities: BTreeMap<u8, Vec<PolynomialWithGeneratingSet<MonomialType, Scalar>>>,
-    inequalities: BTreeMap<u8, Vec<PolynomialWithGeneratingSet<MonomialType, Scalar>>>,
+    operator_equalities: BTreeMap<u8, Vec<PolynomialWithGeneratingSet<MonomialType, Scalar>>>,
+    operator_inequalities: BTreeMap<u8, Vec<PolynomialWithGeneratingSet<MonomialType, Scalar>>>,
     moment_equalities: Vec<(Polynomial<MonomialType, Scalar>, Scalar)>,
     moment_inequalities: Vec<(Polynomial<MonomialType, Scalar>, f64)>,
     moment_matrices: BTreeMap<u8, RustMomentMatrix<Scalar, MonomialType>>,
-    generating_sets: BTreeMap<u8, Vec<MonomialType>>,
+    // The i-th set holds the monomials generated from products of i operators, for i from 0 to the level. The split
+    // is kept so that operator constraints added after the build get the same default generating set
+    generating_sets: BTreeMap<u8, Vec<Vec<MonomialType>>>,
     localising_moment_matrices_equalities: BTreeMap<u8, Vec<OperatorEqualityAsMoments<MonomialType, Scalar>>>,
     localising_moment_matrices_inequalities: BTreeMap<u8, Vec<RustMomentMatrix<Scalar, MonomialType>>>,
     extra_monomials: BTreeMap<u8, Vec<MonomialType>>,
@@ -1054,14 +1191,14 @@ pub(super) type ComplexNonCommutativeSdpRelaxation = NonCommutativeSdpRelaxation
 ///
 /// Use the `change_variables` method to substitute the abstract monomials with Python objects.
 // Commutative Python wrappers
-#[pyclass(frozen, module = "ncpoleon.relaxations", subclass, name = "RealValuedCommutativeSdpRelaxation")]
+#[pyclass(module = "ncpoleon.relaxations", subclass, name = "RealValuedCommutativeSdpRelaxation")]
 pub(super) struct PythonRealValuedCommutativeSdpRelaxation(RealCommutativeSdpRelaxation);
 
 /// SDP relaxation for a commutative polynomial optimisation problem with complex coefficients.
 ///
 /// Same as [`RealValuedCommutativeSdpRelaxation`] but the objective and all
 /// constraint polynomials may have complex coefficients.
-#[pyclass(frozen, module = "ncpoleon.relaxations", subclass, name = "ComplexValuedCommutativeSdpRelaxation")]
+#[pyclass(module = "ncpoleon.relaxations", subclass, name = "ComplexValuedCommutativeSdpRelaxation")]
 pub(super) struct PythonComplexValuedCommutativeSdpRelaxation(ComplexCommutativeSdpRelaxation);
 
 /// SDP relaxation for a non-commutative polynomial optimisation problem with real coefficients.
@@ -1069,14 +1206,14 @@ pub(super) struct PythonComplexValuedCommutativeSdpRelaxation(ComplexCommutative
 /// Instances are created by calling [`get_relaxation`] with non-commutative
 /// variables, a real-valued objective and real-valued equality and inequality constraints.
 // Noncommutative Python wrappers
-#[pyclass(frozen, module = "ncpoleon.relaxations", subclass, name = "RealValuedNonCommutativeSdpRelaxation")]
+#[pyclass(module = "ncpoleon.relaxations", subclass, name = "RealValuedNonCommutativeSdpRelaxation")]
 pub(super) struct PythonRealValuedNonCommutativeSdpRelaxation(RealNonCommutativeSdpRelaxation);
 
 /// SDP relaxation for a non-commutative polynomial optimisation problem with complex coefficients.
 ///
 /// Same as [`RealValuedNonCommutativeSdpRelaxation`] but the objective and all
 /// constraint polynomials may have complex coefficients.
-#[pyclass(frozen, module = "ncpoleon.relaxations", subclass, name = "ComplexValuedNonCommutativeSdpRelaxation")]
+#[pyclass(module = "ncpoleon.relaxations", subclass, name = "ComplexValuedNonCommutativeSdpRelaxation")]
 pub(super) struct PythonComplexValuedNonCommutativeSdpRelaxation(ComplexNonCommutativeSdpRelaxation);
 
 // Generate #[pymethods] for all relaxation wrapper types via macro
@@ -1085,6 +1222,8 @@ impl_sdp_relaxation_pymethods!(
     PythonRealCoefficientsCommutativePolynomial,
     PythonCommutativeMonomial,
     PythonRealValuedCommutativeMomentMatrix,
+    PythonRealCoefficientsCommutativeConstraint,
+    RustCommutativeMonomial,
     f64
 );
 impl_sdp_relaxation_pymethods!(
@@ -1092,6 +1231,8 @@ impl_sdp_relaxation_pymethods!(
     PythonComplexCoefficientsCommutativePolynomial,
     PythonCommutativeMonomial,
     PythonComplexValuedCommutativeMomentMatrix,
+    PythonComplexCoefficientsCommutativeConstraint,
+    RustCommutativeMonomial,
     Complex<f64>
 );
 impl_sdp_relaxation_pymethods!(
@@ -1099,6 +1240,8 @@ impl_sdp_relaxation_pymethods!(
     PythonRealCoefficientsNonCommutativePolynomial,
     PythonNonCommutativeMonomial,
     PythonRealValuedNonCommutativeMomentMatrix,
+    PythonRealCoefficientsNonCommutativeConstraint,
+    RustNonCommutativeMonomial,
     f64
 );
 impl_sdp_relaxation_pymethods!(
@@ -1106,11 +1249,16 @@ impl_sdp_relaxation_pymethods!(
     PythonComplexCoefficientsNonCommutativePolynomial,
     PythonNonCommutativeMonomial,
     PythonComplexValuedNonCommutativeMomentMatrix,
+    PythonComplexCoefficientsNonCommutativeConstraint,
+    RustNonCommutativeMonomial,
     Complex<f64>
 );
 
 type PolynomialWithOptionalGeneratingSet<MonomialType, Scalar> =
     (Polynomial<MonomialType, Scalar>, Option<Vec<MonomialType>>);
+type OperatorConstraint<MonomialType, Scalar> =
+    (ConstraintKind, PolynomialWithOptionalGeneratingSet<MonomialType, Scalar>);
+type MomentConstraint<MonomialType, Scalar> = (ConstraintKind, (Polynomial<MonomialType, Scalar>, Scalar));
 
 impl<Data: Ord + Clone, Scalar: PolynomialDtype + Into<Complex<f64>>> SdpRelaxation<Monomial<Data>, Scalar>
 where
@@ -1143,8 +1291,8 @@ where
             objective: Polynomial::zero(),
             substitutions,
             substitution_strategy,
-            equalities: BTreeMap::new(),
-            inequalities: BTreeMap::new(),
+            operator_equalities: BTreeMap::new(),
+            operator_inequalities: BTreeMap::new(),
             moment_equalities: Vec::with_capacity(0),
             moment_inequalities: Vec::with_capacity(0),
             moment_matrices: BTreeMap::new(),
@@ -1161,8 +1309,8 @@ where
         level: i8,
         variables: Vec<OperatorType>,
         objective: Polynomial<Monomial<Data>, Scalar>,
-        equalities: Vec<PolynomialWithOptionalGeneratingSet<Monomial<Data>, Scalar>>,
-        inequalities: Vec<PolynomialWithOptionalGeneratingSet<Monomial<Data>, Scalar>>,
+        operator_equalities: Vec<PolynomialWithOptionalGeneratingSet<Monomial<Data>, Scalar>>,
+        operator_inequalities: Vec<PolynomialWithOptionalGeneratingSet<Monomial<Data>, Scalar>>,
         moment_equalities: Vec<(Polynomial<Monomial<Data>, Scalar>, Scalar)>,
         moment_inequalities: Vec<(Polynomial<Monomial<Data>, Scalar>, f64)>,
         normalization_equalities: Vec<(Polynomial<Monomial<Data>, Scalar>, Scalar)>,
@@ -1210,59 +1358,12 @@ where
             BTreeSet::from_iter(variables_with_adjoint.keys().copied().chain(self.extra_monomials.keys().copied()));
 
         // We do this here so that if there's an error, the user doesn't have to wait for the
-        // generating sets to be created. The temporary BTreeMaps are here so that self isn't
-        // borrowed mutably when we change the generating sets for these constraints
-        let mut temporary_equalities: BTreeMap<u8, Vec<PolynomialWithGeneratingSet<Monomial<Data>, Scalar>>> =
-            BTreeMap::new();
-        let mut temporary_inequalities: BTreeMap<u8, Vec<PolynomialWithGeneratingSet<Monomial<Data>, Scalar>>> =
-            BTreeMap::new();
-        macro_rules! partition_operator_constraints {
-            ($constraints_field:ident, $temporary:expr, $constraint_kind:literal) => {{
-                debug!("Partitioning operator {} constraints.", stringify!($constraints_field));
-                for (index, (constraint, generating_set)) in $constraints_field.into_iter().enumerate() {
-                    if let Some(moment_matrix_id) = constraint.get_unique_moment_matrix_id() {
-                        if !all_moment_matrices_identifers.contains(&moment_matrix_id) {
-                            return Err(PyValueError::new_err(format!(
-                                "The polynomial at index {} in the operator {} constraints is defined using the moment
-                                matrix identifier {} which isn't associated with a moment matrix.",
-                                index, $constraint_kind, moment_matrix_id
-                            )));
-                        }
-                        $temporary.entry(moment_matrix_id).or_default().push((
-                            constraint
-                                .rewrite(self.substitution_strategy, &self.substitutions)
-                                .map_err(PyValueError::new_err)?,
-                            generating_set.unwrap_or_default(),
-                        ));
-                    } else {
-                        return Err(PyValueError::new_err(format!(
-                            "The polynomial at index {} in the operator {} constraints isn't defined using a unique
-                            moment matrix identifier.",
-                            index, $constraint_kind
-                        )));
-                    }
-                }
-            }};
-        }
-
-        partition_operator_constraints!(equalities, temporary_equalities, "equality");
-        partition_operator_constraints!(inequalities, temporary_inequalities, "inequality");
-
-        debug!("Checking the Hermiticity of operator inequalities.");
-        for operator_inequalities in temporary_inequalities.values() {
-            for (operator_inequality, _generating_set) in operator_inequalities {
-                if !(operator_inequality - operator_inequality.adjoint())
-                    .rewrite(self.substitution_strategy, &self.substitutions)
-                    .map_err(PyValueError::new_err)?
-                    .is_zero()
-                {
-                    return Err(PyValueError::new_err(format!(
-                        "The operator inequality constraint {} ≽ 0 isn't Hermitian.",
-                        operator_inequality
-                    )));
-                }
-            }
-        }
+        // generating sets to be created
+        let (mut temporary_equalities, mut temporary_inequalities) = self.partition_operator_constraints(
+            operator_equalities,
+            operator_inequalities,
+            &all_moment_matrices_identifers,
+        )?;
 
         // Auto-inject default normalization `<I_k> = 1` for each moment-matrix index `k` that
         // doesn't already appear in a user-supplied normalization constraint. Only normalization
@@ -1295,38 +1396,6 @@ where
         moment_equalities.extend(normalization_equalities);
         let mut moment_inequalities = moment_inequalities;
         moment_inequalities.extend(normalization_inequalities);
-        self.moment_equalities = moment_equalities
-            .into_iter()
-            .map(|(poly, scalar)| match poly.rewrite(self.substitution_strategy, &self.substitutions) {
-                Ok(rewritten) => Ok((rewritten, scalar)),
-                Err(e) => Err(e),
-            })
-            .collect::<Result<_, _>>()
-            .map_err(PyValueError::new_err)?;
-        self.moment_inequalities = moment_inequalities
-            .into_iter()
-            .map(|(poly, scalar)| match poly.rewrite(self.substitution_strategy, &self.substitutions) {
-                Ok(rewritten) => Ok((rewritten, scalar)),
-                Err(e) => Err(e),
-            })
-            .collect::<Result<_, _>>()
-            .map_err(PyValueError::new_err)?;
-
-        if !objective.is_real() {
-            debug!("Checking the Hermiticity of moment inequalities.");
-            for (moment_inequality, scalar) in self.moment_inequalities.iter() {
-                if !(moment_inequality - moment_inequality.adjoint())
-                    .rewrite(self.substitution_strategy, &self.substitutions)
-                    .map_err(PyValueError::new_err)?
-                    .is_zero()
-                {
-                    return Err(PyValueError::new_err(format!(
-                        "The moment inequality constraint {} >= {} isn't Hermitian.",
-                        moment_inequality, scalar
-                    )));
-                }
-            }
-        }
 
         debug!("Rewriting objective.");
         self.objective =
@@ -1343,6 +1412,10 @@ where
                 objective_diff,
             )));
         }
+
+        // Done once the objective is set, since the checks depend on whether the problem is real-valued
+        (self.moment_equalities, self.moment_inequalities) =
+            self.prepare_moment_constraints(moment_equalities, moment_inequalities)?;
 
         let top_bar = (verbosity > 0) && (verbosity < 3) && (variables_with_adjoint.len() > 1);
 
@@ -1543,91 +1616,71 @@ where
                 }
             }
 
-            // The constraints are taken out of the temporary map rather than borrowed from `self`,
-            // since filling their generating sets in place would otherwise borrow `self` mutably,
-            // which would conflict with the immutable borrow taken by `get_localising_moment_matrix`
-            macro_rules! build_localising_moment_matrices {
-                ($temporary_constraints:expr, $constraints_field:ident, $matrices_field:ident, $generating_func:ident $(, $extra_args:expr)* $(,)?) => {{
-                    let mut new_localising_moment_matrices = Vec::new();
-                    if let Some(mut constraints) = $temporary_constraints.remove(&moment_matrix_id) {
-                        new_localising_moment_matrices.reserve_exact(constraints.len());
-                        let constraints_with_generating_sets_iterator = if verbosity > 0 {
-                            itertools::Either::Left(tqdm!(
-                                constraints.iter_mut(),
-                                desc =
-                                    format!("Building localising moment matrices ({})", stringify!($constraints_field)),
-                                position = if top_bar { 1 } else { 0 },
-                                ncols = 0
-                            ))
-                        } else {
-                            itertools::Either::Right(constraints.iter_mut())
-                        };
-
-                        for (constraint, generating_set) in constraints_with_generating_sets_iterator {
-                            // No user-provided generating set for this constraint, so we fall back to the
-                            // classical level-oriented generating set
-                            if generating_set.is_empty() {
-                                generating_set.extend(
-                                    monomials_sets
-                                        .iter()
-                                        .take((((2 * level - constraint.degree() as i8) / 2) + 1).max(0) as usize)
-                                        .flatten()
-                                        .cloned(),
-                                );
-
-                                if generating_set.is_empty() {
-                                    return Err(PyValueError::new_err(format!(
-                                        "({} constraints) Level isn't large enough to deal with the constraint {}. \
-                                        Please provide a generating set for this constraint.",
-                                        stringify!($constraints_field),
-                                        constraint,
-                                    )));
-                                }
-                            }
-                            new_localising_moment_matrices.push(self.$generating_func(
-                                constraint,
-                                generating_set,
-                                $($extra_args,)*
-                                verbosity,
-                                top_bar,
-                            )?);
-                        }
-                        // The generating sets are now resolved, so the constraints can be stored
-                        self.$constraints_field.insert(moment_matrix_id, constraints);
-                    }
-                    self.$matrices_field.insert(moment_matrix_id, new_localising_moment_matrices);
-                }};
-            }
-
-            // TODO: if we don't assume that operator equalities are Hermitian, we should use a distinct function
-            build_localising_moment_matrices!(
-                temporary_equalities,
-                equalities,
-                localising_moment_matrices_equalities,
-                get_localizing_moment_equalities
-            );
-            build_localising_moment_matrices!(
-                temporary_inequalities,
-                inequalities,
-                localising_moment_matrices_inequalities,
-                get_localising_moment_matrix,
-                &new_moment_matrix
-            );
-
             self.moment_matrices.insert(moment_matrix_id, new_moment_matrix);
-            self.generating_sets.insert(moment_matrix_id, monomials_sets.iter().flatten().cloned().collect());
+            self.generating_sets.insert(moment_matrix_id, monomials_sets.into_iter().map(Vec::from_iter).collect());
+            // Every moment matrix gets a list of localising matrices, even an empty one
+            self.localising_moment_matrices_equalities.insert(moment_matrix_id, Vec::new());
+            self.localising_moment_matrices_inequalities.insert(moment_matrix_id, Vec::new());
+
+            self.add_operator_constraints(
+                temporary_equalities.remove_entry(&moment_matrix_id).into_iter().collect(),
+                temporary_inequalities.remove_entry(&moment_matrix_id).into_iter().collect(),
+                verbosity,
+                top_bar,
+            )?;
+        }
+
+        info!("Finished setting relaxation.");
+        Ok(())
+    }
+
+    /// Rewrites moment constraints and checks that they can be satisfied. In a complex-valued problem, moment
+    /// inequalities must be Hermitian and Hermitian moment equalities must have a real value. Anti-Hermitian moment
+    /// equalities must have a purely imaginary value.
+    #[allow(clippy::type_complexity)]
+    fn prepare_moment_constraints(
+        &self,
+        moment_equalities: Vec<(Polynomial<Monomial<Data>, Scalar>, Scalar)>,
+        moment_inequalities: Vec<(Polynomial<Monomial<Data>, Scalar>, f64)>,
+    ) -> PyResult<(Vec<(Polynomial<Monomial<Data>, Scalar>, Scalar)>, Vec<(Polynomial<Monomial<Data>, Scalar>, f64)>)>
+    where
+        Polynomial<Monomial<Data>, Scalar>: RewritingTrait<Monomial<Data>> + Display,
+    {
+        let moment_equalities: Vec<_> = moment_equalities
+            .into_iter()
+            .map(|(poly, scalar)| poly.rewrite(self.substitution_strategy, &self.substitutions).map(|r| (r, scalar)))
+            .collect::<Result<_, _>>()
+            .map_err(PyValueError::new_err)?;
+        let moment_inequalities: Vec<_> = moment_inequalities
+            .into_iter()
+            .map(|(poly, scalar)| poly.rewrite(self.substitution_strategy, &self.substitutions).map(|r| (r, scalar)))
+            .collect::<Result<_, _>>()
+            .map_err(PyValueError::new_err)?;
+
+        let is_hermitian = |polynomial: &Polynomial<Monomial<Data>, Scalar>| {
+            (polynomial - polynomial.adjoint())
+                .rewrite(self.substitution_strategy, &self.substitutions)
+                .map(|difference| difference.is_zero())
+                .map_err(PyValueError::new_err)
+        };
+        let is_complex_valued = !self.objective.is_real();
+
+        if is_complex_valued {
+            debug!("Checking the Hermiticity of moment inequalities.");
+            for (moment_inequality, scalar) in moment_inequalities.iter() {
+                if !is_hermitian(moment_inequality)? {
+                    return Err(PyValueError::new_err(format!(
+                        "The moment inequality constraint {} >= {} isn't Hermitian.",
+                        moment_inequality, scalar
+                    )));
+                }
+            }
         }
 
         debug!("Checking the complex feasibility of moment equalities.");
-        if !self.objective.is_real() {
-            // Only check for complex-valued problems
-            for (moment_equality, scalar) in self.moment_equalities.iter() {
-                if Into::<Complex<f64>>::into(*scalar).im != 0.0
-                    && (moment_equality - moment_equality.adjoint())
-                        .rewrite(self.substitution_strategy, &self.substitutions)
-                        .map_err(PyValueError::new_err)?
-                        .is_zero()
-                {
+        if is_complex_valued {
+            for (moment_equality, scalar) in moment_equalities.iter() {
+                if Into::<Complex<f64>>::into(*scalar).im != 0.0 && is_hermitian(moment_equality)? {
                     return Err(PyValueError::new_err(format!(
                         "The moment equality constraint {} = {} can't be satisfied since the polynomial is hermitian \
                         and thus real-valued.",
@@ -1637,7 +1690,7 @@ where
             }
         }
 
-        for (moment_equality, scalar) in self.moment_equalities.iter() {
+        for (moment_equality, scalar) in moment_equalities.iter() {
             if Into::<Complex<f64>>::into(*scalar).re != 0.0
                 && (moment_equality + moment_equality.adjoint())
                     .rewrite(self.substitution_strategy, &self.substitutions)
@@ -1651,9 +1704,352 @@ where
                 )));
             }
         }
+        Ok((moment_equalities, moment_inequalities))
+    }
 
-        info!("Finished setting relaxation.");
+    /// Adds moment constraints after the existing ones, normalization constraints included. The bound of a moment
+    /// inequality must be real. Nothing is stored before everything is checked, so an error leaves the relaxation
+    /// untouched.
+    fn add_moment_constraints(&mut self, constraints: Vec<MomentConstraint<Monomial<Data>, Scalar>>) -> PyResult<()>
+    where
+        Polynomial<Monomial<Data>, Scalar>: RewritingTrait<Monomial<Data>> + Display,
+    {
+        let (mut equalities, mut inequalities) = (Vec::new(), Vec::new());
+        for (kind, (polynomial, bound)) in constraints {
+            match kind {
+                ConstraintKind::Equality => equalities.push((polynomial, bound)),
+                ConstraintKind::Inequality => {
+                    inequalities.push((polynomial, bound.try_into_real().map_err(PyValueError::new_err)?))
+                }
+            }
+        }
+        let (equalities, inequalities) = self.prepare_moment_constraints(equalities, inequalities)?;
+        self.moment_equalities.extend(equalities);
+        self.moment_inequalities.extend(inequalities);
         Ok(())
+    }
+
+    /// Removes the moment equalities and inequalities at the given positions, normalization constraints included.
+    fn remove_moment_constraints(&mut self, equalities: Vec<usize>, inequalities: Vec<usize>) -> PyResult<()> {
+        let equalities = check_positions(self.moment_equalities.len(), &equalities, "moment equalities")?;
+        let inequalities = check_positions(self.moment_inequalities.len(), &inequalities, "moment inequalities")?;
+        remove_at(&mut self.moment_equalities, &equalities);
+        remove_at(&mut self.moment_inequalities, &inequalities);
+        Ok(())
+    }
+
+    /// Replaces moment constraints in place: each `(position, constraint)` puts `constraint` at `position` among the
+    /// moment constraints of its kind. Nothing is replaced before everything is checked, so an error leaves the
+    /// relaxation untouched.
+    fn replace_moment_constraints(
+        &mut self,
+        replacements: Vec<(usize, MomentConstraint<Monomial<Data>, Scalar>)>,
+    ) -> PyResult<()>
+    where
+        Polynomial<Monomial<Data>, Scalar>: RewritingTrait<Monomial<Data>> + Display,
+    {
+        let (mut equality_positions, mut inequality_positions) = (Vec::new(), Vec::new());
+        let (mut equalities, mut inequalities) = (Vec::new(), Vec::new());
+        for (position, (kind, (polynomial, bound))) in replacements {
+            match kind {
+                ConstraintKind::Equality => {
+                    equality_positions.push(position);
+                    equalities.push((polynomial, bound));
+                }
+                ConstraintKind::Inequality => {
+                    inequality_positions.push(position);
+                    inequalities.push((polynomial, bound.try_into_real().map_err(PyValueError::new_err)?));
+                }
+            }
+        }
+        check_positions(self.moment_equalities.len(), &equality_positions, "moment equalities")?;
+        check_positions(self.moment_inequalities.len(), &inequality_positions, "moment inequalities")?;
+
+        let (equalities, inequalities) = self.prepare_moment_constraints(equalities, inequalities)?;
+        for (position, constraint) in equality_positions.into_iter().zip(equalities) {
+            self.moment_equalities[position] = constraint;
+        }
+        for (position, constraint) in inequality_positions.into_iter().zip(inequalities) {
+            self.moment_inequalities[position] = constraint;
+        }
+        Ok(())
+    }
+
+    /// The identifier of the moment matrix, if the relaxation has exactly one.
+    fn unique_moment_matrix_id(&self) -> Option<u8> {
+        if self.moment_matrices.len() == 1 { self.moment_matrices.keys().next().copied() } else { None }
+    }
+
+    /// Checks that each operator constraint is defined on a single moment matrix among `moment_matrix_ids`, rewrites
+    /// it, and groups the constraints by moment matrix, keeping their order. Operator inequalities must be Hermitian.
+    #[allow(clippy::type_complexity)]
+    fn partition_operator_constraints(
+        &self,
+        operator_equalities: Vec<PolynomialWithOptionalGeneratingSet<Monomial<Data>, Scalar>>,
+        operator_inequalities: Vec<PolynomialWithOptionalGeneratingSet<Monomial<Data>, Scalar>>,
+        moment_matrix_ids: &BTreeSet<u8>,
+    ) -> PyResult<(ConstraintsByMomentMatrix<Monomial<Data>, Scalar>, ConstraintsByMomentMatrix<Monomial<Data>, Scalar>)>
+    where
+        Polynomial<Monomial<Data>, Scalar>: RewritingTrait<Monomial<Data>> + Display,
+    {
+        let partition = |constraints: Vec<PolynomialWithOptionalGeneratingSet<Monomial<Data>, Scalar>>, kind: &str| {
+            debug!("Partitioning operator {kind} constraints.");
+            let mut partitioned: ConstraintsByMomentMatrix<Monomial<Data>, Scalar> = BTreeMap::new();
+            for (index, (constraint, generating_set)) in constraints.into_iter().enumerate() {
+                let Some(moment_matrix_id) = constraint.get_unique_moment_matrix_id() else {
+                    return Err(PyValueError::new_err(format!(
+                        "The polynomial at index {index} in the operator {kind} constraints isn't defined using a \
+                        unique moment matrix identifier."
+                    )));
+                };
+                if !moment_matrix_ids.contains(&moment_matrix_id) {
+                    return Err(PyValueError::new_err(format!(
+                        "The polynomial at index {index} in the operator {kind} constraints is defined using the \
+                        moment matrix identifier {moment_matrix_id} which isn't associated with a moment matrix."
+                    )));
+                }
+                partitioned.entry(moment_matrix_id).or_default().push((
+                    constraint
+                        .rewrite(self.substitution_strategy, &self.substitutions)
+                        .map_err(PyValueError::new_err)?,
+                    generating_set.unwrap_or_default(),
+                ));
+            }
+            Ok(partitioned)
+        };
+        let equalities = partition(operator_equalities, "equality")?;
+        let inequalities = partition(operator_inequalities, "inequality")?;
+
+        debug!("Checking the Hermiticity of operator inequalities.");
+        for (operator_inequality, _generating_set) in inequalities.values().flatten() {
+            if !(operator_inequality - operator_inequality.adjoint())
+                .rewrite(self.substitution_strategy, &self.substitutions)
+                .map_err(PyValueError::new_err)?
+                .is_zero()
+            {
+                return Err(PyValueError::new_err(format!(
+                    "The operator inequality constraint {} ≽ 0 isn't Hermitian.",
+                    operator_inequality
+                )));
+            }
+        }
+        Ok((equalities, inequalities))
+    }
+
+    /// Builds the localising matrices of operator constraints grouped by moment matrix, filling in the default
+    /// generating sets.
+    #[allow(clippy::type_complexity)]
+    fn build_localising_matrices(
+        &self,
+        equalities: &mut ConstraintsByMomentMatrix<Monomial<Data>, Scalar>,
+        inequalities: &mut ConstraintsByMomentMatrix<Monomial<Data>, Scalar>,
+        verbosity: u8,
+        top_bar: bool,
+    ) -> PyResult<(
+        ByMomentMatrix<OperatorEqualityAsMoments<Monomial<Data>, Scalar>>,
+        ByMomentMatrix<RustMomentMatrix<Scalar, Monomial<Data>>>,
+    )>
+    where
+        Monomial<Data>: Display + RewritingTrait<Monomial<Data>>,
+        Polynomial<Monomial<Data>, Scalar>: Display,
+    {
+        let mut localising_equalities = BTreeMap::new();
+        for (&moment_matrix_id, constraints) in equalities.iter_mut() {
+            let built = self.build_localising(
+                moment_matrix_id,
+                constraints,
+                "operator_equalities",
+                verbosity,
+                top_bar,
+                |constraint, generating_set| {
+                    self.get_localizing_moment_equalities(constraint, generating_set, verbosity, top_bar)
+                },
+            )?;
+            localising_equalities.insert(moment_matrix_id, built);
+        }
+
+        let mut localising_inequalities = BTreeMap::new();
+        for (&moment_matrix_id, constraints) in inequalities.iter_mut() {
+            let moment_matrix = &self.moment_matrices[&moment_matrix_id];
+            let built = self.build_localising(
+                moment_matrix_id,
+                constraints,
+                "operator_inequalities",
+                verbosity,
+                top_bar,
+                |constraint, generating_set| {
+                    self.get_localising_moment_matrix(constraint, generating_set, moment_matrix, verbosity, top_bar)
+                },
+            )?;
+            localising_inequalities.insert(moment_matrix_id, built);
+        }
+        Ok((localising_equalities, localising_inequalities))
+    }
+
+    /// Adds operator constraints, partitioned by `partition_operator_constraints`, after the existing ones along with
+    /// their localising matrices. Nothing is stored before everything is built, so an error leaves the relaxation
+    /// untouched.
+    fn add_operator_constraints(
+        &mut self,
+        mut equalities: ConstraintsByMomentMatrix<Monomial<Data>, Scalar>,
+        mut inequalities: ConstraintsByMomentMatrix<Monomial<Data>, Scalar>,
+        verbosity: u8,
+        top_bar: bool,
+    ) -> PyResult<()>
+    where
+        Monomial<Data>: Display + RewritingTrait<Monomial<Data>>,
+        Polynomial<Monomial<Data>, Scalar>: Display,
+    {
+        let (localising_equalities, localising_inequalities) =
+            self.build_localising_matrices(&mut equalities, &mut inequalities, verbosity, top_bar)?;
+        extend_by_moment_matrix(&mut self.operator_equalities, equalities);
+        extend_by_moment_matrix(&mut self.localising_moment_matrices_equalities, localising_equalities);
+        extend_by_moment_matrix(&mut self.operator_inequalities, inequalities);
+        extend_by_moment_matrix(&mut self.localising_moment_matrices_inequalities, localising_inequalities);
+        Ok(())
+    }
+
+    /// Removes the operator equalities and inequalities at the given positions in the lists of `moment_matrix_id`,
+    /// along with their localising matrices.
+    fn remove_operator_constraints(
+        &mut self,
+        moment_matrix_id: u8,
+        equalities: Vec<usize>,
+        inequalities: Vec<usize>,
+    ) -> PyResult<()> {
+        let equalities = check_positions(
+            self.operator_equalities.get(&moment_matrix_id).map_or(0, Vec::len),
+            &equalities,
+            &format!("operator equalities on the moment matrix {moment_matrix_id}"),
+        )?;
+        let inequalities = check_positions(
+            self.operator_inequalities.get(&moment_matrix_id).map_or(0, Vec::len),
+            &inequalities,
+            &format!("operator inequalities on the moment matrix {moment_matrix_id}"),
+        )?;
+        remove_positions(
+            &mut self.operator_equalities,
+            &mut self.localising_moment_matrices_equalities,
+            moment_matrix_id,
+            &equalities,
+        );
+        remove_positions(
+            &mut self.operator_inequalities,
+            &mut self.localising_moment_matrices_inequalities,
+            moment_matrix_id,
+            &inequalities,
+        );
+        Ok(())
+    }
+
+    /// Replaces operator constraints in place: each `(position, (kind, constraint))` puts `constraint` at `position`
+    /// among the operator constraints of its kind on its moment matrix. Nothing is replaced before everything is
+    /// built, so an error leaves the relaxation untouched.
+    fn replace_operator_constraints(
+        &mut self,
+        replacements: Vec<(usize, OperatorConstraint<Monomial<Data>, Scalar>)>,
+    ) -> PyResult<()>
+    where
+        Monomial<Data>: Display + RewritingTrait<Monomial<Data>>,
+        Polynomial<Monomial<Data>, Scalar>: RewritingTrait<Monomial<Data>> + Display,
+    {
+        // `partition_operator_constraints` groups the constraints by moment matrix in order, so the positions are
+        // grouped the same way to match them up afterwards
+        let (mut equality_positions, mut inequality_positions) = (ByMomentMatrix::new(), ByMomentMatrix::new());
+        let (mut equalities, mut inequalities) = (Vec::new(), Vec::new());
+        for (position, (kind, constraint)) in replacements {
+            let (positions, constraints) = match kind {
+                ConstraintKind::Equality => (&mut equality_positions, &mut equalities),
+                ConstraintKind::Inequality => (&mut inequality_positions, &mut inequalities),
+            };
+            // A constraint without a unique moment matrix is rejected when partitioning
+            if let Some(moment_matrix_id) = constraint.0.get_unique_moment_matrix_id() {
+                positions.entry(moment_matrix_id).or_default().push(position);
+            }
+            constraints.push(constraint);
+        }
+
+        let moment_matrix_ids = self.moment_matrices.keys().copied().collect();
+        let (mut equalities, mut inequalities) =
+            self.partition_operator_constraints(equalities, inequalities, &moment_matrix_ids)?;
+        for (&moment_matrix_id, positions) in &equality_positions {
+            check_positions(
+                self.operator_equalities.get(&moment_matrix_id).map_or(0, Vec::len),
+                positions,
+                &format!("operator equalities on the moment matrix {moment_matrix_id}"),
+            )?;
+        }
+        for (&moment_matrix_id, positions) in &inequality_positions {
+            check_positions(
+                self.operator_inequalities.get(&moment_matrix_id).map_or(0, Vec::len),
+                positions,
+                &format!("operator inequalities on the moment matrix {moment_matrix_id}"),
+            )?;
+        }
+
+        let (localising_equalities, localising_inequalities) =
+            self.build_localising_matrices(&mut equalities, &mut inequalities, 0, false)?;
+        replace_positions(&mut self.operator_equalities, &equality_positions, equalities);
+        replace_positions(&mut self.localising_moment_matrices_equalities, &equality_positions, localising_equalities);
+        replace_positions(&mut self.operator_inequalities, &inequality_positions, inequalities);
+        replace_positions(
+            &mut self.localising_moment_matrices_inequalities,
+            &inequality_positions,
+            localising_inequalities,
+        );
+        Ok(())
+    }
+
+    /// Calls `build` on each constraint and its generating set. A constraint given without a generating set gets
+    /// the classical level-oriented one, which is written back into `constraints`.
+    fn build_localising<T>(
+        &self,
+        moment_matrix_id: u8,
+        constraints: &mut [PolynomialWithGeneratingSet<Monomial<Data>, Scalar>],
+        kind: &str,
+        verbosity: u8,
+        top_bar: bool,
+        build: impl Fn(&Polynomial<Monomial<Data>, Scalar>, &[Monomial<Data>]) -> PyResult<T>,
+    ) -> PyResult<Vec<T>>
+    where
+        Polynomial<Monomial<Data>, Scalar>: Display,
+    {
+        let monomials_sets = &self.generating_sets[&moment_matrix_id];
+        // There's one set per length from 0 to the level, and none at level -1
+        let level = monomials_sets.len() as i8 - 1;
+
+        let mut built = Vec::with_capacity(constraints.len());
+        let constraints_iterator = if verbosity > 0 {
+            itertools::Either::Left(tqdm!(
+                constraints.iter_mut(),
+                desc = format!("Building localising moment matrices ({kind})"),
+                position = if top_bar { 1 } else { 0 },
+                ncols = 0
+            ))
+        } else {
+            itertools::Either::Right(constraints.iter_mut())
+        };
+
+        for (constraint, generating_set) in constraints_iterator {
+            if generating_set.is_empty() {
+                generating_set.extend(
+                    monomials_sets
+                        .iter()
+                        .take((((2 * level - constraint.degree() as i8) / 2) + 1).max(0) as usize)
+                        .flatten()
+                        .cloned(),
+                );
+
+                if generating_set.is_empty() {
+                    return Err(PyValueError::new_err(format!(
+                        "({kind} constraints) Level isn't large enough to deal with the constraint {constraint}. \
+                        Please provide a generating set for this constraint."
+                    )));
+                }
+            }
+            built.push(build(constraint, generating_set)?);
+        }
+        Ok(built)
     }
 
     fn get_localising_moment_matrix(
@@ -1897,5 +2293,73 @@ where
         }
 
         Ok((polynomial.clone(), moment_equalities, hermiticity))
+    }
+}
+
+fn extend_by_moment_matrix<T>(lists: &mut ByMomentMatrix<T>, new: ByMomentMatrix<T>) {
+    for (moment_matrix_id, values) in new {
+        lists.entry(moment_matrix_id).or_default().extend(values);
+    }
+}
+
+/// Errors unless `positions` are distinct positions in a list of `len` `what`, and returns them.
+fn check_positions(len: usize, positions: &[usize], what: &str) -> PyResult<BTreeSet<usize>> {
+    let mut checked = BTreeSet::new();
+    for &position in positions {
+        if position >= len {
+            return Err(PyIndexError::new_err(format!("Index {position} is out of range, as there are {len} {what}.")));
+        }
+        if !checked.insert(position) {
+            return Err(PyValueError::new_err(format!("Index {position} of the {what} is given twice.")));
+        }
+    }
+    Ok(checked)
+}
+
+/// Removes the entries at `positions`, which `check_positions` accepted.
+fn remove_at<T>(list: &mut Vec<T>, positions: &BTreeSet<usize>) {
+    // From the end, so that the positions left to remove don't shift
+    for &position in positions.iter().rev() {
+        list.remove(position);
+    }
+}
+
+/// Removes the entries at `positions`, which `check_positions` accepted, from both parallel lists of
+/// `moment_matrix_id`.
+fn remove_positions<C, L>(
+    constraints: &mut ByMomentMatrix<C>,
+    localising: &mut ByMomentMatrix<L>,
+    moment_matrix_id: u8,
+    positions: &BTreeSet<usize>,
+) {
+    let (Some(constraints_list), Some(localising_list)) =
+        (constraints.get_mut(&moment_matrix_id), localising.get_mut(&moment_matrix_id))
+    else {
+        return;
+    };
+    remove_at(constraints_list, positions);
+    remove_at(localising_list, positions);
+    // A relaxation built without operator constraints of this kind on this moment matrix has no entry for it
+    if constraints_list.is_empty() {
+        constraints.remove(&moment_matrix_id);
+    }
+}
+
+/// Puts the k-th value of `new[moment_matrix_id]` at the k-th position of `positions[moment_matrix_id]`, which
+/// `check_positions` accepted.
+fn replace_positions<T>(lists: &mut ByMomentMatrix<T>, positions: &ByMomentMatrix<usize>, new: ByMomentMatrix<T>) {
+    for (moment_matrix_id, values) in new {
+        let list = lists.entry(moment_matrix_id).or_default();
+        for (&position, value) in positions[&moment_matrix_id].iter().zip(values) {
+            list[position] = value;
+        }
+    }
+}
+
+fn check_one_index_per_constraint(indices: &[usize], constraints: &Bound<'_, PyList>) -> PyResult<()> {
+    if indices.len() == constraints.len() {
+        Ok(())
+    } else {
+        Err(PyValueError::new_err(format!("Got {} indices for {} constraints.", indices.len(), constraints.len())))
     }
 }

@@ -120,7 +120,7 @@ def consistency_check(
             # Check that the localizing moment matrix is PSD
             np.testing.assert_allclose(eigvals[eigvals < 0], 0, rtol=rtol, atol=atol)
 
-        for polynomial, generating_set in relaxation.equalities.get(mm_id, []):
+        for polynomial, generating_set in relaxation.operator_equalities.get(mm_id, []):
             # Check that the moments in the localizing moment matrices are nil
             np.testing.assert_allclose(
                 _build_moment_matrix_from_moments(generating_set, polynomial, relaxation, mapping),
