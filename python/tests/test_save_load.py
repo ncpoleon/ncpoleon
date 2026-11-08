@@ -35,8 +35,8 @@ def _snapshot(sdp):
     return [
         str(sdp.objective),
         str(sdp.generating_sets),
-        str(sdp.equalities),
-        str(sdp.inequalities),
+        str(sdp.operator_equalities),
+        str(sdp.operator_inequalities),
         str(sdp.moment_equalities),
         str(sdp.moment_inequalities),
         str(sdp.localising_moment_matrices_equalities),

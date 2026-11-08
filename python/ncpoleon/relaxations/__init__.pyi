@@ -213,13 +213,34 @@ class BaseSdpRelaxation(Generic[MonomialType, Scalar]):
     @property
     def generating_sets(self) -> dict[int, list[MonomialType]]: ...
     @property
-    def equalities(
+    def operator_equalities(
         self,
     ) -> dict[int, list[tuple[Polynomial[MonomialType, Scalar], list[MonomialType]]]]: ...
     @property
-    def inequalities(
+    def operator_inequalities(
         self,
     ) -> dict[int, list[tuple[Polynomial[MonomialType, Scalar], list[MonomialType]]]]: ...
+    def add_operator_constraints(
+        self,
+        constraints: list[Constraint[MonomialType, Any] | tuple[Constraint[MonomialType, Any], list[Any] | None]],
+    ) -> None: ...
+    def remove_operator_constraints(
+        self,
+        *,
+        equalities: list[int] = ...,
+        inequalities: list[int] = ...,
+        moment_matrix_id: int | None = None,
+    ) -> None: ...
+    def replace_operator_constraints(
+        self,
+        indices: list[int],
+        constraints: list[Constraint[MonomialType, Any] | tuple[Constraint[MonomialType, Any], list[Any] | None]],
+    ) -> None: ...
+    def add_moment_constraints(self, constraints: list[Constraint[MonomialType, Any]]) -> None: ...
+    def remove_moment_constraints(self, *, equalities: list[int] = ..., inequalities: list[int] = ...) -> None: ...
+    def replace_moment_constraints(
+        self, indices: list[int], constraints: list[Constraint[MonomialType, Any]]
+    ) -> None: ...
 
 # Unlike every other class here, the four relaxations are `#[pyclass(subclass)]`, so Python code
 # may subclass them and they are deliberately not `@final`.
