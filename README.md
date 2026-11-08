@@ -28,10 +28,10 @@ Let us consider the example from [Tavakoli, Pozas-Kerstjens, Brown and Araújo](
 
 $$
     \begin{aligned}
-        \max &\quad \mathop{\mathrm{tr}}\left[\rho\left(X_2^2-\frac12\,X_1X_2-\frac12\,X_2X_1-X_2\right)\right]\\
-        \text{s.t.} &\quad X_1-X_1^2\succeq0\\,,\\
-        &\quad X_2-X_2^2\succeq0\\,,\\
-        &\quad\mathop{\mathrm{tr}}\left[\rho\right]=1\\,,\\
+        \max &\quad \mathop{\mathrm{tr}}\left[\rho\left(X_2^2-\frac12\\,X_1X_2-\frac12\\,X_2X_1-X_2\right)\right]\\\\
+        \text{s.t.} &\quad X_1-X_1^2\succeq0\\,,\\\\
+        &\quad X_2-X_2^2\succeq0\\,,\\\\
+        &\quad\mathop{\mathrm{tr}}\left[\rho\right]=1\\,,\\\\
         &\quad\rho\succeq0
     \end{aligned}
 $$

@@ -104,7 +104,7 @@ class PicosSolution(BaseSolution[MonomialType, Scalar]):
         res = {}
         # Each of these getters rebuilds its whole map on access, cloning every polynomial and monomial, so they are
         # read once here rather than once per moment matrix
-        equalities = self._relaxation.equalities
+        equalities = self._relaxation.operator_equalities
 
         for moment_matrix_id, equalities_as_moments in self._relaxation.localising_moment_matrices_equalities.items():
             list_of_equalities: list[
@@ -159,9 +159,9 @@ class PicosSolution(BaseSolution[MonomialType, Scalar]):
         ],
     ]:
         res = {}
-        # `inequalities` rebuilds its whole map on access, cloning every polynomial and monomial, so it is
+        # `operator_inequalities` rebuilds its whole map on access, cloning every polynomial and monomial, so it is
         # read once here rather than once per moment matrix
-        inequalities = self._relaxation.inequalities
+        inequalities = self._relaxation.operator_inequalities
 
         for id in self._relaxation.localising_moment_matrices_inequalities:
             to_add: list[tuple[Polynomial[MonomialType, Scalar], RealOrComplexMatrix, list[MonomialType]]] = []
@@ -192,9 +192,9 @@ class PicosSolution(BaseSolution[MonomialType, Scalar]):
         ],
     ]:
         res = {}
-        # `inequalities` rebuilds its whole map on access, cloning every polynomial and monomial, so it is
+        # `operator_inequalities` rebuilds its whole map on access, cloning every polynomial and monomial, so it is
         # read once here rather than once per moment matrix
-        inequalities = self._relaxation.inequalities
+        inequalities = self._relaxation.operator_inequalities
 
         for id in self._relaxation.localising_moment_matrices_inequalities:
             to_add: list[tuple[Polynomial[MonomialType, Scalar], RealOrComplexMatrix, list[MonomialType]]] = []
