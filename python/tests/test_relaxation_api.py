@@ -110,7 +110,7 @@ def test_scalar_on_the_left_of_a_constraint():
         [x, y], 1, x * y, operator_constraints=[1.0 - x >= 0], moment_constraints=[-(x * y) >= -0.5]
     )
 
-    assert str(flipped.inequalities) == str(expected.inequalities)
+    assert str(flipped.operator_inequalities) == str(expected.operator_inequalities)
     assert str(flipped.moment_inequalities) == str(expected.moment_inequalities)
 
 
@@ -181,8 +181,8 @@ def test_verbosity(verbosity):
         set_verbosity_level(0)
 
     assert str(sdp.generating_sets) == str(expected.generating_sets)
-    assert str(sdp.equalities) == str(expected.equalities)
-    assert str(sdp.inequalities) == str(expected.inequalities)
+    assert str(sdp.operator_equalities) == str(expected.operator_equalities)
+    assert str(sdp.operator_inequalities) == str(expected.operator_inequalities)
 
 
 def test_rewriting_a_scalar_needs_a_unique_moment_matrix():
